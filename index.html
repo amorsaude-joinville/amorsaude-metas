@@ -1473,6 +1473,18 @@ const CC_TODOS   = ["Erielly","Júlia"];
 // Meta fixa de caixa por atendente CC (usada na coordenadora quando não há meta configurada)
 const META_CC_PADRAO = 28000;
 
+// Metas padrão da EQUIPE — valores independentes, NÃO são soma das metas individuais
+const METAS_EQUIPE_PADRAO = {
+  meta_caixa_equipe:              740000,
+  meta_credito_equipe:            130000,
+  meta_boleto_equipe:              25000,
+  meta_lab_equipe:                273000,
+  meta_img_equipe:                144000,
+  meta_proc_equipe:               227500,
+  meta_injetaveis_equipe:          60000,
+  meta_caixa_callcenter_equipe:    56000,
+};
+
 // Perfis que têm meta de crédito
 const TEM_CREDITO = ["recepcionista","lider"];
 // Perfis que fazem lançamento
@@ -3112,12 +3124,10 @@ function renderCardMetasEquipe() {
     const metaImg    = m.meta_img_equipe           || 144000;
     const metaProc   = m.meta_proc_equipe          || 227500;
     const metaInj    = m.meta_injetaveis_equipe    || 60000;
-    const metaCxMed  = (m.meta_caixa_recepcao     || 0) *
-                        Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
-    const metaCrMed  = (m.meta_credito_recepcao   || 0) *
-                        Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
-    const metaBol    = m.meta_boleto_equipe        || 0;
-    const metaCC     = (m.meta_caixa_callcenter    || META_CC_PADRAO) * CC_TODOS.length;
+    const metaCxMed  = m.meta_caixa_equipe                || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+    const metaCrMed  = m.meta_credito_equipe              || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+    const metaBol    = m.meta_boleto_equipe               || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
+    const metaCC     = m.meta_caixa_callcenter_equipe     || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
     const metaIndCC  = m.meta_caixa_callcenter     || META_CC_PADRAO;
 
     // Seção medicina (sem "Sua parte" — CC não participa do pool)
@@ -3164,7 +3174,7 @@ function renderCardMetasEquipe() {
 
   } else if(grupoCC) {
     // ── Coord / lider_callcenter: vê só CC (comportamento original) ──
-    const metaCC    = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+    const metaCC    = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
     const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
     const lancCC2   = equipeLancs.filter(l => ["callcenter","lider_callcenter"].includes(l.perfil));
     const totCC2    = calcTotaisDetalhados(lancCC2);
@@ -3193,10 +3203,9 @@ function renderCardMetasEquipe() {
         ${rankHtml2}
        </div>`;
   } else {
-    const numRec      = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
-    const metaCaixa   = (m.meta_caixa_recepcao  || 0) * numRec;
-    const metaCredito = (m.meta_credito_recepcao || 0) * numRec;
-    const metaBoleto  = m.meta_boleto_equipe  || 0;
+    const metaCaixa   = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+    const metaCredito = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+    const metaBoleto  = m.meta_boleto_equipe   || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
     const metaLab     = m.meta_lab_equipe     || 273000;
     const metaImg     = m.meta_img_equipe     || 144000;
     const metaProc    = m.meta_proc_equipe    || 227500;
@@ -3418,7 +3427,7 @@ function buildCardPremGestao(titulo, faixas, total, meta, cor) {
 
 // Renderiza cards de premiação da gestão (usa sempre o mês inteiro, não o filtro de período)
 function renderCoordPremiacaoGestao() {
-  const metaEquipe = (metas?.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+  const metaEquipe = metas?.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
   let totalCaixa = 0;
   CC_TODOS.forEach(n => { totalCaixa += calcTotais(coordLancs.filter(l => l.usuario_nome === n)).caixa; });
 
@@ -3452,7 +3461,7 @@ function renderCoordResumoCCs(lancs) {
 
   let totalCaixa = 0;
   CC_TODOS.forEach(n => { totalCaixa += calcTotais(lancs.filter(l => l.usuario_nome === n)).caixa; });
-  const metaEquipe = metaCC * CC_TODOS.length;
+  const metaEquipe = metas?.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
   const pct = metaEquipe > 0 ? Math.min((totalCaixa/metaEquipe)*100,100) : 0;
   const ok  = totalCaixa >= metaEquipe && metaEquipe > 0;
 
@@ -4066,9 +4075,9 @@ function renderDashHistorico() {
 
   // Cards equipe
   const m    = dashMetasMes || {};
-  const metaC  = m.meta_caixa_equipe  || (m.meta_caixa_recepcao||0) + (m.meta_caixa_callcenter||0);
-  const metaCr = m.meta_credito_equipe || m.meta_credito_recepcao   || 0;
-  const metaB  = m.meta_boleto_equipe  || 0;
+  const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+  const metaCr = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+  const metaB  = m.meta_boleto_equipe   || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
   function miniCard(tit, val, meta, ico) {
     const pct = meta > 0 ? Math.min((val/meta)*100,100) : 0;
     const ok  = val >= meta && meta > 0;
@@ -4187,9 +4196,9 @@ function renderDashHistorico() {
 function renderDashEquipe(lista) {
   const tot = calcTotaisDetalhados(lista);
   const m   = dashMetasMes || {};
-  const metaC = m.meta_caixa_equipe || (m.meta_caixa_recepcao||0) + (m.meta_caixa_callcenter||0);
-  const metaCr= m.meta_credito_equipe || m.meta_credito_recepcao || 0;
-  const metaB = m.meta_boleto_equipe  || 0;
+  const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+  const metaCr = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+  const metaB  = m.meta_boleto_equipe   || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
 
   function miniCard(tit, val, meta, ico) {
     const pct  = meta > 0 ? Math.min((val/meta)*100,100) : 0;
@@ -4237,7 +4246,7 @@ function renderDashPremiacao() {
   const metaLab    = m.meta_lab_equipe        || 273000;
   const metaImg    = m.meta_img_equipe        || 144000;
   const metaProc   = m.meta_proc_equipe       || 227500;
-  const metaEquipeCC = metaCC * CC_TODOS.length;
+  const metaEquipeCC = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
   const diasUteis  = m.dias_uteis || 22;
   const diasPassF  = diasUteisPassadosFloat();
 
