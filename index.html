@@ -500,6 +500,7 @@
         </optgroup>
         <optgroup label="Coordenação">
           <option value="Paola">Paola</option>
+          <option value="Andrielli">Andrielli</option>
         </optgroup>
         <optgroup label="Líderes">
           <option value="Dara">Dara</option>
@@ -515,7 +516,6 @@
           <option value="Leticia">Leticia</option>
         </optgroup>
         <optgroup label="Call Center">
-          <option value="Andrielli">Andrielli</option>
           <option value="Erielly">Erielly</option>
           <option value="Júlia">Júlia</option>
         </optgroup>
@@ -3049,10 +3049,10 @@ function iniciarDashboard() {
   const sel = document.getElementById("dash-colab");
   if(sel) {
     sel.innerHTML = '<option value="">Todas</option>';
-    Object.entries(USUARIOS).filter(([,u]) => FAZ_LANC.includes(u.perfil))
-      .forEach(([nome]) => {
+    Object.values(USUARIOS).filter(u => FAZ_LANC.includes(u.perfil))
+      .forEach(u => {
         const o = document.createElement("option");
-        o.value = o.textContent = nome;
+        o.value = o.textContent = u.nome;
         sel.appendChild(o);
       });
   }
