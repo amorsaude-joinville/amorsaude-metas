@@ -602,6 +602,12 @@
         <!-- Cards de resumo da equipe -->
         <div class="dash-equipe-grid" id="coord-resumo-cards" style="margin-bottom:24px"></div>
 
+        <!-- Card premiação coordenação (só Paola) -->
+        <div id="coord-card-prem-coord" style="display:none;margin-bottom:20px"></div>
+
+        <!-- Card premiação liderança (Paola + Andrielli) -->
+        <div id="coord-card-prem-lider" style="margin-bottom:20px"></div>
+
         <!-- Ranking -->
         <div class="card" style="margin-bottom:20px">
           <div class="card-title">🏆 Ranking — Call Center</div>
@@ -2544,10 +2550,148 @@ function renderCoord() {
   if(coordModo === "comparativo") return;
   const filtrado = filtrarLancsCCModo();
   renderCoordResumoCCs(filtrado);
+  renderCoordPremiacaoGestao();
   renderCoordRanking(filtrado);
   renderCoordPremiacao(filtrado);
   renderCoordColabs(filtrado);
   renderCoordPrescritores(filtrado);
+}
+
+// Faixas de premiação — coordenação (Paola): % aplicado sobre meta total
+const FAIXAS_COORD_CC = [
+  { limiar: 1.50, label: "150% da meta", pct: "0,60%", prem: 504 },
+  { limiar: 1.25, label: "125% da meta", pct: "0,55%", prem: 385 },
+  { limiar: 1.00, label: "100% — Meta", pct: "0,50%", prem: 280 },
+  { limiar: 0.90, label: "90% da meta",  pct: "0,35%", prem: 196 },
+  { limiar: 0.80, label: "80% da meta",  pct: "0,30%", prem: 168 },
+];
+
+// Faixas de premiação — liderança CC (Paola + Andrielli)
+const FAIXAS_LIDER_CC = [
+  { limiar: 1.50, label: "150% da meta", pct: "0,35%", prem: 294 },
+  { limiar: 1.25, label: "125% da meta", pct: "0,30%", prem: 252 },
+  { limiar: 1.00, label: "100% — Meta",  pct: "0,25%", prem: 210 },
+  { limiar: 0.90, label: "90% da meta",  pct: "0,20%", prem: 168 },
+  { limiar: 0.80, label: "80% da meta",  pct: "0,15%", prem: 126 },
+];
+
+// Retorna { atual, prox } para um pct sobre a meta (faixas em ordem decrescente de limiar)
+function calcFaixaCC(faixas, pct) {
+  const idx   = faixas.findIndex(f => pct >= f.limiar);
+  const atual = idx >= 0 ? faixas[idx] : null;
+  const prox  = idx > 0  ? faixas[idx - 1]
+              : idx < 0  ? faixas[faixas.length - 1]
+              : null;
+  return { atual, prox };
+}
+
+// Constrói o HTML de um card de premiação gestão
+function buildCardPremGestao(titulo, faixas, total, meta, cor) {
+  const diasPass  = diasUteisPassadosFloat();
+  const diasUteis = metas?.dias_uteis || 22;
+  const pctMeta   = meta > 0 ? total / meta : 0;
+  const media     = diasPass > 0 ? total / diasPass : 0;
+  const proj      = media * diasUteis;
+  const pctProj   = meta > 0 ? proj / meta : 0;
+
+  const { atual, prox }     = calcFaixaCC(faixas, pctMeta);
+  const { atual: projAtual} = calcFaixaCC(faixas, pctProj);
+
+  const premAtual = atual     ? atual.prem     : 0;
+  const premProj  = projAtual ? projAtual.prem : 0;
+
+  let proxHtml = "";
+  if(prox && (!atual || prox.limiar > atual.limiar)) {
+    const falta = (prox.limiar * meta) - total;
+    if(falta > 0) {
+      proxHtml = `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:12px">
+        ⬆️ Próxima faixa: <strong>${(prox.limiar*100).toFixed(0)}% → ${brl(prox.prem)}</strong>
+        &nbsp;—&nbsp; falta <strong style="color:#B45309">${brl(falta)}</strong>
+      </div>`;
+    }
+  } else if(!prox && atual) {
+    proxHtml = `<div style="background:#D1FAE5;border:1px solid #6EE7B7;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:12px">
+      🏆 Faixa máxima atingida!
+    </div>`;
+  }
+
+  const tabelaRows = [...faixas].reverse().map(f => {
+    const isAtual = atual && f.limiar === atual.limiar;
+    return `<tr style="${isAtual ? "background:#FEF3C7;" : ""}">
+      <td style="padding:7px 10px${isAtual?";font-weight:700":""}">${(f.limiar*100).toFixed(0)}%</td>
+      <td style="padding:7px 10px">${brl(f.limiar * meta)}</td>
+      <td style="padding:7px 10px;color:var(--text2)">${f.pct}</td>
+      <td style="padding:7px 10px;font-weight:600;color:${isAtual ? cor : "var(--text)"}">${brl(f.prem)}</td>
+    </tr>`;
+  }).join("");
+
+  return `<div class="card">
+    <div class="card-title">${titulo}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:4px">
+      <div style="background:var(--bg2);border-radius:var(--r2);padding:16px;border-left:4px solid ${cor}">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Premiação Atual</div>
+        <div style="font-size:26px;font-weight:700;color:${cor}">${brl(premAtual)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${atual ? `Faixa ${(atual.limiar*100).toFixed(0)}% — ${atual.pct}` : "Abaixo de 80% (sem premiação)"}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:var(--r2);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Caixa da Equipe</div>
+        <div style="font-size:22px;font-weight:700;color:var(--text)">${brl(total)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${(pctMeta*100).toFixed(1)}% da meta • ${brl(meta)}</div>
+        <div class="bar-wrap" style="margin-top:8px"><div class="bar-fill${pctMeta>=1?" ok":""}" style="width:${Math.min(pctMeta*100,100).toFixed(0)}%"></div></div>
+      </div>
+      <div style="background:var(--bg2);border-radius:var(--r2);padding:16px;border-left:4px solid var(--success)">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Projeção</div>
+        <div style="font-size:22px;font-weight:700;color:var(--success)">${brl(premProj)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Caixa proj.: ${brl(proj)}</div>
+      </div>
+    </div>
+    ${proxHtml}
+    <details style="margin-top:14px">
+      <summary style="font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px">
+        <span>▶</span> Ver tabela de faixas
+      </summary>
+      <div class="tbl-wrap" style="margin-top:10px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead style="background:var(--bg2)">
+            <tr>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Faixa</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Total Equipe</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">% Aplicado</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Premiação</th>
+            </tr>
+          </thead>
+          <tbody>${tabelaRows}</tbody>
+        </table>
+      </div>
+    </details>
+  </div>`;
+}
+
+// Renderiza cards de premiação da gestão (usa sempre o mês inteiro)
+function renderCoordPremiacaoGestao() {
+  const metaEquipe = (metas?.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+  let totalCaixa = 0;
+  CC_TODOS.forEach(n => { totalCaixa += calcTotais(coordLancs.filter(l => l.usuario_nome === n)).caixa; });
+
+  // Card coordenação — só Paola
+  const elCoord = document.getElementById("coord-card-prem-coord");
+  if(elCoord) {
+    const ehPaola = usuario?.nome === "Paola";
+    elCoord.style.display = ehPaola ? "" : "none";
+    if(ehPaola) {
+      elCoord.innerHTML = buildCardPremGestao(
+        "💰 Sua Premiação — Coordenação", FAIXAS_COORD_CC, totalCaixa, metaEquipe, "var(--primary)"
+      );
+    }
+  }
+
+  // Card liderança — Paola e Andrielli
+  const elLider = document.getElementById("coord-card-prem-lider");
+  if(elLider) {
+    elLider.innerHTML = buildCardPremGestao(
+      "🏆 Premiação — Liderança Call Center", FAIXAS_LIDER_CC, totalCaixa, metaEquipe, "#7C3AED"
+    );
+  }
 }
 
 function renderCoordResumoCCs(lancs) {
