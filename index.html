@@ -1548,6 +1548,15 @@ const PLANILHAS_HISTORICAS = {
 // URL fixo da planilha de equipe (dias)
 const PLANILHA_EQUIPE_URL = "https://docs.google.com/spreadsheets/d/1o9vfvoXREHZzdJv8ngAYFW6VXVaEk_OiNt053Npf-P8";
 
+// Índices de coluna (base 0) por campo/mês na planilha de equipe
+// Cada aba = um dia; linha 0 = cabeçalho; demais linhas = uma recepcionista cada
+const COLUNAS_EQUIPE = {
+  "2026-01": { laboratorio:5, procedimentos:14, imagem:23, caixa:32, credito:41, boleto:50 },
+  "2026-02": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50 },
+  "2026-03": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
+  "2026-04": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
+};
+
 // Mapeamento de campos para busca de labels na planilha (normalizado sem acentos)
 const CAMPOS_HISTORICO_ALIASES = {
   caixa:         ["caixa","caixa total","total caixa","total de caixa","total caixa dinheiro","entrada caixa"],
@@ -5614,28 +5623,69 @@ const normStr = s =>
   (s ?? "").toString().toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-// Extrai campos conhecidos de uma matriz de linhas
-// Procura label em qualquer célula e pega o valor numérico da célula seguinte
+// Converte célula gviz para número (trata R$, pontos de milhar, vírgula decimal)
+function parseCelula(cel) {
+  if(!cel) return 0;
+  if(typeof cel.valor === "number") return cel.valor;
+  const s = (cel.formatted || cel.valor || "").toString()
+    .replace(/R\$\s*/g, "")
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3})/g, "")   // remove pontos de milhar
+    .replace(",", ".");             // vírgula decimal → ponto
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// Extrai campos do Dashboard individual usando coluna J (label, índice 9) e K (valor, índice 10)
+function extrairCamposPorColunaJK(linhas) {
+  const resultado = {};
+  for(const linha of linhas) {
+    const label  = normStr(linha[9]?.valor);   // coluna J
+    const valCel = linha[10];                  // coluna K
+    if(!label || !valCel) continue;
+    for(const [campo, aliases] of Object.entries(CAMPOS_HISTORICO_ALIASES)) {
+      if(campo in resultado) continue;
+      if(!aliases.includes(label)) continue;
+      const num = parseCelula(valCel);
+      if(num >= 0) resultado[campo] = Math.round(num * 100) / 100;
+    }
+  }
+  return resultado;
+}
+
+// Extrai campos de uma aba diária da planilha de equipe usando índices de coluna fixos
+// Pula linha 0 (cabeçalho) e soma todas as demais linhas (uma por recepcionista)
+function extrairCamposAbaEquipe(linhas, mes) {
+  const colunas = COLUNAS_EQUIPE[mes];
+  if(!colunas || linhas.length < 2) return {};
+  const totais = {};
+  Object.keys(colunas).forEach(k => totais[k] = 0);
+  for(let r = 1; r < linhas.length; r++) {   // linha 0 = cabeçalho
+    const linha = linhas[r];
+    for(const [campo, colIdx] of Object.entries(colunas)) {
+      const num = parseCelula(linha[colIdx]);
+      if(num > 0) totais[campo] += num;
+    }
+  }
+  // Arredonda para evitar float impreciso
+  Object.keys(totais).forEach(k => totais[k] = Math.round(totais[k] * 100) / 100);
+  return totais;
+}
+
+// Extrai campos conhecidos de uma matriz de linhas (busca por label genérica)
+// Usado como fallback para planilhas individuais sem col J/K definidas
 function extrairCamposDeLinhas(linhas) {
   const resultado = {};
-
   for(const linha of linhas) {
     for(let i = 0; i < linha.length; i++) {
       const label = normStr(linha[i]?.valor);
       if(!label) continue;
-
       for(const [campo, aliases] of Object.entries(CAMPOS_HISTORICO_ALIASES)) {
         if(campo in resultado) continue;
         if(!aliases.includes(label)) continue;
-
-        // Procura valor numérico nas próximas células da mesma linha
         for(let j = i + 1; j < Math.min(i + 5, linha.length); j++) {
-          const c = linha[j];
-          if(c?.valor === null || c?.valor === undefined) continue;
-          const num = typeof c.valor === "number"
-            ? c.valor
-            : parseFloat((c.formatted || c.valor || "").toString().replace(/[^\d.,-]/g,"").replace(",","."));
-          if(!isNaN(num) && num >= 0) { resultado[campo] = Math.round(num * 100) / 100; break; }
+          const num = parseCelula(linha[j]);
+          if(num >= 0) { resultado[campo] = Math.round(num * 100) / 100; break; }
         }
       }
     }
@@ -5658,14 +5708,26 @@ async function importarMesColaboradora() {
 
   const statusEl  = document.getElementById("imp-status");
   const previewEl = document.getElementById("imp-preview");
-  statusEl.innerHTML  = '<div class="import-progress">⏳ Lendo aba Dashboard...</div>';
+  statusEl.innerHTML  = '<div class="import-progress">⏳ Lendo aba Dashboard (colunas J/K)...</div>';
   previewEl.innerHTML = "";
 
   try {
     const data   = await fetchGviz(id, "Dashboard");
     const linhas = gvizParaLinhas(data);
-    const campos = extrairCamposDeLinhas(linhas);
-    statusEl.innerHTML = "";
+
+    // Tenta leitura estruturada col J (label) + col K (valor) — layout padrão das planilhas
+    let campos = extrairCamposPorColunaJK(linhas);
+    const qtdJK = Object.keys(campos).length;
+
+    // Se não encontrou nada via J/K, tenta busca genérica por label em qualquer célula
+    if(qtdJK === 0) {
+      campos = extrairCamposDeLinhas(linhas);
+    }
+
+    statusEl.innerHTML = qtdJK > 0
+      ? `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 Leitura via coluna J/K — ${qtdJK} campo(s) detectados.</div>`
+      : `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 Leitura via busca de labels — ${Object.keys(campos).length} campo(s) detectados.</div>`;
+
     renderPreviewMes(campos, email, mes);
   } catch(e) {
     console.error("importarMes:", e);
@@ -5794,7 +5856,7 @@ async function importarEquipe() {
     try {
       const data   = await fetchGviz(id, String(dia));
       const linhas = gvizParaLinhas(data);
-      const campos = extrairCamposDeLinhas(linhas);
+      const campos = extrairCamposAbaEquipe(linhas, _mesPendente);
 
       const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
       _diasEquipePendentes.push({ dia, dataStr, campos });
@@ -5819,12 +5881,13 @@ function renderPreviewEquipe() {
   const mesLabel = { "2026-01":"Janeiro 2026","2026-02":"Fevereiro 2026","2026-03":"Março 2026","2026-04":"Abril 2026" }[_mesPendente] || _mesPendente;
   const statusEl = document.getElementById("imp-equipe-status");
 
-  const ths = Object.values(LABELS_CAMPOS_PT).map(l =>
-    `<th style="padding:5px 8px;font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;background:var(--bg2);text-align:right;white-space:nowrap">${l}</th>`
+  const camposEquipe = Object.keys(COLUNAS_EQUIPE[_mesPendente] || COLUNAS_EQUIPE["2026-04"]);
+  const ths = camposEquipe.map(k =>
+    `<th style="padding:5px 8px;font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;background:var(--bg2);text-align:right;white-space:nowrap">${LABELS_CAMPOS_PT[k]||k}</th>`
   ).join("");
 
   const trs = _diasEquipePendentes.map(({ dia, campos }) => {
-    const tds = Object.keys(LABELS_CAMPOS_PT).map(k =>
+    const tds = camposEquipe.map(k =>
       `<td style="text-align:right;padding:5px 8px;font-size:12px">${brl(campos[k]||0)}</td>`
     ).join("");
     return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600">${dia}</td>${tds}</tr>`;
@@ -5854,24 +5917,25 @@ async function confirmarImportacaoEquipe() {
   if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
 
   let ok = 0, erros = 0;
+  const colsMes = COLUNAS_EQUIPE[_mesPendente] || {};
+  const temInjetaveis = "injetaveis" in colsMes;
   for(const { dataStr, campos } of _diasEquipePendentes) {
-    const docId = `equipe_${dataStr}`;
+    const docId = dataStr;
     try {
-      await db.collection("historico_equipe").doc(docId).set({
-        data:                 dataStr,
-        mes_ano:              _mesPendente,
-        caixa_equipe:         campos.caixa         || 0,
-        credito_equipe:       campos.credito        || 0,
-        boleto_equipe:        campos.boleto         || 0,
-        laboratorio_equipe:   campos.laboratorio    || 0,
-        imagem_equipe:        campos.imagem         || 0,
-        procedimentos_equipe: campos.procedimentos  || 0,
-        consultas_equipe:     campos.consultas      || 0,
-        injetaveis_equipe:    campos.injetaveis     || 0,
-        saidas_equipe:        campos.saidas         || 0,
-        fonte:                "importacao_historica",
-        importado_em:         firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      const payload = {
+        data:          dataStr,
+        mes_ano:       _mesPendente,
+        caixa:         campos.caixa         || 0,
+        credito:       campos.credito        || 0,
+        boleto:        campos.boleto         || 0,
+        laboratorio:   campos.laboratorio    || 0,
+        imagem:        campos.imagem         || 0,
+        procedimentos: campos.procedimentos  || 0,
+        fonte:         "importacao_historica",
+        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      if(temInjetaveis) payload.injetaveis = campos.injetaveis || 0;
+      await db.collection("historico_equipe").doc(docId).set(payload);
       ok++;
     } catch(e) {
       console.error("equipe dia:", dataStr, e);
