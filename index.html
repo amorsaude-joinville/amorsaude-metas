@@ -1238,9 +1238,13 @@
         <label>Meta Exames de Imagem (R$)</label>
         <input type="text" id="mm-img" placeholder="0,00" oninput="mascaraValor(this)" />
       </div>
-      <div class="fg full">
+      <div class="fg">
         <label>Meta Procedimentos (R$)</label>
         <input type="text" id="mm-proc" placeholder="0,00" oninput="mascaraValor(this)" />
+      </div>
+      <div class="fg">
+        <label>Meta Injetáveis (R$)</label>
+        <input type="text" id="mm-injetaveis" placeholder="0,00" oninput="mascaraValor(this)" />
       </div>
     </div>
     <div class="modal-btns" style="margin-top:24px">
@@ -1321,6 +1325,13 @@ const VE_DASHBOARD = ["gestor","subgestora","lider"];
 const SO_DASHBOARD = ["gestor","subgestora"];
 // Perfis com dashboard próprio de coordenação (painel Call Center)
 const VE_COORD = ["coordenadora","lider_callcenter"];
+
+// Premiação coletiva (pool) para Lab, Imagem e Procedimentos
+const POOL_REC_EXCLUIDOS = ["Tuane"];  // não participa do pool
+const POOL_REC_QTD       = 6;         // recepcionistas no pool (excl. Tuane)
+const FAIXAS_POOL_LAB    = [{pct:1.0,pool:1500},{pct:0.9,pool:1125},{pct:0.8,pool:500}];
+const FAIXAS_POOL_IMG    = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
+const FAIXAS_POOL_PROC   = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 
 // ═══════════════════════════════════════════════════════════
 //  PRESCRITORES
@@ -1508,6 +1519,55 @@ function calcPremiacao(caixa, credito, perfil, metaCaixa, metaCredito) {
   if(pct >= 0.9)                   return { valor:450, faixa:"90% do caixa 🔥",               proxFaixa:"100% do caixa", faltaProx:metaCaixa-caixa };
   if(pct >= 0.8)                   return { valor:300, faixa:"80% do caixa",                  proxFaixa:"90% do caixa",  faltaProx:metaCaixa*0.9-caixa };
   return                                  { valor:0,   faixa:"Abaixo de 80%",                 proxFaixa:"80% do caixa",  faltaProx:metaCaixa*0.8-caixa };
+}
+
+// Premiação de caixa individual para recepcionista/lider (fórmula percentual)
+function calcPremiacaoCaixaRec(caixa, credito, metaCaixa, metaCredito) {
+  if(metaCaixa <= 0) return {valor:0, faixa:"Meta não definida", proxFaixa:null, faltaProx:0};
+  const pct     = caixa / metaCaixa;
+  const pctCred = metaCredito > 0 ? credito / metaCredito : 0;
+  if(pct >= 1.0 && pctCred >= 1.0) return {
+    valor: (caixa + credito) * 0.007, faixa: "100% caixa + crédito 💎",
+    proxFaixa: null, faltaProx: 0
+  };
+  if(pct >= 1.0) return {
+    valor: caixa * 0.005, faixa: "100% do caixa ✅",
+    proxFaixa: "100% crédito", faltaProx: Math.max(0, metaCredito - credito)
+  };
+  if(pct >= 0.9) return {
+    valor: caixa * 0.005 * 0.75, faixa: "90% do caixa 🔥",
+    proxFaixa: "100% do caixa", faltaProx: metaCaixa - caixa
+  };
+  if(pct >= 0.8) return {
+    valor: caixa * 0.005 * 0.50, faixa: "80% do caixa",
+    proxFaixa: "90% do caixa", faltaProx: metaCaixa * 0.9 - caixa
+  };
+  return {valor:0, faixa:"Abaixo de 80%", proxFaixa:"80% do caixa", faltaProx: metaCaixa * 0.8 - caixa};
+}
+
+// Premiação de boleto individual (qtd. de boletos efetivados no mês)
+function calcPremBoleto(contBoleto) {
+  if(contBoleto >= 5) return contBoleto * 25;
+  if(contBoleto >= 3) return contBoleto * 15;
+  if(contBoleto >= 1) return contBoleto * 10;
+  return 0;
+}
+
+// Valor do pool coletivo baseado no total de equipe vs meta
+function calcPoolPremio(total, meta, faixas) {
+  if(meta <= 0) return 0;
+  const pct = total / meta;
+  for(const f of faixas) if(pct >= f.pct) return f.pool;
+  return 0;
+}
+
+// Parte individual do pool: líderes = 30%, recepcionistas no pool = 40% ÷ POOL_REC_QTD
+function calcPartePool(nome, pool) {
+  if(pool <= 0) return 0;
+  const perfil = PERFIS[nome] || "";
+  if(perfil === "lider") return pool * 0.30;
+  if(POOL_REC_EXCLUIDOS.includes(nome)) return 0;
+  return (pool * 0.40) / POOL_REC_QTD;
 }
 
 function toast(msg, tipo="ok") {
@@ -1851,8 +1911,12 @@ async function carregarMetas() {
   try {
     const doc = await db.collection("metas").doc(mesAno).get();
     metas = doc.exists ? doc.data() : {
-      meta_caixa_recepcao:0, meta_credito_recepcao:0,
-      meta_caixa_callcenter:0, dias_uteis:22
+      meta_caixa_recepcao:120000, meta_credito_recepcao:16000,
+      meta_caixa_callcenter:28000, dias_uteis:22,
+      meta_caixa_equipe:740000, meta_credito_equipe:130000,
+      meta_boleto_equipe:25000, meta_lab_equipe:273000,
+      meta_img_equipe:144000, meta_proc_equipe:227500,
+      meta_injetaveis_equipe:60000
     };
     atualizarCards();
     // Re-renderiza premiação da coordenação com meta correta
@@ -1933,10 +1997,12 @@ function atualizarCards() {
   if(!FAZ_LANC.includes(perfil)) return;
 
   const { caixa, credito } = calcTotais(lancMes);
-  const metaCaixa   = (perfil==="callcenter"||perfil==="lider_callcenter") ? (metas.meta_caixa_callcenter||0) : (metas.meta_caixa_recepcao||0);
+  const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
+  const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metas.meta_caixa_recepcao||0);
   const metaCredito = metas.meta_credito_recepcao||0;
+  const contBoleto  = isCC ? 0 : lancMes.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
 
-  console.log(`[Amor Saúde] Totais — Perfil: ${perfil} | Caixa: ${caixa.toFixed(2)} | Crédito: ${credito.toFixed(2)} | MetaCaixa: ${metaCaixa} | MetaCredito: ${metaCredito} | Qtd lançamentos: ${lancMes.length}`);
+  console.log(`[Amor Saúde] Totais — Perfil: ${perfil} | Caixa: ${caixa.toFixed(2)} | Crédito: ${credito.toFixed(2)} | MetaCaixa: ${metaCaixa} | MetaCredito: ${metaCredito} | Boletos: ${contBoleto} | Qtd lançamentos: ${lancMes.length}`);
 
   const grid = document.getElementById("grid-metas");
   grid.innerHTML = "";
@@ -1945,10 +2011,10 @@ function atualizarCards() {
     grid.appendChild(cardMeta("Meta de Crédito","💳",credito,metaCredito));
 
   atualizarProj(caixa, metaCaixa, credito, metaCredito);
-  atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil);
+  atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto);
   atualizarMetaDiaria(caixa, metaCaixa);
   atualizarResumoDia();
-  if(metaCaixa > 0) verificarMarcos(caixa / metaCaixa);
+  if(metaCaixa > 0) verificarMarcos(caixa / metaCaixa, caixa, credito, metaCaixa, metaCredito, perfil);
 }
 
 function cardMeta(titulo, ico, atingido, meta) {
@@ -2371,25 +2437,91 @@ function renderHistorico(lista, dataSel) {
 // ═══════════════════════════════════════════════════════════
 //  CARD PREMIAÇÃO
 // ═══════════════════════════════════════════════════════════
-function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil) {
+function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto) {
   const el = document.getElementById("card-prem");
   if(!el) return;
-  const { valor, faixa, proxFaixa, faltaProx } = calcPremiacao(caixa, credito, perfil, metaCaixa, metaCredito);
+
+  // Call Center: lógica por faixa fixa
+  if(perfil === "callcenter" || perfil === "lider_callcenter") {
+    const { valor, faixa, proxFaixa, faltaProx } = calcPremiacao(caixa, credito, perfil, metaCaixa, metaCredito);
+    let proxHtml = "";
+    if(proxFaixa && faltaProx > 0) {
+      proxHtml = `<div class="prem-prox">Próxima faixa: <strong>${proxFaixa}</strong> — falta <strong>${brl(faltaProx)}</strong></div>`;
+    } else if(!proxFaixa) {
+      proxHtml = `<div class="prem-pleno">🏆 Premiação máxima atingida!</div>`;
+    }
+    el.innerHTML = `
+      <div class="prem-top"><div class="prem-tit">🏅 Premiação Atual</div><span style="font-size:26px">🎯</span></div>
+      <div class="prem-val">${brl(valor)}</div>
+      <div class="prem-faixa">${faixa}</div>
+      ${proxHtml}
+    `;
+    return;
+  }
+
+  // Recepcionista / Lider: premiação detalhada com pool coletivo
+  const m          = metas || {};
+  const metaLab    = m.meta_lab_equipe   || 273000;
+  const metaImg    = m.meta_img_equipe   || 144000;
+  const metaProc   = m.meta_proc_equipe  || 227500;
+  const diasUteis  = m.dias_uteis        || 22;
+  const diasPassF  = diasUteisPassadosFloat();
+
+  const teamTot   = calcTotaisDetalhados(equipeLancs);
+  const poolLab   = calcPoolPremio(teamTot.lab,  metaLab,  FAIXAS_POOL_LAB);
+  const poolImg   = calcPoolPremio(teamTot.img,  metaImg,  FAIXAS_POOL_IMG);
+  const poolProc  = calcPoolPremio(teamTot.proc, metaProc, FAIXAS_POOL_PROC);
+  const parteLab  = calcPartePool(usuario.nome, poolLab);
+  const parteImg  = calcPartePool(usuario.nome, poolImg);
+  const parteProc = calcPartePool(usuario.nome, poolProc);
+
+  const premCaixa  = calcPremiacaoCaixaRec(caixa, credito, metaCaixa, metaCredito);
+  const premBoleto = calcPremBoleto(contBoleto || 0);
+  const totalAtual = premCaixa.valor + premBoleto + parteLab + parteImg + parteProc;
+
+  // Projeção ao final do mês
+  let totalProj = totalAtual;
+  if(diasPassF > 0) {
+    const projCaixa    = (caixa            / diasPassF) * diasUteis;
+    const projCredito  = (credito          / diasPassF) * diasUteis;
+    const projLab      = (teamTot.lab      / diasPassF) * diasUteis;
+    const projImg      = (teamTot.img      / diasPassF) * diasUteis;
+    const projProc     = (teamTot.proc     / diasPassF) * diasUteis;
+    const projCont     = Math.round((contBoleto / diasPassF) * diasUteis);
+    const projPoolLab  = calcPoolPremio(projLab,  metaLab,  FAIXAS_POOL_LAB);
+    const projPoolImg  = calcPoolPremio(projImg,  metaImg,  FAIXAS_POOL_IMG);
+    const projPoolProc = calcPoolPremio(projProc, metaProc, FAIXAS_POOL_PROC);
+    totalProj = calcPremiacaoCaixaRec(projCaixa, projCredito, metaCaixa, metaCredito).valor
+              + calcPremBoleto(projCont)
+              + calcPartePool(usuario.nome, projPoolLab)
+              + calcPartePool(usuario.nome, projPoolImg)
+              + calcPartePool(usuario.nome, projPoolProc);
+  }
+
+  const pctLab  = metaLab  > 0 ? (teamTot.lab  / metaLab  * 100).toFixed(1) : "0.0";
+  const pctImg  = metaImg  > 0 ? (teamTot.img  / metaImg  * 100).toFixed(1) : "0.0";
+  const pctProc = metaProc > 0 ? (teamTot.proc / metaProc * 100).toFixed(1) : "0.0";
 
   let proxHtml = "";
-  if(proxFaixa && faltaProx > 0) {
-    proxHtml = `<div class="prem-prox">Próxima faixa: <strong>${proxFaixa}</strong> — falta <strong>${brl(faltaProx)}</strong></div>`;
-  } else if(!proxFaixa) {
-    proxHtml = `<div class="prem-pleno">🏆 Premiação máxima atingida!</div>`;
+  if(premCaixa.proxFaixa && premCaixa.faltaProx > 0) {
+    proxHtml = `<div class="prem-prox">Próx. faixa caixa: <strong>${premCaixa.proxFaixa}</strong> — falta <strong>${brl(premCaixa.faltaProx)}</strong></div>`;
+  } else if(!premCaixa.proxFaixa && premCaixa.valor > 0) {
+    proxHtml = `<div class="prem-pleno">🏆 Caixa máximo atingido!</div>`;
   }
 
   el.innerHTML = `
-    <div class="prem-top">
-      <div class="prem-tit">🏅 Premiação Atual</div>
-      <span style="font-size:26px">🎯</span>
+    <div class="prem-top"><div class="prem-tit">🏅 Premiação Atual</div><span style="font-size:24px">🎯</span></div>
+    <div class="prem-val">${brl(totalAtual)}</div>
+    <div style="font-size:12px;color:#78350F;margin:8px 0 6px;display:flex;flex-direction:column;gap:5px">
+      <div>💰 Caixa: <strong>${brl(premCaixa.valor)}</strong> <span style="opacity:.75">${premCaixa.faixa}</span></div>
+      <div>🧾 Boleto: <strong>${brl(premBoleto)}</strong> <span style="opacity:.75">(${contBoleto||0} boleto${(contBoleto||0)!==1?"s":""})</span></div>
+      <div>🔬 Lab: <strong>${brl(parteLab)}</strong> <span style="opacity:.75">(equipe ${pctLab}%)</span></div>
+      <div>🩻 Imagem: <strong>${brl(parteImg)}</strong> <span style="opacity:.75">(equipe ${pctImg}%)</span></div>
+      <div>🏥 Proc: <strong>${brl(parteProc)}</strong> <span style="opacity:.75">(equipe ${pctProc}%)</span></div>
     </div>
-    <div class="prem-val">${brl(valor)}</div>
-    <div class="prem-faixa">${faixa}</div>
+    <div style="font-size:13px;color:#92400E;font-weight:600;border-top:1px solid #FDE68A;padding-top:8px;margin-top:4px">
+      Projeção total: ${brl(totalProj)}
+    </div>
     ${proxHtml}
   `;
 }
@@ -2476,11 +2608,27 @@ function atualizarResumoDia() {
 // ═══════════════════════════════════════════════════════════
 //  BANNER DE MARCO
 // ═══════════════════════════════════════════════════════════
-function verificarMarcos(pctCaixa) {
+function verificarMarcos(pctCaixa, caixa, credito, metaCaixa, metaCredito, perfil) {
+  const isRec = perfil === "recepcionista" || perfil === "lider";
+  function premStr(pct100, pct90, pct80) {
+    if(!isRec || !metaCaixa) return "";
+    let v = 0;
+    if(pct100) {
+      const pctCred = metaCredito > 0 ? (credito||0) / metaCredito : 0;
+      v = (pctCred >= 1.0)
+        ? ((caixa||0) + (credito||0)) * 0.007
+        : (caixa||0) * 0.005;
+    } else if(pct90) {
+      v = (caixa||0) * 0.005 * 0.75;
+    } else if(pct80) {
+      v = (caixa||0) * 0.005 * 0.50;
+    }
+    return v > 0 ? ` — prêmio caixa: ${brl(v)}` : "";
+  }
   const marcos = [
-    { pct:1.0, cls:"bm-100", msg:"🏆 META BATIDA! Parabéns, você arrasou!" },
-    { pct:0.9, cls:"bm-90",  msg:"🔥 90% da meta batida! Falta pouco!" },
-    { pct:0.8, cls:"bm-80",  msg:"🎉 Você atingiu 80% da meta! Continue assim!" },
+    { pct:1.0, cls:"bm-100", msg:`🏆 Meta de caixa batida! Parabéns!${premStr(true,false,false)}` },
+    { pct:0.9, cls:"bm-90",  msg:`🔥 90% da meta de caixa!${premStr(false,true,false)}` },
+    { pct:0.8, cls:"bm-80",  msg:`🎉 80% da meta de caixa!${premStr(false,false,true)}` },
   ];
   for(const m of marcos) {
     if(pctCaixa >= m.pct && !marcosMostrados.has(m.pct)) {
@@ -2567,22 +2715,34 @@ function renderCardMetasEquipe() {
   if(!el) return;
   if(!metas) { el.innerHTML = '<div style="font-size:13px;color:var(--text2)">Aguardando metas...</div>'; return; }
 
-  const perfil  = usuario?.perfil;
-  const grupoCC = perfil === "callcenter" || VE_COORD.includes(perfil);
-  const tot     = calcTotaisDetalhados(equipeLancs);
-  const m       = metas;
+  const perfil   = usuario?.perfil;
+  const grupoCC  = perfil === "callcenter" || VE_COORD.includes(perfil);
+  const tot      = calcTotaisDetalhados(equipeLancs);
+  const m        = metas;
+  const diasUteis = m.dias_uteis || 22;
+  const diasPassF = diasUteisPassadosFloat();
 
-  function metrica(tit, val, meta) {
+  function metrica(tit, val, meta, extra) {
     const pct    = meta > 0 ? Math.min((val/meta)*100, 100) : 0;
-    const classe = pct >= 80 ? "verde" : pct >= 50 ? "amarelo" : "vermelho";
+    const rawPct = meta > 0 ? (val/meta)*100 : 0;
+    const classe = rawPct >= 80 ? "verde" : rawPct >= 50 ? "amarelo" : "vermelho";
+    let projHtml = "";
+    if(diasPassF > 0 && meta > 0) {
+      const projVal = (val / diasPassF) * diasUteis;
+      const projPct = Math.min((projVal/meta)*100,100);
+      const projCl  = projPct >= 80 ? "verde" : projPct >= 50 ? "amarelo" : "vermelho";
+      projHtml = `<div class="equipe-met-meta" style="margin-top:4px">Projeção: <span class="equipe-met-pct ${projCl}">${brl(projVal)} (${projPct.toFixed(1)}%)</span></div>`;
+    }
     return `
       <div class="equipe-metrica">
         <div class="equipe-met-tit">${tit}</div>
         <div class="equipe-met-val">${brl(val)}</div>
         ${meta > 0 ? `
           <div class="equipe-met-meta">Meta: ${brl(meta)}</div>
-          <div class="equipe-bar"><div class="equipe-bar-fill ${classe}" style="width:${pct}%"></div></div>
-          <div class="equipe-met-pct ${classe}">${pct.toFixed(1)}%</div>
+          <div class="equipe-bar"><div class="equipe-bar-fill ${classe}" style="width:${Math.min(pct,100)}%"></div></div>
+          <div class="equipe-met-pct ${classe}">${rawPct.toFixed(1)}%</div>
+          ${projHtml}
+          ${extra || ""}
         ` : '<div class="equipe-met-meta">Meta não definida</div>'}
       </div>`;
   }
@@ -2591,21 +2751,41 @@ function renderCardMetasEquipe() {
     const metaCC = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
     el.innerHTML = metrica("💰 Caixa CC — Equipe", tot.caixa, metaCC);
   } else {
-    // Número de recepcionistas + líderes de recepção
-    const numRec = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
+    const numRec      = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
     const metaCaixa   = (m.meta_caixa_recepcao  || 0) * numRec;
     const metaCredito = (m.meta_credito_recepcao || 0) * numRec;
     const metaBoleto  = m.meta_boleto_equipe  || 0;
-    const metaLab     = m.meta_lab_equipe     || 0;
-    const metaImg     = m.meta_img_equipe     || 0;
-    const metaProc    = m.meta_proc_equipe    || 0;
+    const metaLab     = m.meta_lab_equipe     || 273000;
+    const metaImg     = m.meta_img_equipe     || 144000;
+    const metaProc    = m.meta_proc_equipe    || 227500;
+
+    const poolLab  = calcPoolPremio(tot.lab,  metaLab,  FAIXAS_POOL_LAB);
+    const poolImg  = calcPoolPremio(tot.img,  metaImg,  FAIXAS_POOL_IMG);
+    const poolProc = calcPoolPremio(tot.proc, metaProc, FAIXAS_POOL_PROC);
+
+    function parteExtra(pool, projPool) {
+      const parte     = calcPartePool(usuario.nome, pool);
+      const projParte = calcPartePool(usuario.nome, projPool);
+      if(parte <= 0 && pool <= 0) return "";
+      const projStr = (projParte !== parte && diasPassF > 0)
+        ? `<div class="equipe-met-meta" style="color:#B45309">Projeção parte: <strong>${brl(projParte)}</strong></div>` : "";
+      return `<div class="equipe-met-meta" style="margin-top:4px;color:#B45309">Sua parte: <strong>${brl(parte)}</strong></div>${projStr}`;
+    }
+
+    let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc;
+    if(diasPassF > 0) {
+      projPoolLab  = calcPoolPremio((tot.lab  / diasPassF) * diasUteis, metaLab,  FAIXAS_POOL_LAB);
+      projPoolImg  = calcPoolPremio((tot.img  / diasPassF) * diasUteis, metaImg,  FAIXAS_POOL_IMG);
+      projPoolProc = calcPoolPremio((tot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
+    }
+
     el.innerHTML =
       metrica("💰 Caixa",        tot.caixa,   metaCaixa)   +
       metrica("💳 Crédito",      tot.credito, metaCredito) +
       metrica("📄 Boleto",       tot.boleto,  metaBoleto)  +
-      metrica("🧪 Lab",          tot.lab,     metaLab)     +
-      metrica("🩻 Imagem",       tot.img,     metaImg)     +
-      metrica("💉 Procedimentos",tot.proc,    metaProc);
+      metrica("🧪 Lab",          tot.lab,     metaLab,  parteExtra(poolLab,  projPoolLab))  +
+      metrica("🩻 Imagem",       tot.img,     metaImg,  parteExtra(poolImg,  projPoolImg))  +
+      metrica("💉 Procedimentos",tot.proc,    metaProc, parteExtra(poolProc, projPoolProc));
   }
 }
 
@@ -3350,7 +3530,7 @@ function mudarModoDash(modo) {
 // ═══════════════════════════════════════════════════════════
 function calcTotaisDetalhados(lista) {
   const fmCaixa = ["Dinheiro","Débito","Pix","Boleto"];
-  let caixa=0, credito=0, boleto=0, lab=0, img=0, proc=0, consultas=0;
+  let caixa=0, credito=0, boleto=0, lab=0, img=0, proc=0, injetaveis=0, consultas=0;
   const porProcTipo = {};
   lista.forEach(l => {
     if(l.tipo !== "entrada") return;
@@ -3360,11 +3540,15 @@ function calcTotaisDetalhados(lista) {
     if(fp==="Boleto")         boleto  += v;
     if(p==="Exames Laboratoriais") lab += v;
     if(p==="Exames de Imagem")     img += v;
-    if(p==="Procedimento")  { proc += v; if(tp) porProcTipo[tp]=(porProcTipo[tp]||0)+v; }
-    if(p==="Consultas")            consultas += v;
+    if(p==="Procedimento") {
+      proc += v;
+      if(tp) { porProcTipo[tp]=(porProcTipo[tp]||0)+v; }
+      if(tp==="Injetáveis") injetaveis += v;
+    }
+    if(p==="Consultas") consultas += v;
   });
   lista.filter(l=>l.tipo==="saida").forEach(l => { caixa -= l.valor||0; });
-  return { caixa:Math.max(0,caixa), credito:Math.max(0,credito), boleto, lab, img, proc, consultas, porProcTipo };
+  return { caixa:Math.max(0,caixa), credito:Math.max(0,credito), boleto, lab, img, proc, injetaveis, consultas, porProcTipo };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3422,65 +3606,103 @@ function renderDashEquipe(lista) {
   }
 
   document.getElementById("dash-cards-equipe").innerHTML =
-    miniCard("Caixa — Equipe",   tot.caixa,   metaC,  "💰") +
-    miniCard("Crédito — Equipe", tot.credito,  metaCr, "💳") +
-    miniCard("Boleto — Equipe",  tot.boleto,   metaB,  "📄") +
-    miniCard("Exames Lab.",      tot.lab,      m.meta_lab_equipe||0,  "🧪") +
-    miniCard("Exames Imagem",    tot.img,      m.meta_img_equipe||0,  "🩻") +
-    miniCard("Procedimentos",    tot.proc,     m.meta_proc_equipe||0, "💉");
+    miniCard("Caixa — Equipe",   tot.caixa,      metaC,  "💰") +
+    miniCard("Crédito — Equipe", tot.credito,    metaCr, "💳") +
+    miniCard("Boleto — Equipe",  tot.boleto,     metaB,  "📄") +
+    miniCard("Exames Lab.",      tot.lab,        m.meta_lab_equipe||0,        "🧪") +
+    miniCard("Exames Imagem",    tot.img,        m.meta_img_equipe||0,        "🩻") +
+    miniCard("Procedimentos",    tot.proc,       m.meta_proc_equipe||0,       "💉") +
+    miniCard("Injetáveis",       tot.injetaveis, m.meta_injetaveis_equipe||0, "💊");
 }
 
-// ── Painel de Premiações Pagas (usa dashLancs bruto para calcular pelo mês inteiro)
+// ── Painel de Premiações (usa dashLancs bruto para calcular pelo mês inteiro)
 function renderDashPremiacao() {
   const el = document.getElementById("dash-premiacao");
   if(!el) return;
 
-  // gestor e subgestora veem todos os 4 grupos; lider vê somente Recepção Médica
   const verCC = SO_DASHBOARD.includes(usuario?.perfil);
 
-  const m = dashMetasMes || {};
+  const m          = dashMetasMes || {};
   const metaRec    = m.meta_caixa_recepcao   || 120000;
   const metaCred   = m.meta_credito_recepcao  || 16000;
   const metaCC     = m.meta_caixa_callcenter  || 28000;
+  const metaLab    = m.meta_lab_equipe        || 273000;
+  const metaImg    = m.meta_img_equipe        || 144000;
+  const metaProc   = m.meta_proc_equipe       || 227500;
   const metaEquipeCC = metaCC * CC_TODOS.length;
   const diasUteis  = m.dias_uteis || 22;
-  const diasPass   = diasUteisPassados(diasUteis);
   const diasPassF  = diasUteisPassadosFloat();
 
-  // Agrupa lançamentos do mês inteiro por colaboradora
+  // Agrupa lançamentos por colaboradora
   const por = {};
   dashLancs.forEach(l => {
     if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
     por[l.usuario_nome].push(l);
   });
 
-  // Linhas individuais (recepção + CC atendentes)
-  const linhas = Object.entries(por)
-    .filter(([nome]) => {
-      const p = PERFIS[nome] || "";
-      return p === "recepcionista" || p === "lider" || p === "callcenter";
-    })
+  // ── Recepção: pool lab/img/proc ────────────────────────────
+  const recLancs   = dashLancs.filter(l => { const p=PERFIS[l.usuario_nome]||""; return p==="recepcionista"||p==="lider"; });
+  const teamRecTot = calcTotaisDetalhados(recLancs);
+  const poolLab    = calcPoolPremio(teamRecTot.lab,  metaLab,  FAIXAS_POOL_LAB);
+  const poolImg    = calcPoolPremio(teamRecTot.img,  metaImg,  FAIXAS_POOL_IMG);
+  const poolProc   = calcPoolPremio(teamRecTot.proc, metaProc, FAIXAS_POOL_PROC);
+  const pctLabStr  = metaLab  > 0 ? (teamRecTot.lab  / metaLab  * 100).toFixed(1)+"%" : "—";
+  const pctImgStr  = metaImg  > 0 ? (teamRecTot.img  / metaImg  * 100).toFixed(1)+"%" : "—";
+  const pctProcStr = metaProc > 0 ? (teamRecTot.proc / metaProc * 100).toFixed(1)+"%" : "—";
+
+  // Pool projeção
+  let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc;
+  if(diasPassF > 0) {
+    projPoolLab  = calcPoolPremio((teamRecTot.lab  / diasPassF) * diasUteis, metaLab,  FAIXAS_POOL_LAB);
+    projPoolImg  = calcPoolPremio((teamRecTot.img  / diasPassF) * diasUteis, metaImg,  FAIXAS_POOL_IMG);
+    projPoolProc = calcPoolPremio((teamRecTot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
+  }
+
+  // ── Linhas recepção ────────────────────────────────────────
+  const linhasRec = Object.entries(por)
+    .filter(([nome]) => { const p=PERFIS[nome]||""; return p==="recepcionista"||p==="lider"; })
     .map(([nome, ls]) => {
-      const tot    = calcTotaisDetalhados(ls);
-      const perfil = PERFIS[nome] || "";
-      const mC     = perfil === "callcenter" ? metaCC : metaRec;
-      const mCr    = perfil === "callcenter" ? 0 : metaCred;
-      const prem   = calcPremiacao(tot.caixa, tot.credito, perfil, mC, mCr);
-      let premProj = prem;
-      if(diasPass > 0) {
-        const projC  = (tot.caixa   / diasPass) * diasUteis;
-        const projCr = (tot.credito / diasPass) * diasUteis;
-        premProj = calcPremiacao(projC, projCr, perfil, mC, mCr);
+      const tot       = calcTotaisDetalhados(ls);
+      const perfil    = PERFIS[nome] || "";
+      const contBol   = ls.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
+      const premCaixa = calcPremiacaoCaixaRec(tot.caixa, tot.credito, metaRec, metaCred);
+      const premBol   = calcPremBoleto(contBol);
+      const parteLab  = calcPartePool(nome, poolLab);
+      const parteImg  = calcPartePool(nome, poolImg);
+      const parteProc = calcPartePool(nome, poolProc);
+      const total     = premCaixa.valor + premBol + parteLab + parteImg + parteProc;
+      let totalProj   = total;
+      if(diasPassF > 0) {
+        const projC    = (tot.caixa   / diasPassF) * diasUteis;
+        const projCr   = (tot.credito / diasPassF) * diasUteis;
+        const projCont = Math.round((contBol / diasPassF) * diasUteis);
+        totalProj = calcPremiacaoCaixaRec(projC, projCr, metaRec, metaCred).valor
+                  + calcPremBoleto(projCont)
+                  + calcPartePool(nome, projPoolLab)
+                  + calcPartePool(nome, projPoolImg)
+                  + calcPartePool(nome, projPoolProc);
       }
-      return { nome, perfil, tot, mC, mCr, prem, premProj };
-    });
+      const pctC = metaRec > 0 ? (tot.caixa / metaRec * 100).toFixed(1) : "—";
+      return { nome, perfil, tot, contBol, premCaixa, premBol, parteLab, parteImg, parteProc, total, totalProj, pctC };
+    })
+    .sort((a,b) => b.total - a.total);
 
-  const linhasRec = linhas.filter(r => r.perfil === "recepcionista" || r.perfil === "lider")
-                          .sort((a,b) => b.prem.valor - a.prem.valor);
-  const linhasCC  = linhas.filter(r => r.perfil === "callcenter")
-                          .sort((a,b) => b.prem.valor - a.prem.valor);
+  // ── Linhas CC ──────────────────────────────────────────────
+  const linhasCC = Object.entries(por)
+    .filter(([nome]) => { const p=PERFIS[nome]||""; return p==="callcenter"; })
+    .map(([nome, ls]) => {
+      const tot  = calcTotaisDetalhados(ls);
+      const prem = calcPremiacao(tot.caixa, tot.credito, "callcenter", metaCC, 0);
+      let premProj = prem;
+      if(diasPassF > 0) {
+        const projC = (tot.caixa / diasPassF) * diasUteis;
+        premProj = calcPremiacao(projC, 0, "callcenter", metaCC, 0);
+      }
+      return { nome, tot, prem, premProj };
+    })
+    .sort((a,b) => b.prem.valor - a.prem.valor);
 
-  // CC equipe total para grupos 3 e 4
+  // ── Liderança + Coordenação CC ─────────────────────────────
   let totalCaixaCC = 0;
   CC_TODOS.forEach(n => { totalCaixaCC += (por[n] ? calcTotaisDetalhados(por[n]).caixa : 0); });
   const pctMetaCC = metaEquipeCC > 0 ? totalCaixaCC / metaEquipeCC : 0;
@@ -3490,178 +3712,145 @@ function renderDashPremiacao() {
   const premCoord = faixaCoordAtual ? faixaCoordAtual.prem : 0;
   const faixaLiderLabel = faixaLiderAtual ? faixaLiderAtual.label : "Abaixo de 80%";
   const faixaCoordLabel = faixaCoordAtual ? faixaCoordAtual.label : "Abaixo de 80%";
-
-  // Projeção CC equipe para grupos 3 e 4
   let premLiderProj = premLider, premCoordProj = premCoord;
-  let faixaLiderLabelProj = faixaLiderLabel, faixaCoordLabelProj = faixaCoordLabel;
+  let fLiderProjLabel = faixaLiderLabel, fCoordProjLabel = faixaCoordLabel;
   if(diasPassF > 0) {
-    const projCaixaCC = (totalCaixaCC / diasPassF) * diasUteis;
-    const pctProj = metaEquipeCC > 0 ? projCaixaCC / metaEquipeCC : 0;
-    const { atual: lProj } = calcFaixaCC(FAIXAS_LIDER_CC, pctProj);
-    const { atual: cProj } = calcFaixaCC(FAIXAS_COORD_CC, pctProj);
-    premLiderProj = lProj ? lProj.prem : 0;
-    premCoordProj = cProj ? cProj.prem : 0;
-    faixaLiderLabelProj = lProj ? lProj.label : "Abaixo de 80%";
-    faixaCoordLabelProj = cProj ? cProj.label : "Abaixo de 80%";
+    const projCC = (totalCaixaCC / diasPassF) * diasUteis;
+    const pctProj = metaEquipeCC > 0 ? projCC / metaEquipeCC : 0;
+    const { atual: lP } = calcFaixaCC(FAIXAS_LIDER_CC, pctProj);
+    const { atual: cP } = calcFaixaCC(FAIXAS_COORD_CC, pctProj);
+    premLiderProj = lP ? lP.prem : 0; fLiderProjLabel = lP ? lP.label : "Abaixo de 80%";
+    premCoordProj = cP ? cP.prem : 0; fCoordProjLabel = cP ? cP.label : "Abaixo de 80%";
   }
 
-  // Totalizadores
-  const totalRec     = linhasRec.reduce((s,r) => s + r.prem.valor, 0);
-  const totalCCInd   = linhasCC.reduce((s,r) => s + r.prem.valor, 0);
-  const totalLider   = premLider + premCoord;
-  const totalGeral   = totalRec + totalCCInd + totalLider;
-  const totalProjRec   = linhasRec.reduce((s,r) => s + r.premProj.valor, 0);
+  // ── Totalizadores ──────────────────────────────────────────
+  const totalRec       = linhasRec.reduce((s,r) => s + r.total, 0);
+  const totalProjRec   = linhasRec.reduce((s,r) => s + r.totalProj, 0);
+  const totalCCInd     = linhasCC.reduce((s,r) => s + r.prem.valor, 0);
   const totalProjCCInd = linhasCC.reduce((s,r) => s + r.premProj.valor, 0);
+  const totalLider     = premLider + premCoord;
   const totalProjLider = premLiderProj + premCoordProj;
+  const totalGeral     = totalRec + totalCCInd + totalLider;
   const totalProj      = totalProjRec + totalProjCCInd + totalProjLider;
 
-  if(!linhas.length) {
+  if(!linhasRec.length && !linhasCC.length) {
     el.innerHTML = '<div class="empty"><div class="ei">💰</div>Nenhum dado disponível.</div>';
     return;
   }
 
-  function faixaClass(prem) {
-    if(!prem.valor) return "";
-    if(prem.faixa.includes("🏆") || prem.faixa.includes("150%")) return "top";
-    if(prem.faixa.includes("✅") || prem.faixa.includes("100%")) return "ok";
+  // ── Funções de linha ───────────────────────────────────────
+  function faixaClass(faixa) {
+    if(!faixa) return "";
+    if(faixa.includes("💎") || faixa.includes("🏆") || faixa.includes("150%")) return "top";
+    if(faixa.includes("✅") || faixa.includes("100%")) return "ok";
     return "";
   }
 
-  function rowInd(r) {
-    const pctC  = r.mC  > 0 ? (r.tot.caixa   / r.mC  * 100).toFixed(1) : "—";
-    const pctCr = r.mCr > 0 ? (r.tot.credito / r.mCr * 100).toFixed(1) : "—";
-    const temCred = r.perfil !== "callcenter";
-    const fc = faixaClass(r.prem);
+  function rowRec(r) {
+    const fc = faixaClass(r.premCaixa.faixa);
+    const cor = v => v > 0 ? "color:#B45309" : "color:var(--text2)";
     return `<tr>
       <td><strong>${r.nome}</strong></td>
-      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
-      <td class="num">${brl(r.tot.caixa)}</td>
-      <td class="num" style="font-weight:600;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</td>
-      <td class="num">${temCred ? brl(r.tot.credito) : "—"}</td>
-      <td class="num" style="color:${pctCr!=="—"&&+pctCr>=100?"var(--success)":"inherit"}">${temCred && pctCr !== "—" ? pctCr+"%" : "—"}</td>
-      <td><span class="prem-faixa ${fc}">${r.prem.faixa || "Abaixo de 80%"}</span></td>
-      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">${brl(r.prem.valor)}</td>
-      <td class="num">
-        <div style="font-weight:700;color:${r.premProj.valor>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valor)}</div>
-        ${r.premProj.valor !== r.prem.valor ? `<div class="prem-proj">${r.premProj.faixa}</div>` : ""}
-      </td>
+      <td class="num">${brl(r.tot.caixa)}<div style="font-size:11px;color:${+r.pctC>=100?"var(--success)":"var(--primary)"};">${r.pctC !== "—" ? r.pctC+"%" : "—"}</div></td>
+      <td class="num" style="font-weight:700;${cor(r.premCaixa.valor)}">${brl(r.premCaixa.valor)}<div style="margin-top:2px"><span class="prem-faixa ${fc}" style="font-size:10px">${r.premCaixa.faixa}</span></div></td>
+      <td class="num" style="${cor(r.premBol)}">${brl(r.premBol)}<div style="font-size:11px;color:var(--text2)">${r.contBol} bol.</div></td>
+      <td class="num" style="${cor(r.parteLab)}">${brl(r.parteLab)}</td>
+      <td class="num" style="${cor(r.parteImg)}">${brl(r.parteImg)}</td>
+      <td class="num" style="${cor(r.parteProc)}">${brl(r.parteProc)}</td>
+      <td class="num" style="font-weight:700;${cor(r.total)}">${brl(r.total)}</td>
+      <td class="num" style="font-weight:700;${cor(r.totalProj)}">${brl(r.totalProj)}</td>
     </tr>`;
   }
 
-  function rowLidGestao(nome, perfil, caixaEquipe, metaEq, premAtual, premProj, faixaAtual, faixaProj) {
-    const pctC = metaEq > 0 ? (caixaEquipe / metaEq * 100).toFixed(1) : "—";
-    const fc = premAtual > 0 ? (faixaAtual.includes("150%") ? "top" : faixaAtual.includes("100%") ? "ok" : "") : "";
+  function rowCC(r) {
+    const pct = metaCC > 0 ? (r.tot.caixa / metaCC * 100).toFixed(1) : "—";
+    const fc  = faixaClass(r.prem.faixa);
     return `<tr>
-      <td><strong>${nome}</strong></td>
-      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[perfil]||perfil}</td>
-      <td class="num">${brl(caixaEquipe)}<div style="font-size:11px;color:var(--text2)">equipe CC</div></td>
-      <td class="num" style="font-weight:600;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</td>
+      <td><strong>${r.nome}</strong></td>
+      <td class="num">${brl(r.tot.caixa)}<div style="font-size:11px;color:${pct!=="—"&&+pct>=100?"var(--success)":"var(--primary)"}">${pct !== "—" ? pct+"%" : "—"}</div></td>
+      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">
+        ${brl(r.prem.valor)}<div><span class="prem-faixa ${fc}" style="font-size:10px">${r.prem.faixa}</span></div>
+      </td>
+      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
+      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">${brl(r.prem.valor)}</td>
+      <td class="num" style="font-weight:700;color:${r.premProj.valor>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valor)}</td>
+    </tr>`;
+  }
+
+  function rowLid(nome, perfil, caixaEq, metaEq, pAt, pProj, fAt, fProj) {
+    const pctC = metaEq > 0 ? (caixaEq / metaEq * 100).toFixed(1) : "—";
+    const fc   = faixaClass(fAt);
+    return `<tr>
+      <td><strong>${nome}</strong><div style="font-size:11px;color:var(--text2)">${PERFIL_LABEL[perfil]||perfil}</div></td>
+      <td class="num">${brl(caixaEq)}<div style="font-size:11px;color:var(--text2)">equipe CC</div><div style="font-size:11px;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</div></td>
+      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
       <td class="num">—</td>
-      <td class="num">—</td>
-      <td><span class="prem-faixa ${fc}">${faixaAtual}</span></td>
-      <td class="num" style="font-weight:700;color:${premAtual>0?"#B45309":"var(--text2)"}">${brl(premAtual)}</td>
-      <td class="num">
-        <div style="font-weight:700;color:${premProj>0?"#B45309":"var(--text2)"}">${brl(premProj)}</div>
-        ${premProj !== premAtual ? `<div class="prem-proj">${faixaProj}</div>` : ""}
+      <td class="num" style="font-weight:700;color:${pAt>0?"#B45309":"var(--text2)"}">
+        ${brl(pAt)}<div><span class="prem-faixa ${fc}" style="font-size:10px">${fAt}</span></div>
+      </td>
+      <td class="num" style="font-weight:700;color:${pProj>0?"#B45309":"var(--text2)"}">${brl(pProj)}${pProj!==pAt?`<div class="prem-proj">${fProj}</div>`:""}
       </td>
     </tr>`;
   }
 
   const pctCCEquipe = metaEquipeCC > 0 ? (totalCaixaCC / metaEquipeCC * 100).toFixed(1) : "—";
 
+  const tblHead = `<thead><tr>
+    <th>Colaboradora</th>
+    <th class="num">Caixa</th>
+    <th class="num">Prêm. Caixa</th>
+    <th class="num">Boleto</th>
+    <th class="num">Lab</th>
+    <th class="num">Imagem</th>
+    <th class="num">Proc</th>
+    <th class="num">Total</th>
+    <th class="num">Projeção</th>
+  </tr></thead>`;
+
+  const resumoCards = verCC ? `
+    <div class="prem-resumo-grid">
+      <div class="prem-resumo-card"><div class="prc-label">💰 Total Geral</div><div class="prc-val">${brl(totalGeral)}</div><div class="prc-sub">Projeção: ${brl(totalProj)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">🩺 Recepção</div><div class="prc-val">${brl(totalRec)}</div><div class="prc-sub">Projeção: ${brl(totalProjRec)} · Lab ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">📞 CC Individual</div><div class="prc-val">${brl(totalCCInd)}</div><div class="prc-sub">Projeção: ${brl(totalProjCCInd)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">🏅 Liderança + Coord CC</div><div class="prc-val">${brl(totalLider)}</div><div class="prc-sub">Projeção: ${brl(totalProjLider)} · CC ${pctCCEquipe !== "—" ? pctCCEquipe+"%" : "—"}</div></div>
+    </div>` : `
+    <div class="prem-resumo-grid">
+      <div class="prem-resumo-card"><div class="prc-label">🩺 Total Recepção Médica</div><div class="prc-val">${brl(totalRec)}</div><div class="prc-sub">Projeção: ${brl(totalProjRec)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">🔬 Lab equipe</div><div class="prc-val">${brl(teamRecTot.lab)}</div><div class="prc-sub">Meta: ${brl(metaLab)} · ${pctLabStr} · Pool: ${brl(poolLab)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">🩻 Img equipe</div><div class="prc-val">${brl(teamRecTot.img)}</div><div class="prc-sub">Meta: ${brl(metaImg)} · ${pctImgStr} · Pool: ${brl(poolImg)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">🏥 Proc equipe</div><div class="prc-val">${brl(teamRecTot.proc)}</div><div class="prc-sub">Meta: ${brl(metaProc)} · ${pctProcStr} · Pool: ${brl(poolProc)}</div></div>
+    </div>`;
+
   if(verCC) {
-    // Painel completo: 4 grupos + 4 cards resumo
-    el.innerHTML = `
-      <div class="prem-resumo-grid">
-        <div class="prem-resumo-card">
-          <div class="prc-label">💰 Total Geral</div>
-          <div class="prc-val">${brl(totalGeral)}</div>
-          <div class="prc-sub">Projeção: ${brl(totalProj)}</div>
-        </div>
-        <div class="prem-resumo-card">
-          <div class="prc-label">🩺 Recepção Médica</div>
-          <div class="prc-val">${brl(totalRec)}</div>
-          <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
-        </div>
-        <div class="prem-resumo-card">
-          <div class="prc-label">📞 CC Individual</div>
-          <div class="prc-val">${brl(totalCCInd)}</div>
-          <div class="prc-sub">Projeção: ${brl(totalProjCCInd)}</div>
-        </div>
-        <div class="prem-resumo-card">
-          <div class="prc-label">🏅 Liderança + Coord CC</div>
-          <div class="prc-val">${brl(totalLider)}</div>
-          <div class="prc-sub">Projeção: ${brl(totalProjLider)} · CC equipe ${pctCCEquipe !== "—" ? pctCCEquipe+"%" : "—"} (meta ${brl(metaEquipeCC)})</div>
-        </div>
-      </div>
-
+    el.innerHTML = resumoCards + `
       <div class="tbl-wrap">
         <table class="prem-table">
-          <thead><tr>
-            <th>Colaboradora</th>
-            <th>Perfil</th>
-            <th class="num">Caixa</th>
-            <th class="num">% Meta</th>
-            <th class="num">Crédito</th>
-            <th class="num">% Créd.</th>
-            <th>Faixa</th>
-            <th class="num">💰 Prêmio</th>
-            <th class="num">Projeção</th>
-          </tr></thead>
+          ${tblHead}
           <tbody>
-            <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica</td></tr>
-            ${linhasRec.map(rowInd).join("")}
+            <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica · Lab equipe ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr}</td></tr>
+            ${linhasRec.map(rowRec).join("")}
             <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
-            ${linhasCC.map(rowInd).join("")}
-            <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
-            ${rowLidGestao("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,faixaLiderLabelProj)}
-            <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
-            ${rowLidGestao("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,faixaCoordLabelProj)}
+            ${linhasCC.map(rowCC).join("")}
+            <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
+            ${rowLid("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,fLiderProjLabel)}
+            <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
+            ${rowLid("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,fCoordProjLabel)}
           </tbody>
-          <tfoot><tr>
-            <td colspan="7">Total Geral</td>
-            <td class="num">${brl(totalGeral)}</td>
-            <td class="num">${brl(totalProj)}</td>
-          </tr></tfoot>
+          <tfoot><tr><td colspan="7">Total Geral</td><td class="num">${brl(totalGeral)}</td><td class="num">${brl(totalProj)}</td></tr></tfoot>
         </table>
-      </div>
-    `;
+      </div>`;
   } else {
-    // Perfil lider: somente Grupo 1 — Recepção Médica + 1 card resumo
-    el.innerHTML = `
-      <div class="prem-resumo-grid">
-        <div class="prem-resumo-card">
-          <div class="prc-label">🩺 Total Recepção Médica</div>
-          <div class="prc-val">${brl(totalRec)}</div>
-          <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
-        </div>
-      </div>
-
+    el.innerHTML = resumoCards + `
       <div class="tbl-wrap">
         <table class="prem-table">
-          <thead><tr>
-            <th>Colaboradora</th>
-            <th>Perfil</th>
-            <th class="num">Caixa</th>
-            <th class="num">% Meta</th>
-            <th class="num">Crédito</th>
-            <th class="num">% Créd.</th>
-            <th>Faixa</th>
-            <th class="num">💰 Prêmio</th>
-            <th class="num">Projeção</th>
-          </tr></thead>
+          ${tblHead}
           <tbody>
-            <tr class="prem-grupo-sep"><td colspan="9">🩺 Recepção Médica</td></tr>
-            ${linhasRec.map(rowInd).join("")}
+            <tr class="prem-grupo-sep"><td colspan="9">🩺 Recepção Médica · Lab equipe ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr}</td></tr>
+            ${linhasRec.map(rowRec).join("")}
           </tbody>
-          <tfoot><tr>
-            <td colspan="7">Total Recepção</td>
-            <td class="num">${brl(totalRec)}</td>
-            <td class="num">${brl(totalProjRec)}</td>
-          </tr></tfoot>
+          <tfoot><tr><td colspan="7">Total Recepção</td><td class="num">${brl(totalRec)}</td><td class="num">${brl(totalProjRec)}</td></tr></tfoot>
         </table>
-      </div>
-    `;
+      </div>`;
   }
 }
 
@@ -3695,7 +3884,13 @@ function renderDashRanking(lista) {
     const pct = metaC > 0 ? (r.caixa/metaC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
     const premBadge = metaC > 0
-      ? (() => { const p=calcPremiacao(r.caixa,r.credito,r.perfil,metaC,dashMetasMes?.meta_credito_recepcao||0); return p.valor>0?`<span class="prem-badge">🏅 ${brl(p.valor)}</span>`:""; })()
+      ? (() => {
+          const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
+          let v = 0;
+          if(isCC) { v = calcPremiacao(r.caixa,r.credito,r.perfil,metaC,0).valor; }
+          else     { v = calcPremiacaoCaixaRec(r.caixa,r.credito,metaC,dashMetasMes?.meta_credito_recepcao||0).valor; }
+          return v > 0 ? `<span class="prem-badge">🏅 ${brl(v)}</span>` : "";
+        })()
       : "";
     return `<tr>
       <td><span class="rank-medal">${medals[posicao]||posicao+1}</span></td>
@@ -4522,10 +4717,13 @@ function calcPremiacaoTotalEquipe(lista, m) {
     const perfil = PERFIS[nome] || "";
     if(!FAZ_LANC.includes(perfil)) return soma;
     const tot  = calcTotaisDetalhados(ls);
-    const mC   = (perfil === "callcenter" || perfil === "lider_callcenter") ? mCC  : mRec;
-    const mCr  = (perfil === "callcenter" || perfil === "lider_callcenter") ? 0    : mCred;
-    const prem = calcPremiacao(tot.caixa, tot.credito, perfil, mC, mCr);
-    return soma + prem.valor;
+    const isCC = perfil === "callcenter" || perfil === "lider_callcenter";
+    const mC   = isCC ? mCC  : mRec;
+    const mCr  = isCC ? 0    : mCred;
+    const v    = isCC
+      ? calcPremiacao(tot.caixa, tot.credito, perfil, mC, mCr).valor
+      : calcPremiacaoCaixaRec(tot.caixa, tot.credito, mC, mCr).valor;
+    return soma + v;
   }, 0);
 }
 
@@ -4915,6 +5113,7 @@ function abrirModalMetas() {
   set("mm-lab",              m.meta_lab_equipe        || 0);
   set("mm-img",              m.meta_img_equipe        || 0);
   set("mm-proc",             m.meta_proc_equipe       || 0);
+  set("mm-injetaveis",       m.meta_injetaveis_equipe || 0);
 
   document.getElementById("modal-metas").classList.remove("hidden");
 }
@@ -4935,9 +5134,10 @@ async function salvarModalMetas() {
     meta_caixa_recepcao:   get("mm-caixa-recepcao"),
     meta_credito_recepcao: get("mm-credito-recepcao"),
     meta_caixa_callcenter: get("mm-caixa-callcenter"),
-    meta_lab_equipe:       get("mm-lab"),
-    meta_img_equipe:       get("mm-img"),
-    meta_proc_equipe:      get("mm-proc"),
+    meta_lab_equipe:            get("mm-lab"),
+    meta_img_equipe:            get("mm-img"),
+    meta_proc_equipe:           get("mm-proc"),
+    meta_injetaveis_equipe:     get("mm-injetaveis"),
   };
 
   const alvo = dashMesAno || getMesAno();
