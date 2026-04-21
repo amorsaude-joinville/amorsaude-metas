@@ -410,13 +410,13 @@
     .rank-grupo-sep td { background:#F3F4F6; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); padding:5px 12px; border-top:2px solid var(--border); }
     .colab-grupo-header { background:#F3F4F6; padding:8px 14px; border-radius:var(--r2); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); margin:14px 0 8px; }
 
-    /* ── ABAS LIDER ── */
-    #lider-nav, #lider-cc-nav {
+    /* ── ABAS LIDER / REC / CC ── */
+    #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav {
       display:none; position:sticky; top:64px; z-index:89;
       background:#fff; border-bottom:2px solid var(--border);
       padding:0 32px; gap:0; box-shadow:0 2px 6px rgba(0,0,0,.04);
     }
-    #lider-nav.show, #lider-cc-nav.show { display:flex; }
+    #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show { display:flex; }
     .lider-tab {
       padding:14px 28px; font-size:14px; font-weight:600; cursor:pointer;
       border:none; background:transparent; color:var(--text2);
@@ -564,10 +564,26 @@
 <!-- ══════════════ TELA APP ══════════════ -->
 <div id="tela-app" class="hidden">
 
-  <!-- Navegação por abas — líderes de recepção -->
+  <!-- Navegação por abas — líderes de recepção (4 abas) -->
   <div id="lider-nav">
-    <button class="lider-tab active" id="lider-tab-lanc" onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
-    <button class="lider-tab"        id="lider-tab-dash" onclick="mudarAbaLider('dashboard')">📊 Dashboard</button>
+    <button class="lider-tab active" id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Minhas Metas</button>
+    <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">👥 Equipe</button>
+    <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">📊 Dashboard</button>
+  </div>
+
+  <!-- Navegação por abas — recepcionistas (3 abas) -->
+  <div id="rec-nav">
+    <button class="lider-tab active" id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Minhas Metas</button>
+    <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">👥 Equipe</button>
+  </div>
+
+  <!-- Navegação por abas — call center (3 abas) -->
+  <div id="cc-nav">
+    <button class="lider-tab active" id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Minhas Metas</button>
+    <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">👥 Equipe</button>
   </div>
 
   <!-- Navegação por abas — líder de call center (Andrielli) -->
@@ -1412,10 +1428,14 @@ let dashModo    = localStorage.getItem("as_dash_modo") || "mes";
 // Sub-aba ativa no modo comparativo
 let dashSubComp = "dias_uteis";
 
-// Aba ativa das líderes de recepção ("lancamentos" | "dashboard")
+// Aba ativa das líderes de recepção ("lancamentos" | "metas" | "equipe" | "dashboard")
 let abaLider = "lancamentos";
 // Aba ativa da líder de call center ("lancamentos" | "callcenter")
 let abaLiderCC = "lancamentos";
+// Aba ativa das recepcionistas ("lancamentos" | "metas" | "equipe")
+let abaRec = "lancamentos";
+// Aba ativa do call center ("lancamentos" | "metas" | "equipe")
+let abaCC = "lancamentos";
 
 // Aba ativa da seção de prescritores ("prescritor" | "comparativo" | "area")
 let abaPrescritor = "prescritor";
@@ -1769,18 +1789,35 @@ function iniciarApp() {
   marcosMostrados = new Set();
   fecharBanner();
 
-  // Barra de abas — líder de recepção (Dara, Bianca)
-  const nav = document.getElementById("lider-nav");
-  nav.classList.toggle("show", ehLider);
+  const ehRec = perfil === "recepcionista";
+  const ehCC  = perfil === "callcenter";
+
+  // Barra de abas — líder de recepção (Dara, Bianca): 4 abas
+  document.getElementById("lider-nav").classList.toggle("show", ehLider);
   if(ehLider) {
     const saved = localStorage.getItem("as_aba_lider");
-    abaLider = saved === "dashboard" ? "dashboard" : "lancamentos";
+    abaLider = ["lancamentos","metas","equipe","dashboard"].includes(saved) ? saved : "lancamentos";
     aplicarAbaLider();
   }
 
+  // Barra de abas — recepcionistas: 3 abas
+  document.getElementById("rec-nav").classList.toggle("show", ehRec);
+  if(ehRec) {
+    const saved = localStorage.getItem("as_aba_rec");
+    abaRec = ["lancamentos","metas","equipe"].includes(saved) ? saved : "lancamentos";
+    aplicarAbaRec();
+  }
+
+  // Barra de abas — call center: 3 abas
+  document.getElementById("cc-nav").classList.toggle("show", ehCC);
+  if(ehCC) {
+    const saved = localStorage.getItem("as_aba_cc");
+    abaCC = ["lancamentos","metas","equipe"].includes(saved) ? saved : "lancamentos";
+    aplicarAbaCC();
+  }
+
   // Barra de abas — líder de call center (Andrielli)
-  const navCC = document.getElementById("lider-cc-nav");
-  navCC.classList.toggle("show", ehLiderCC);
+  document.getElementById("lider-cc-nav").classList.toggle("show", ehLiderCC);
   if(ehLiderCC) {
     const saved = localStorage.getItem("as_aba_lider_cc");
     abaLiderCC = saved === "callcenter" ? "callcenter" : "lancamentos";
@@ -1788,27 +1825,25 @@ function iniciarApp() {
   }
 
   // Seção coordenadora — coordenadora fixa + líder CC quando em aba CC
-  // Para lider_callcenter, visibilidade controlada por aplicarAbaLiderCC()
   if(!ehLiderCC) {
     document.getElementById("sec-coord").style.display = ehCoord ? "" : "none";
   }
 
   // Seções de dashboard geral (gestor/subgestora/lider na aba dashboard)
-  // Para líderes de recepção, controlado por aplicarAbaLider()
   if(!ehLider) {
     document.getElementById("sec-dashboard").style.display = temDashboard ? "" : "none";
   }
 
   // Card equipe — visível para quem faz lançamento (exceto gestor/subgestora)
+  // Para perfis com abas próprias, a visibilidade é controlada por aplicarAbaXxx()
   const verEquipe = (temLanc || ehCoord) && !SO_DASHBOARD.includes(perfil);
-  if(!ehLider && !ehLiderCC) {
+  if(!ehLider && !ehLiderCC && !ehRec && !ehCC) {
     document.getElementById("sec-card-equipe").style.display = verEquipe ? "" : "none";
   }
 
-  // Seções de lançamento — para líderes controlado por aplicarAbaLider/LiderCC()
-  if(!ehLider && !ehLiderCC) {
+  // Seções de lançamento — para perfis com abas, controlado por aplicarAbaXxx()
+  if(!ehLider && !ehLiderCC && !ehRec && !ehCC) {
     document.getElementById("sec-metas").style.display     = temLanc ? "" : "none";
-    document.getElementById("grid-extras").style.display   = temLanc ? "" : "none";
     document.getElementById("sec-resumo").style.display    = temLanc ? "" : "none";
     document.getElementById("sec-lanc").style.display      = temLanc ? "" : "none";
     document.getElementById("sec-tabela").style.display    = temLanc ? "" : "none";
@@ -1828,27 +1863,30 @@ function iniciarApp() {
   if(temLanc)      iniciarListener();
   if(ehCoord)      iniciarCoord();
   if(ehGestao)     iniciarFechamento();
-  // Lider e liderCC: listener iniciado por aplicarAbaLider/CC quando aba lançamentos está ativa
+  // Rec/CC: inicia equipe imediatamente (pool calc necessário para aba Metas)
+  // Lider e liderCC: listener iniciado por aplicarAbaLider/CC quando sai do dashboard
   if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
 }
 
-// Aplica visibilidade das seções conforme aba ativa da líder
+// Aplica visibilidade das seções conforme aba ativa da líder (4 abas)
 function aplicarAbaLider() {
-  const emDash = abaLider === "dashboard";
+  const emLanc   = abaLider === "lancamentos";
+  const emMetas  = abaLider === "metas";
+  const emEquipe = abaLider === "equipe";
+  const emDash   = abaLider === "dashboard";
 
-  document.getElementById("lider-tab-lanc").classList.toggle("active", !emDash);
-  document.getElementById("lider-tab-dash").classList.toggle("active",  emDash);
+  ["lanc","metas","equipe","dash"].forEach(t =>
+    document.getElementById(`lider-tab-${t}`).classList.toggle("active", abaLider === (t==="dash"?"dashboard":t==="lanc"?"lancamentos":t))
+  );
 
-  document.getElementById("sec-dashboard").style.display   = emDash  ? "" : "none";
-  document.getElementById("sec-card-equipe").style.display = emDash  ? "none" : "";
-  document.getElementById("sec-metas").style.display       = emDash  ? "none" : "";
-  document.getElementById("grid-extras").style.display     = emDash  ? "none" : "";
-  document.getElementById("sec-resumo").style.display      = emDash  ? "none" : "";
-  document.getElementById("sec-lanc").style.display        = emDash  ? "none" : "";
-  document.getElementById("sec-tabela").style.display      = emDash  ? "none" : "";
-  document.getElementById("sec-historico").style.display   = emDash  ? "none" : "";
+  document.getElementById("sec-dashboard").style.display   = emDash   ? "" : "none";
+  document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
+  document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
+  document.getElementById("sec-lanc").style.display        = emLanc   ? "" : "none";
+  document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-tabela").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
 
-  // Inicia listener equipe na primeira vez que aba lançamentos é aberta
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
 }
 
@@ -1856,6 +1894,54 @@ function mudarAbaLider(aba) {
   abaLider = aba;
   localStorage.setItem("as_aba_lider", aba);
   aplicarAbaLider();
+}
+
+// Aplica visibilidade das seções conforme aba ativa das recepcionistas
+function aplicarAbaRec() {
+  const emLanc   = abaRec === "lancamentos";
+  const emMetas  = abaRec === "metas";
+  const emEquipe = abaRec === "equipe";
+
+  ["lanc","metas","equipe"].forEach(t =>
+    document.getElementById(`rec-tab-${t}`).classList.toggle("active", abaRec === (t==="lanc"?"lancamentos":t))
+  );
+
+  document.getElementById("sec-lanc").style.display        = emLanc   ? "" : "none";
+  document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-tabela").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
+  document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
+  document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
+}
+
+function mudarAbaRec(aba) {
+  abaRec = aba;
+  localStorage.setItem("as_aba_rec", aba);
+  aplicarAbaRec();
+}
+
+// Aplica visibilidade das seções conforme aba ativa do call center
+function aplicarAbaCC() {
+  const emLanc   = abaCC === "lancamentos";
+  const emMetas  = abaCC === "metas";
+  const emEquipe = abaCC === "equipe";
+
+  ["lanc","metas","equipe"].forEach(t =>
+    document.getElementById(`cc-tab-${t}`).classList.toggle("active", abaCC === (t==="lanc"?"lancamentos":t))
+  );
+
+  document.getElementById("sec-lanc").style.display        = emLanc   ? "" : "none";
+  document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-tabela").style.display      = emLanc   ? "" : "none";
+  document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
+  document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
+  document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
+}
+
+function mudarAbaCC(aba) {
+  abaCC = aba;
+  localStorage.setItem("as_aba_cc", aba);
+  aplicarAbaCC();
 }
 
 // Aplica visibilidade das seções conforme aba ativa da líder de call center
@@ -1868,7 +1954,6 @@ function aplicarAbaLiderCC() {
   // Aba Lançamentos: mesma interface de callcenter
   document.getElementById("sec-card-equipe").style.display = emCC ? "none" : "";
   document.getElementById("sec-metas").style.display       = emCC ? "none" : "";
-  document.getElementById("grid-extras").style.display     = emCC ? "none" : "";
   document.getElementById("sec-resumo").style.display      = emCC ? "none" : "";
   document.getElementById("sec-lanc").style.display        = emCC ? "none" : "";
   document.getElementById("sec-tabela").style.display      = emCC ? "none" : "";
@@ -2748,8 +2833,32 @@ function renderCardMetasEquipe() {
   }
 
   if(grupoCC) {
-    const metaCC = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
-    el.innerHTML = metrica("💰 Caixa CC — Equipe", tot.caixa, metaCC);
+    const metaCC    = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+    const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
+    const porPessoa = {};
+    equipeLancs.forEach(l => {
+      if(!porPessoa[l.usuario_nome]) porPessoa[l.usuario_nome] = [];
+      porPessoa[l.usuario_nome].push(l);
+    });
+    const ranking = CC_TODOS.map(nome => {
+      const { caixa } = calcTotais(porPessoa[nome]||[]);
+      const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
+      const cor  = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
+      return { nome, caixa, pct, cor };
+    }).sort((a,b)=>b.caixa-a.caixa);
+    const rankHtml = ranking.map((r,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:18px;min-width:28px">${i===0?"🥇":i===1?"🥈":"🥉"}</span>
+        <span style="flex:1;font-weight:600;font-size:14px">${r.nome}</span>
+        <span style="font-size:13px;color:var(--text2)">${brl(r.caixa)}</span>
+        <span style="font-size:12px;font-weight:700;color:${r.cor}">${r.pct.toFixed(1)}%</span>
+      </div>`).join("");
+    el.innerHTML =
+      metrica("💰 Caixa CC — Equipe", tot.caixa, metaCC) +
+      `<div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
+        ${rankHtml}
+       </div>`;
   } else {
     const numRec      = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
     const metaCaixa   = (m.meta_caixa_recepcao  || 0) * numRec;
