@@ -31,6 +31,7 @@
     /* ── LOGIN ── */
     #tela-login {
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      overflow-y: auto; padding: 24px 0;
       background: linear-gradient(135deg,#FFF5F7 0%,#fff 60%,#FFF0F3 100%);
     }
     .login-box {
@@ -530,8 +531,11 @@
 
     <div id="msg-reset" style="display:none;margin-top:12px;font-size:13px;text-align:center;padding:10px 14px;border-radius:var(--r2)"></div>
 
-    <div style="text-align:center;margin-top:14px">
-      <button onclick="esqueceuSenha()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--primary);font-family:'Inter',sans-serif;padding:0;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Esqueci minha senha</button>
+    <div style="text-align:center;margin-top:18px;padding-bottom:4px">
+      <button type="button" onclick="esqueceuSenha()"
+        style="background:none;border:none;cursor:pointer;font-size:13px;color:#E8003D;font-family:'Inter',sans-serif;padding:4px 8px;display:inline-block;text-decoration:none;line-height:1.4"
+        onmouseover="this.style.textDecoration='underline'"
+        onmouseout="this.style.textDecoration='none'">Esqueci minha senha</button>
     </div>
   </div>
 </div>
@@ -1234,7 +1238,7 @@ const USUARIOS = {
   "paola7ccristino@gmail.com":         { nome: "Paola",     perfil: "coordenadora"     },
   "darafidelesmarques@gmail.com":      { nome: "Dara",      perfil: "lider"            },
   "bianca.trazibulo@gmail.com":        { nome: "Bianca",    perfil: "lider"            },
-  "andriellisouza45@gmail.com":        { nome: "Andrielli", perfil: "lider_callcenter" },
+  "andriellisouza45@gmail.com":        { nome: "Andrielli", perfil: "coordenadora"     },
   "dawilla.stefany@hotmail.com":       { nome: "Dawilla",   perfil: "recepcionista"    },
   "susuh.medeiros28@gmail.com":        { nome: "Suélen",    perfil: "recepcionista"    },
   "graziiaraujo8@gmail.com":           { nome: "Graziele",  perfil: "recepcionista"    },
@@ -1264,7 +1268,7 @@ const PERFIL_LABEL = {
 
 // Atendentes de Call Center supervisionadas pela coordenadora
 const CC_MEMBROS = ["Erielly","Júlia"];
-const CC_TODOS   = ["Erielly","Júlia","Andrielli"];
+const CC_TODOS   = ["Erielly","Júlia"];
 // Meta fixa de caixa por atendente CC (usada na coordenadora quando não há meta configurada)
 const META_CC_PADRAO = 28000;
 
