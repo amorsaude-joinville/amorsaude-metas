@@ -1672,10 +1672,12 @@ let delId     = null;        // id para modal de exclusão
 let marcosMostrados = new Set(); // marcos de % já exibidos
 
 // Dashboard gestão
-let dashLancs    = [];       // todos lançamentos carregados no dashboard
-let dashMetasMes = null;     // metas do mês do dashboard
-let dashMesAno   = "";       // mês/ano selecionado no dashboard
-let unsubDash    = null;     // listener do dashboard
+let dashLancs           = [];    // lançamentos carregados no dashboard
+let dashMetasMes        = null;  // metas do mês do dashboard
+let dashMesAno          = "";    // mês/ano selecionado no dashboard
+let unsubDash           = null;  // listener do dashboard
+let dashHistorico       = [];    // docs de historico_mensal quando mês é histórico
+let dashUsandoHistorico = false; // true quando dashboard exibe dados de historico_mensal
 
 // Modo de visualização do dashboard ("dia" | "semana" | "mes" | "comparativo")
 let dashModo    = localStorage.getItem("as_dash_modo") || "mes";
@@ -3820,13 +3822,36 @@ async function mudarFiltroDash() {
 
 function carregarDashListener() {
   if(unsubDash){ unsubDash(); unsubDash=null; }
+  dashUsandoHistorico = false;
+  dashHistorico = [];
 
   document.getElementById("dash-cards-equipe").innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
   document.getElementById("dash-ranking").innerHTML      = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
   document.getElementById("dash-colaboradoras").innerHTML = '';
   document.getElementById("dash-prescritores").innerHTML  = '';
 
-  carregarDashMetas(dashMesAno).then(() => {
+  carregarDashMetas(dashMesAno).then(async () => {
+    // Para meses passados, tenta buscar dados históricos primeiro
+    const ehPassado = dashMesAno < getMesAno();
+    if(ehPassado) {
+      try {
+        const snap = await db.collection("historico_mensal")
+          .where("mes_ano","==",dashMesAno).get();
+        console.log("Dados históricos encontrados:", snap.size);
+        if(!snap.empty) {
+          dashHistorico = snap.docs.map(d => {
+            const dado = d.data();
+            const email = dado.email || d.id.split("_").slice(0,-1).join("_");
+            const u = USUARIOS[email] || {};
+            return { email, nome: u.nome || email, perfil: u.perfil || "", ...dado };
+          });
+          dashUsandoHistorico = true;
+          renderDashboard();
+          return;
+        }
+      } catch(e) { console.warn("historico_mensal:", e); }
+    }
+    // Listener em tempo real nos lançamentos
     unsubDash = db.collection("lancamentos")
       .where("mes_ano","==",dashMesAno)
       .onSnapshot(snap => {
@@ -4006,14 +4031,156 @@ function getDashLancsFiltrados() {
 }
 
 function renderDashboard() {
+  if(dashUsandoHistorico && dashHistorico.length) {
+    renderDashHistorico();
+    return;
+  }
   const lista = getDashLancsFiltrados();
   renderDashEquipe(lista);
   renderDashRanking(lista);
   renderDashPremiacao();
   renderDashColaboradoras(lista);
   renderPrescritores();
-  // Atualiza resumo rápido do fechamento se a seção estiver visível
   if(SO_DASHBOARD.includes(usuario?.perfil)) renderResumoRapidoFech();
+}
+
+// ── Dashboard histórico (dados de historico_mensal) ───────────
+function renderDashHistorico() {
+  const filtroColab = document.getElementById("dash-colab")?.value || "";
+  const docs = filtroColab
+    ? dashHistorico.filter(d => d.nome === filtroColab)
+    : dashHistorico;
+
+  // Totais da equipe
+  const eq = { caixa:0, credito:0, boleto:0, laboratorio:0, imagem:0, procedimentos:0, consultas:0, injetaveis:0 };
+  docs.forEach(d => {
+    eq.caixa         += d.caixa         || 0;
+    eq.credito       += d.credito       || 0;
+    eq.boleto        += d.boleto        || 0;
+    eq.laboratorio   += d.laboratorio   || 0;
+    eq.imagem        += d.imagem        || 0;
+    eq.procedimentos += d.procedimentos || 0;
+    eq.consultas     += d.consultas     || 0;
+    eq.injetaveis    += d.injetaveis    || 0;
+  });
+
+  // Cards equipe
+  const m    = dashMetasMes || {};
+  const metaC  = m.meta_caixa_equipe  || (m.meta_caixa_recepcao||0) + (m.meta_caixa_callcenter||0);
+  const metaCr = m.meta_credito_equipe || m.meta_credito_recepcao   || 0;
+  const metaB  = m.meta_boleto_equipe  || 0;
+  function miniCard(tit, val, meta, ico) {
+    const pct = meta > 0 ? Math.min((val/meta)*100,100) : 0;
+    const ok  = val >= meta && meta > 0;
+    return `<div class="card-meta" style="padding:18px">
+      <div class="meta-top" style="margin-bottom:10px">
+        <div class="meta-tit" style="font-size:12px">${tit}</div>
+        <div class="meta-ico" style="width:30px;height:30px;font-size:15px">${ico}</div>
+      </div>
+      <div class="meta-val" style="font-size:20px">${brl(val)}</div>
+      ${meta > 0 ? `
+        <div class="meta-info" style="font-size:12px;margin-bottom:8px">
+          <span>Meta: <strong>${brl(meta)}</strong></span>
+          <span>${ok?"✅":brl(Math.max(0,meta-val))+" falta"}</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div></div>
+        <div class="meta-pct${ok?" ok":""}" style="font-size:12px">${pct.toFixed(1)}%</div>
+      ` : '<div style="font-size:12px;color:var(--text2)">Meta não definida</div>'}
+    </div>`;
+  }
+  document.getElementById("dash-cards-equipe").innerHTML =
+    miniCard("Caixa — Equipe",   eq.caixa,         metaC,                        "💰") +
+    miniCard("Crédito — Equipe", eq.credito,        metaCr,                       "💳") +
+    miniCard("Boleto — Equipe",  eq.boleto,         metaB,                        "📄") +
+    miniCard("Exames Lab.",      eq.laboratorio,    m.meta_lab_equipe||0,         "🧪") +
+    miniCard("Exames Imagem",    eq.imagem,         m.meta_img_equipe||0,         "🩻") +
+    miniCard("Procedimentos",    eq.procedimentos,  m.meta_proc_equipe||0,        "💉") +
+    miniCard("Injetáveis",       eq.injetaveis,     m.meta_injetaveis_equipe||0,  "💊");
+
+  // Ranking
+  const rankRec = docs.filter(r => r.perfil==="recepcionista"||r.perfil==="lider").sort((a,b)=>b.caixa-a.caixa);
+  const rankCC  = docs.filter(r => r.perfil==="callcenter"||r.perfil==="lider_callcenter").sort((a,b)=>b.caixa-a.caixa);
+  const rank    = [...rankRec, ...rankCC];
+  const maxCaixa = rank[0]?.caixa || 1;
+  const medals   = ["🥇","🥈","🥉"];
+
+  function rankRow(r, i) {
+    const mC  = (r.perfil==="callcenter"||r.perfil==="lider_callcenter")
+      ? (dashMetasMes?.meta_caixa_callcenter||0) : (dashMetasMes?.meta_caixa_recepcao||0);
+    const pct = mC > 0 ? (r.caixa/mC*100).toFixed(1) : "—";
+    const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
+    const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
+    const premV = mC > 0
+      ? (isCC ? calcPremiacao(r.caixa,r.credito||0,r.perfil,mC,0).valor
+               : calcPremiacaoCaixaRec(r.caixa,r.credito||0,mC,dashMetasMes?.meta_credito_recepcao||0).valor)
+      : 0;
+    const premBadge = premV > 0 ? `<span class="prem-badge">🏅 ${brl(premV)}</span>` : "";
+    return `<tr>
+      <td><span class="rank-medal">${medals[i]||i+1}</span></td>
+      <td><strong>${r.nome}</strong>${premBadge?"<br>"+premBadge:""}</td>
+      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
+      <td>${brl(r.caixa)}<div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div></td>
+      <td>${brl(r.credito||0)}</td>
+      <td style="font-weight:600;color:${pct!=="—"&&+pct>=100?"var(--success)":"var(--primary)"}">${pct!=="—"?pct+"%":"—"}</td>
+    </tr>`;
+  }
+
+  document.getElementById("dash-ranking").innerHTML = rank.length ? `
+    <div class="tbl-wrap"><table class="rank-table">
+      <thead><tr><th>#</th><th>Colaboradora</th><th>Perfil</th><th>Caixa</th><th>Crédito</th><th>% da Meta</th></tr></thead>
+      <tbody>
+        ${rankRec.length?`<tr class="rank-grupo-sep"><td colspan="6">🩺 Recepção Médica</td></tr>${rankRec.map((r,i)=>rankRow(r,i)).join("")}`:""}
+        ${rankCC.length ?`<tr class="rank-grupo-sep"><td colspan="6">📞 Call Center</td></tr>${rankCC.map((r,i)=>rankRow(r,i)).join("")}`:""}
+      </tbody>
+    </table></div>`
+    : '<div class="empty"><div class="ei">📊</div>Nenhum dado histórico no período.</div>';
+
+  // Cards por colaboradora
+  function colabCard(r) {
+    const perfil = r.perfil;
+    const mC  = (perfil==="callcenter"||perfil==="lider_callcenter")
+      ? (dashMetasMes?.meta_caixa_callcenter||0) : (dashMetasMes?.meta_caixa_recepcao||0);
+    const mCr = dashMetasMes?.meta_credito_recepcao||0;
+    const prem = mC > 0 ? calcPremiacao(r.caixa||0, r.credito||0, perfil, mC, mCr) : null;
+    const pct  = mC > 0 ? (((r.caixa||0)/mC)*100).toFixed(1)+"%" : "—";
+    return `<div class="colab-card">
+      <div class="colab-header" onclick="toggleColab(this)">
+        <div>
+          <div class="colab-nome">${r.nome}</div>
+          <div class="colab-resumo-txt">Caixa: ${brl(r.caixa||0)} · ${pct} da meta${prem&&prem.valor>0?" · 🏅 "+brl(prem.valor):""}</div>
+        </div>
+        <span class="colab-chev">▼</span>
+      </div>
+      <div class="colab-body">
+        <div class="colab-stat-grid">
+          <div class="colab-stat"><label>Caixa</label><div class="csv">${brl(r.caixa||0)}</div></div>
+          <div class="colab-stat"><label>Crédito</label><div class="csv">${brl(r.credito||0)}</div></div>
+          <div class="colab-stat"><label>Boleto</label><div class="csv">${brl(r.boleto||0)}</div></div>
+          <div class="colab-stat"><label>Exames Lab.</label><div class="csv">${brl(r.laboratorio||0)}</div></div>
+          <div class="colab-stat"><label>Exames Imagem</label><div class="csv">${brl(r.imagem||0)}</div></div>
+          <div class="colab-stat"><label>Procedimentos</label><div class="csv">${brl(r.procedimentos||0)}</div></div>
+          <div class="colab-stat"><label>Consultas</label><div class="csv">${brl(r.consultas||0)}</div></div>
+          <div class="colab-stat"><label>Injetáveis</label><div class="csv">${brl(r.injetaveis||0)}</div></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const secRec = rankRec.length
+    ? `<div class="rank-grupo-sep" style="padding:8px 12px;margin-bottom:10px">🩺 Recepção Médica</div>${rankRec.map(colabCard).join("")}` : "";
+  const secCC = rankCC.length
+    ? `<div class="rank-grupo-sep" style="padding:8px 12px;margin:10px 0">📞 Call Center</div>${rankCC.map(colabCard).join("")}` : "";
+  document.getElementById("dash-colaboradoras").innerHTML = (secRec||secCC)
+    ? secRec + secCC
+    : '<div class="empty"><div class="ei">👥</div>Nenhum dado histórico no período.</div>';
+
+  // Premiação calculada pelos totais históricos
+  const premEl = document.getElementById("dash-premiacao");
+  if(premEl) premEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:12px 0">Premiações calculadas com base nos totais mensais importados — detalhamento diário não disponível para meses históricos.</div>';
+
+  // Prescritores não disponíveis em dados históricos
+  const presEl = document.getElementById("dash-prescritores");
+  if(presEl) presEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:12px 0">Análise de prescritores não disponível para dados históricos.</div>';
 }
 
 // ── Cards resumo da equipe
