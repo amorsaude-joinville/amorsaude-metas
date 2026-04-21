@@ -527,6 +527,12 @@
     </div>
 
     <button class="btn btn-primary" onclick="fazerLogin()">Entrar</button>
+
+    <div id="msg-reset" style="display:none;margin-top:12px;font-size:13px;text-align:center;padding:10px 14px;border-radius:var(--r2)"></div>
+
+    <div style="text-align:center;margin-top:14px">
+      <button onclick="esqueceuSenha()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--primary);font-family:'Inter',sans-serif;padding:0;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Esqueci minha senha</button>
+    </div>
   </div>
 </div>
 
@@ -565,44 +571,103 @@
 
   <div id="app">
 
-    <!-- ══════════ DASHBOARD COORDENADORA (Call Center) ══════════ -->
+    <!-- ══════════ DASHBOARD CALL CENTER (coordenadora / lider_callcenter) ══════════ -->
     <div id="sec-coord" style="display:none">
 
-      <!-- Card consolidado Call Center -->
+      <!-- Filtros e barra de modos -->
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title">📞 Visão Geral — Call Center</div>
-        <div id="coord-geral"></div>
-      </div>
-
-      <!-- Filtro de data -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="coord-filtro">
-          <label>Filtrar por data:</label>
-          <input type="date" id="coord-data" onchange="renderCoordLancs()" />
-          <span style="font-size:13px;color:var(--text2)" id="coord-data-total"></span>
+        <div class="dash-modo-bar" id="coord-modo-bar">
+          <button class="modo-btn" id="coord-btn-dia"    onclick="mudarModoCoord('dia')">📆 Por Dia</button>
+          <button class="modo-btn" id="coord-btn-semana" onclick="mudarModoCoord('semana')">📅 Por Semana</button>
+          <button class="modo-btn active" id="coord-btn-mes" onclick="mudarModoCoord('mes')">🗓️ Por Mês</button>
+          <button class="modo-btn" id="coord-btn-comp"   onclick="mudarModoCoord('comparativo')">📊 Comparativo</button>
         </div>
-        <div id="coord-resumo-dia"></div>
+        <div class="dash-modo-controles" id="coord-modo-controles" style="display:none"></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-top:12px">
+          <div style="min-width:160px">
+            <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Mês / Ano</label>
+            <input type="month" id="coord-mes" onchange="mudarFiltroCoordMes()"
+              style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);transition:border-color .2s" />
+          </div>
+        </div>
       </div>
 
-      <!-- Cards individuais -->
-      <div class="coord-cc-grid" id="coord-cards"></div>
+      <!-- Painel normal (dia / semana / mês) -->
+      <div id="coord-painel-normal">
 
-      <!-- Ranking entre as duas -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-title">🏆 Ranking — Call Center</div>
-        <div id="coord-ranking"></div>
-      </div>
+        <!-- Cards de resumo da equipe -->
+        <div class="dash-equipe-grid" id="coord-resumo-cards" style="margin-bottom:24px"></div>
 
-      <!-- Lançamentos recentes -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-title">📋 Lançamentos</div>
-        <div id="coord-lancs"></div>
-      </div>
+        <!-- Ranking -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">🏆 Ranking — Call Center</div>
+          <div id="coord-ranking"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+        </div>
+
+        <!-- Premiações -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">💰 Premiações</div>
+          <div id="coord-premiacao"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+        </div>
+
+        <!-- Cards individuais expansíveis -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">👥 Detalhamento por Atendente</div>
+          <div id="coord-colab-cards"></div>
+        </div>
+
+        <!-- Prescritores -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">🩺 Prescritores</div>
+          <div style="margin-bottom:12px">
+            <input type="text" id="coord-busca-pres" placeholder="🔍 Filtrar por prescritor..."
+              oninput="renderCoordPrescritores()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-size:13px;width:280px;max-width:100%;outline:none;font-family:'Inter',sans-serif" />
+          </div>
+          <div id="coord-prescritores"></div>
+        </div>
+
+      </div><!-- fim coord-painel-normal -->
+
+      <!-- Painel comparativo -->
+      <div id="coord-painel-comp" style="display:none">
+
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">📊 Comparativo de Períodos — Call Center</div>
+
+          <!-- Sub-abas -->
+          <div style="display:flex;gap:4px;background:#F3F4F6;border-radius:var(--r2);padding:4px;margin-bottom:20px;flex-wrap:wrap">
+            <button class="pres-tab active" id="coord-comp-tab-du"  onclick="mudarSubCompCC('dias_uteis')">📅 Dias Úteis</button>
+            <button class="pres-tab"        id="coord-comp-tab-ds"  onclick="mudarSubCompCC('dia_semana')">📆 Dia da Semana</button>
+            <button class="pres-tab"        id="coord-comp-tab-sem" onclick="mudarSubCompCC('semanas')">🗓️ Semanas</button>
+          </div>
+
+          <!-- Seletores de período -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div>
+              <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Período A</label>
+              <input type="month" id="coord-comp-mes-a"
+                style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);width:100%" />
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Período B</label>
+              <input type="month" id="coord-comp-mes-b"
+                style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);width:100%" />
+            </div>
+          </div>
+
+          <div id="coord-comp-ctrl-sub" style="margin-bottom:16px"></div>
+          <button class="btn btn-primary" onclick="executarComparativoCC()" style="width:auto">📊 Comparar</button>
+        </div>
+
+        <div id="coord-comp-resultado"></div>
+
+      </div><!-- fim coord-painel-comp -->
 
     </div>
 
     <!-- ══════════ DASHBOARD GESTÃO ══════════ -->
-    <div id="sec-dashboard">
+    <div id="sec-dashboard" style="display:none">
 
       <!-- Filtros + botão metas -->
       <div class="card" style="margin-bottom:20px">
@@ -1199,6 +1264,7 @@ const PERFIL_LABEL = {
 
 // Atendentes de Call Center supervisionadas pela coordenadora
 const CC_MEMBROS = ["Erielly","Júlia"];
+const CC_TODOS   = ["Erielly","Júlia","Andrielli"];
 // Meta fixa de caixa por atendente CC (usada na coordenadora quando não há meta configurada)
 const META_CC_PADRAO = 28000;
 
@@ -1410,6 +1476,14 @@ document.getElementById("inp-senha").addEventListener("keypress", e => {
   if(e.key==="Enter") fazerLogin();
 });
 
+// Limpa mensagens ao interagir com o formulário
+["sel-usuario","inp-senha"].forEach(id => {
+  document.getElementById(id).addEventListener("change", () => {
+    document.getElementById("msg-reset").style.display = "none";
+    document.getElementById("erro-login").classList.add("hidden");
+  });
+});
+
 // Senhas locais — fallback enquanto Firebase Auth não estiver configurado
 const SENHAS_LOCAL = {
   "Laudenir":  "amor2026CONTEXTO",
@@ -1473,6 +1547,48 @@ async function fazerLogin() {
     }
   } finally {
     btn.disabled = false; btn.textContent = "Entrar";
+  }
+}
+
+// Envia email de redefinição de senha via Firebase Auth
+async function esqueceuSenha() {
+  const nome  = document.getElementById("sel-usuario").value;
+  const msgEl = document.getElementById("msg-reset");
+  const errEl = document.getElementById("erro-login");
+
+  // Limpa mensagens anteriores
+  errEl.classList.add("hidden");
+  msgEl.style.display = "none";
+
+  if(!nome) {
+    errEl.textContent = "Selecione seu nome antes de solicitar a redefinição.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  const email = emailPorNome(nome);
+  if(!email) {
+    errEl.textContent = "Email não encontrado para esta usuária. Contate a gestão.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  try {
+    await auth.sendPasswordResetEmail(email);
+    msgEl.style.display = "block";
+    msgEl.style.background = "#D1FAE5";
+    msgEl.style.color = "#065F46";
+    msgEl.textContent = "✅ Email de redefinição enviado para seu Gmail cadastrado. Verifique sua caixa de entrada.";
+  } catch(e) {
+    let msg = "Não foi possível enviar o email. Tente novamente.";
+    if(e.code === "auth/user-not-found")          msg = "Esta usuária ainda não foi cadastrada no sistema de autenticação.";
+    if(e.code === "auth/too-many-requests")       msg = "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+    if(e.code === "auth/network-request-failed")  msg = "Sem conexão com a internet. Verifique sua rede.";
+    msgEl.style.display = "block";
+    msgEl.style.background = "#FEE2E2";
+    msgEl.style.color = "#DC2626";
+    msgEl.textContent = msg;
+    console.error("[esqueceuSenha]", e.code, e.message);
   }
 }
 
@@ -1571,7 +1687,7 @@ function iniciarApp() {
 
   // Seções de dashboard geral (gestor/subgestora/lider na aba dashboard)
   // Para líderes de recepção, controlado por aplicarAbaLider()
-  if(!ehLider && !ehLiderCC) {
+  if(!ehLider) {
     document.getElementById("sec-dashboard").style.display = temDashboard ? "" : "none";
   }
 
@@ -2323,248 +2439,435 @@ function fecharBanner() {
 // ═══════════════════════════════════════════════════════════
 //  COORDENADORA — DASHBOARD CALL CENTER
 // ═══════════════════════════════════════════════════════════
+let coordModo    = "mes"; // dia | semana | mes | comparativo
+let coordSubComp = "dias_uteis";
+let coordDataDia = "";
+let coordSemanaRef = "";
+
+// Cores por membro CC
+const CC_CORES = { "Erielly":"#E8003D", "Júlia":"#7C3AED", "Andrielli":"#059669" };
+
 function iniciarCoord() {
-  // Define data padrão como ontem (ou hoje se início do mês)
-  const inp = document.getElementById("coord-data");
   const hoje = new Date();
+  const fmtM = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  const fmtD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const mesInp = document.getElementById("coord-mes");
+  if(mesInp && !mesInp.value) mesInp.value = fmtM(hoje);
+
   const ontem = new Date(hoje); ontem.setDate(hoje.getDate()-1);
-  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const ini = `${getMesAno()}-01`;
-  const hojeStr = fmt(hoje);
-  inp.min = ini; inp.max = hojeStr;
-  inp.value = fmt(ontem) >= ini ? fmt(ontem) : hojeStr;
+  if(!coordDataDia) coordDataDia = fmtD(ontem) >= ini ? fmtD(ontem) : fmtD(hoje);
 
   if(unsubCoord) { unsubCoord(); unsubCoord=null; }
-
+  const mesAnoCoord = (mesInp && mesInp.value) ? mesInp.value : getMesAno();
   unsubCoord = db.collection("lancamentos")
-    .where("mes_ano","==",mesAno)
-    .where("perfil","==","callcenter")
+    .where("mes_ano","==",mesAnoCoord)
+    .where("perfil","in",["callcenter","lider_callcenter"])
     .onSnapshot(snap => {
       coordLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
       renderCoord();
     }, e => console.error("coord listener:", e));
 }
 
-function renderCoord() {
-  renderCoordGeral();
-  renderCoordCards();
-  renderCoordRanking();
-  renderCoordLancs();
+function mudarFiltroCoordMes() {
+  iniciarCoord();
 }
 
-// Card consolidado
-function renderCoordGeral() {
-  const metaCC = (metas?.meta_caixa_callcenter || 0);
-  const metaPorPessoa = metaCC > 0 ? metaCC : META_CC_PADRAO;
+function mudarModoCoord(modo) {
+  coordModo = modo;
+  const modos = { dia:"coord-btn-dia", semana:"coord-btn-semana", mes:"coord-btn-mes", comparativo:"coord-btn-comp" };
+  Object.entries(modos).forEach(([m,id]) => document.getElementById(id)?.classList.toggle("active", m===modo));
 
-  let totalCaixa = 0;
-  CC_MEMBROS.forEach(nome => {
-    const ls = coordLancs.filter(l => l.usuario_nome === nome);
-    totalCaixa += calcTotais(ls).caixa;
-  });
-  const metaEquipe = metaPorPessoa * CC_MEMBROS.length;
-  const pct = metaEquipe > 0 ? Math.min((totalCaixa/metaEquipe)*100, 100) : 0;
-  const ok  = totalCaixa >= metaEquipe && metaEquipe > 0;
-
-  document.getElementById("coord-geral").innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-size:26px;font-weight:700;color:var(--text)">${brl(totalCaixa)}</div>
-        <div style="font-size:13px;color:var(--text2)">Meta da equipe: <strong style="color:var(--text)">${brl(metaEquipe)}</strong></div>
-      </div>
-      <div style="font-size:28px;font-weight:700;color:${ok?"var(--success)":"var(--primary)"}">${pct.toFixed(1)}%</div>
-    </div>
-    <div class="bar-wrap" style="height:12px">
-      <div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div>
-    </div>
-    <div style="font-size:12px;color:var(--text2);margin-top:6px">${ok?"✅ Meta da equipe atingida!":"Falta "+brl(Math.max(0,metaEquipe-totalCaixa))+" para a meta"}</div>
-  `;
-}
-
-// Cores por membro
-const CC_CORES = { "Erielly":"#E8003D", "Júlia":"#7C3AED" };
-
-// Cards individuais
-function renderCoordCards() {
-  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
-  const diasPass = diasUteisPassadosFloat();
-  const diasUteis = metas?.dias_uteis || 22;
-
-  document.getElementById("coord-cards").innerHTML = CC_MEMBROS.map(nome => {
-    const ls    = coordLancs.filter(l => l.usuario_nome === nome);
-    const { caixa } = calcTotais(ls);
-    const pct   = metaCC > 0 ? Math.min((caixa/metaCC)*100, 100) : 0;
-    const ok    = caixa >= metaCC && metaCC > 0;
-    const prem  = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
-    const media = diasPass > 0 ? caixa / diasPass : 0;
-    const proj  = media * diasUteis;
-    const projPct = metaCC > 0 ? (proj/metaCC*100).toFixed(0) : "—";
-    const cor   = CC_CORES[nome] || "var(--primary)";
-    const iniciais = nome.slice(0,2).toUpperCase();
-
-    let proxHtml = "";
-    if(prem.proxFaixa && prem.faltaProx > 0) {
-      proxHtml = `<div class="coord-prem-prox">Próxima faixa: <strong>${prem.proxFaixa}</strong> — falta <strong>${brl(prem.faltaProx)}</strong></div>`;
-    } else if(!prem.proxFaixa && prem.valor > 0) {
-      proxHtml = `<div class="coord-prem-prox" style="background:rgba(16,185,129,.15);color:var(--success)">🏆 Premiação máxima atingida!</div>`;
-    }
-
-    return `
-      <div class="coord-card">
-        <div class="coord-avatar" style="background:${cor}">${iniciais}</div>
-        <div class="coord-nome">${nome}</div>
-        <div class="coord-sub">Call Center · ${PERFIL_LABEL.callcenter}</div>
-
-        <div class="coord-stat">
-          <span class="coord-stat-label">Caixa acumulado</span>
-          <span class="coord-stat-val vp">${brl(caixa)}</span>
-        </div>
-        <div class="coord-stat">
-          <span class="coord-stat-label">Meta individual</span>
-          <span class="coord-stat-val">${brl(metaCC)}</span>
-        </div>
-        <div class="coord-stat">
-          <span class="coord-stat-label">Atingimento</span>
-          <span class="coord-stat-val" style="color:${ok?"var(--success)":"var(--primary)"}">${pct.toFixed(1)}%</span>
-        </div>
-
-        <div class="bar-wrap" style="margin:10px 0">
-          <div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div>
-        </div>
-
-        <div class="coord-prem-box">
-          <div class="coord-prem-val">${brl(prem.valor)}</div>
-          <div class="coord-prem-faixa">${prem.faixa}</div>
-          ${proxHtml}
-        </div>
-
-        <div class="coord-proj">
-          Projeção: <strong>${brl(proj)}</strong>
-          ${metaCC > 0 ? ` (${projPct}% da meta)` : ""}
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-// Ranking entre as duas
-function renderCoordRanking() {
-  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
-  const rank = CC_MEMBROS.map(nome => {
-    const ls = coordLancs.filter(l => l.usuario_nome === nome);
-    return { nome, caixa: calcTotais(ls).caixa };
-  }).sort((a,b) => b.caixa - a.caixa);
-
-  const medals = ["🥇","🥈"];
-  document.getElementById("coord-ranking").innerHTML = `
-    <div class="tbl-wrap">
-      <table class="rank-table">
-        <thead><tr>
-          <th>#</th><th>Atendente</th><th>Caixa</th><th>% da Meta</th><th>Premiação</th>
-        </tr></thead>
-        <tbody>
-          ${rank.map((r,i) => {
-            const pct  = metaCC > 0 ? (r.caixa/metaCC*100).toFixed(1)+"%" : "—";
-            const prem = calcPremiacao(r.caixa, 0, "callcenter", metaCC, 0);
-            const barW = metaCC > 0 ? Math.min((r.caixa/(metaCC||1))*100,100).toFixed(0) : 0;
-            return `<tr>
-              <td><span class="rank-medal">${medals[i]||i+1}</span></td>
-              <td><strong>${r.nome}</strong></td>
-              <td>
-                ${brl(r.caixa)}
-                <div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div>
-              </td>
-              <td style="font-weight:600;color:${r.caixa>=metaCC&&metaCC>0?"var(--success)":"var(--primary)"}">${pct}</td>
-              <td><span class="prem-badge">🏅 ${brl(prem.valor)}</span></td>
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Lançamentos filtrados por data
-function renderCoordLancs() {
-  const dataSel = document.getElementById("coord-data").value;
-  const totalEl = document.getElementById("coord-data-total");
-  const resumoEl = document.getElementById("coord-resumo-dia");
-
-  if(!dataSel) {
-    document.getElementById("coord-lancs").innerHTML = '<div class="empty"><div class="ei">📅</div>Selecione uma data.</div>';
-    return;
+  const ctrlEl = document.getElementById("coord-modo-controles");
+  if(modo === "dia") {
+    ctrlEl.style.display = "";
+    ctrlEl.innerHTML = `<div><label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Data</label>
+      <input type="date" id="coord-ctrl-dia" value="${coordDataDia}"
+        onchange="coordDataDia=this.value;renderCoord()"
+        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-size:14px;font-family:'Inter',sans-serif;outline:none" /></div>`;
+  } else if(modo === "semana") {
+    ctrlEl.style.display = "";
+    ctrlEl.innerHTML = `<div><label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Semana de</label>
+      <input type="date" id="coord-ctrl-sem" value="${coordSemanaRef||coordDataDia}"
+        onchange="coordSemanaRef=this.value;renderCoord()"
+        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-size:14px;font-family:'Inter',sans-serif;outline:none" /></div>`;
+  } else {
+    ctrlEl.style.display = "none";
+    ctrlEl.innerHTML = "";
   }
 
-  const filtrado = coordLancs.filter(l => {
+  const normal = document.getElementById("coord-painel-normal");
+  const comp   = document.getElementById("coord-painel-comp");
+  if(modo === "comparativo") {
+    normal.style.display = "none";
+    comp.style.display = "";
+    const hoje = new Date();
+    const fmtM = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const prev = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
+    const mesA = document.getElementById("coord-comp-mes-a");
+    const mesB = document.getElementById("coord-comp-mes-b");
+    if(mesA && !mesA.value) mesA.value = fmtM(prev);
+    if(mesB && !mesB.value) mesB.value = fmtM(hoje);
+  } else {
+    normal.style.display = "";
+    comp.style.display = "none";
+    renderCoord();
+  }
+}
+
+function filtrarLancsCCModo() {
+  if(coordModo === "mes") return coordLancs;
+  return coordLancs.filter(l => {
     if(!l.data_hora) return false;
     const dd = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
     const ds = `${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,"0")}-${String(dd.getDate()).padStart(2,"0")}`;
-    return ds === dataSel;
+    if(coordModo === "dia") return ds === coordDataDia;
+    if(coordModo === "semana") {
+      const ref = coordSemanaRef || coordDataDia;
+      if(!ref) return true;
+      const d = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate());
+      const base = new Date(ref + "T00:00:00");
+      const dow = base.getDay();
+      const seg = new Date(base); seg.setDate(base.getDate() - (dow === 0 ? 6 : dow - 1));
+      const dom = new Date(seg); dom.setDate(seg.getDate() + 6);
+      return d >= seg && d <= dom;
+    }
+    return true;
   });
+}
 
-  const [ano,mes,dia] = dataSel.split("-");
-  totalEl.textContent = `${filtrado.length} lançamento${filtrado.length!==1?"s":""} em ${dia}/${mes}/${ano}`;
+function renderCoord() {
+  if(coordModo === "comparativo") return;
+  const filtrado = filtrarLancsCCModo();
+  renderCoordResumoCCs(filtrado);
+  renderCoordRanking(filtrado);
+  renderCoordPremiacao(filtrado);
+  renderCoordColabs(filtrado);
+  renderCoordPrescritores(filtrado);
+}
 
-  // Resumo por membro no dia
-  resumoEl.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">` +
-    CC_MEMBROS.map(nome => {
-      const ls = filtrado.filter(l => l.usuario_nome === nome);
-      const { caixa } = calcTotais(ls);
-      const cor = CC_CORES[nome] || "var(--primary)";
-      return `<div style="background:var(--bg2);border-radius:8px;padding:10px 16px;border-left:4px solid ${cor}">
-        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">${nome}</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:2px">${brl(caixa)}</div>
-      </div>`;
-    }).join("") + `</div>`;
+function renderCoordResumoCCs(lancs) {
+  const metaCC  = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  const diasPass = diasUteisPassadosFloat();
+  const diasUteis = metas?.dias_uteis || 22;
+  const el = document.getElementById("coord-resumo-cards");
+  if(!el) return;
 
-  if(!filtrado.length) {
-    document.getElementById("coord-lancs").innerHTML = `<div class="empty"><div class="ei">📋</div>Nenhum lançamento em ${dia}/${mes}/${ano}.</div>`;
-    return;
+  let totalCaixa = 0;
+  CC_TODOS.forEach(n => { totalCaixa += calcTotais(lancs.filter(l => l.usuario_nome === n)).caixa; });
+  const metaEquipe = metaCC * CC_TODOS.length;
+  const pct = metaEquipe > 0 ? Math.min((totalCaixa/metaEquipe)*100,100) : 0;
+  const ok  = totalCaixa >= metaEquipe && metaEquipe > 0;
+
+  function miniCardCC(tit, val, meta) {
+    const p = meta > 0 ? Math.min((val/meta)*100,100) : 0;
+    const isOk = val >= meta && meta > 0;
+    return `<div class="card-meta" style="padding:18px">
+      <div class="meta-top" style="margin-bottom:10px">
+        <div class="meta-tit" style="font-size:12px">${tit}</div>
+        <div class="meta-ico" style="width:30px;height:30px;font-size:15px">💰</div>
+      </div>
+      <div class="meta-val" style="font-size:20px">${brl(val)}</div>
+      ${meta > 0 ? `
+        <div class="meta-info" style="font-size:12px;margin-bottom:8px">
+          <span>Meta: <strong>${brl(meta)}</strong></span>
+          <span style="color:${isOk?"var(--success)":"var(--primary)"}">${isOk?"✅":brl(Math.max(0,meta-val))+" falta"}</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill${isOk?" ok":""}" style="width:${p}%"></div></div>` : ""}
+    </div>`;
   }
 
-  // Agrupa por colaboradora
-  const porPessoa = {};
-  CC_MEMBROS.forEach(n => { porPessoa[n] = filtrado.filter(l => l.usuario_nome === n); });
+  el.innerHTML =
+    miniCardCC("Caixa — Equipe CC", totalCaixa, metaEquipe) +
+    CC_TODOS.map(nome => {
+      const { caixa } = calcTotais(lancs.filter(l => l.usuario_nome === nome));
+      const media = diasPass > 0 ? caixa/diasPass : 0;
+      const proj  = media * diasUteis;
+      const cor   = CC_CORES[nome] || "var(--primary)";
+      const p = metaCC > 0 ? Math.min((caixa/metaCC)*100,100) : 0;
+      const isOk = caixa >= metaCC && metaCC > 0;
+      return `<div class="card-meta" style="padding:18px;border-top:3px solid ${cor}">
+        <div class="meta-top" style="margin-bottom:10px">
+          <div class="meta-tit" style="font-size:12px">${nome}</div>
+          <div class="meta-ico" style="width:30px;height:30px;font-size:15px;background:${cor}">${nome.slice(0,2).toUpperCase()}</div>
+        </div>
+        <div class="meta-val" style="font-size:20px">${brl(caixa)}</div>
+        ${metaCC > 0 ? `
+          <div class="meta-info" style="font-size:12px;margin-bottom:8px">
+            <span>Meta: <strong>${brl(metaCC)}</strong></span>
+            <span style="color:${isOk?"var(--success)":"var(--primary)"}">${isOk?"✅":brl(Math.max(0,metaCC-caixa))+" falta"}</span>
+          </div>
+          <div class="bar-wrap"><div class="bar-fill${isOk?" ok":""}" style="width:${p}%"></div></div>` : ""}
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">Projeção: ${brl(proj)}</div>
+      </div>`;
+    }).join("");
+}
 
-  document.getElementById("coord-lancs").innerHTML = CC_MEMBROS.map(nome => {
-    const ls = porPessoa[nome];
-    if(!ls.length) return `<div style="color:var(--text2);font-size:13px;margin:8px 0 16px;padding-left:4px">${nome}: nenhum lançamento neste dia.</div>`;
-    const cor = CC_CORES[nome] || "var(--primary)";
+function renderCoordRanking(lancs) {
+  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  const rank = CC_TODOS.map(nome => ({
+    nome, caixa: calcTotais(lancs.filter(l => l.usuario_nome === nome)).caixa
+  })).sort((a,b) => b.caixa - a.caixa);
+
+  const medals = ["🥇","🥈","🥉"];
+  const el = document.getElementById("coord-ranking");
+  if(!el) return;
+  el.innerHTML = `<div class="tbl-wrap"><table class="rank-table">
+    <thead><tr><th>#</th><th>Atendente</th><th>Caixa</th><th>% da Meta</th><th>Premiação</th></tr></thead>
+    <tbody>
+      ${rank.map((r,i) => {
+        const pct  = metaCC > 0 ? (r.caixa/metaCC*100).toFixed(1)+"%" : "—";
+        const prem = calcPremiacao(r.caixa, 0, "callcenter", metaCC, 0);
+        const barW = metaCC > 0 ? Math.min((r.caixa/metaCC)*100,100).toFixed(0) : 0;
+        const cor  = CC_CORES[r.nome] || "var(--primary)";
+        return `<tr>
+          <td><span class="rank-medal">${medals[i]||i+1}</span></td>
+          <td><strong style="color:${cor}">${r.nome}</strong></td>
+          <td>${brl(r.caixa)}<div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div></td>
+          <td style="font-weight:600;color:${r.caixa>=metaCC&&metaCC>0?"var(--success)":"var(--primary)"}">${pct}</td>
+          <td><span class="prem-badge">🏅 ${brl(prem.valor)}</span></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table></div>`;
+}
+
+function renderCoordPremiacao(lancs) {
+  const metaCC    = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  const diasPass  = diasUteisPassadosFloat();
+  const diasUteis = metas?.dias_uteis || 22;
+  const el = document.getElementById("coord-premiacao");
+  if(!el) return;
+
+  const dados = CC_TODOS.map(nome => {
+    const { caixa } = calcTotais(lancs.filter(l => l.usuario_nome === nome));
+    const prem  = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
+    const media = diasPass > 0 ? caixa/diasPass : 0;
+    const proj  = media * diasUteis;
+    const premProj = calcPremiacao(proj, 0, "callcenter", metaCC, 0);
+    return { nome, caixa, prem, proj, premProj };
+  });
+
+  const totalPrem     = dados.reduce((s,d) => s + d.prem.valor, 0);
+  const totalPremProj = dados.reduce((s,d) => s + d.premProj.valor, 0);
+
+  el.innerHTML = `
+    <div class="prem-resumo-grid">
+      <div class="prem-resumo-card">
+        <div class="prc-label">Total Premiações</div>
+        <div class="prc-val">${brl(totalPrem)}</div>
+        <div class="prc-sub">${CC_TODOS.length} atendentes</div>
+      </div>
+      <div class="prem-resumo-card">
+        <div class="prc-label">Projeção Premiações</div>
+        <div class="prc-val">${brl(totalPremProj)}</div>
+        <div class="prc-sub">baseado no ritmo atual</div>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table class="prem-table">
+      <thead><tr>
+        <th>Atendente</th>
+        <th class="num">Caixa</th>
+        <th class="num">% Meta</th>
+        <th>Faixa</th>
+        <th class="num">Premiação</th>
+        <th class="num">Projeção</th>
+      </tr></thead>
+      <tbody>
+        ${dados.map(d => {
+          const pct = metaCC > 0 ? (d.caixa/metaCC*100).toFixed(1) : "—";
+          const ok  = d.caixa >= metaCC && metaCC > 0;
+          const cor = CC_CORES[d.nome] || "var(--primary)";
+          return `<tr>
+            <td><strong style="color:${cor}">${d.nome}</strong></td>
+            <td class="num">${brl(d.caixa)}</td>
+            <td class="num" style="color:${ok?"var(--success)":"var(--primary)"};font-weight:600">${pct}%</td>
+            <td><span class="prem-faixa${ok?" ok":""}">${d.prem.faixa}</span></td>
+            <td class="num vp"><strong>${brl(d.prem.valor)}</strong></td>
+            <td class="num" style="color:var(--text2)">${brl(d.premProj.valor)}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="4">Total</td>
+        <td class="num vp">${brl(totalPrem)}</td>
+        <td class="num">${brl(totalPremProj)}</td>
+      </tr></tfoot>
+    </table></div>
+  `;
+}
+
+function renderCoordColabs(lancs) {
+  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  const el = document.getElementById("coord-colab-cards");
+  if(!el) return;
+
+  el.innerHTML = CC_TODOS.map(nome => {
+    const ls   = lancs.filter(l => l.usuario_nome === nome);
+    const { caixa } = calcTotais(ls);
+    const pct  = metaCC > 0 ? Math.min((caixa/metaCC)*100,100) : 0;
+    const ok   = caixa >= metaCC && metaCC > 0;
+    const prem = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
+    const cor  = CC_CORES[nome] || "var(--primary)";
+    const id   = "coord-colab-" + nome.replace(/\s/g,"-");
+
+    const linhas = ls.map(l => {
+      const dd = l.data_hora?.toDate ? l.data_hora.toDate() : new Date();
+      const h  = `${String(dd.getHours()).padStart(2,"0")}:${String(dd.getMinutes()).padStart(2,"0")}`;
+      const dstr = `${String(dd.getDate()).padStart(2,"0")}/${String(dd.getMonth()+1).padStart(2,"0")}`;
+      const en = l.tipo === "entrada";
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:8px 10px"><span class="tipo-b ${en?"b-in":"b-out"}">${en?"✅ Entrada":"↩️ Saída"}</span></td>
+        <td style="padding:8px 10px;color:var(--text2);font-size:12px">${dstr} ${h}</td>
+        <td style="padding:8px 10px">${l.paciente_nome||"—"}</td>
+        <td style="padding:8px 10px">${l.produto||"—"}</td>
+        <td style="padding:8px 10px" class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}</td>
+      </tr>`;
+    }).join("");
+
     return `
-      <div style="margin-bottom:20px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:${cor}">📋 ${nome}</div>
-        <div class="tbl-wrap">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead style="background:var(--bg2)">
-              <tr>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Tipo</th>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Hora</th>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Paciente</th>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Produto</th>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Pagamento</th>
-                <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${ls.map(l => {
-                const dd = l.data_hora?.toDate ? l.data_hora.toDate() : new Date();
-                const h  = `${String(dd.getHours()).padStart(2,"0")}:${String(dd.getMinutes()).padStart(2,"0")}`;
-                const en = l.tipo === "entrada";
-                return `<tr style="border-top:1px solid var(--border)">
-                  <td style="padding:9px 12px"><span class="tipo-b ${en?"b-in":"b-out"}">${en?"✅ Entrada":"↩️ Saída"}</span></td>
-                  <td style="padding:9px 12px">${h}</td>
-                  <td style="padding:9px 12px">${l.paciente_nome||"—"}</td>
-                  <td style="padding:9px 12px">${l.produto||"—"}</td>
-                  <td style="padding:9px 12px">${l.forma_pagamento||(l.motivo_saida?"Estorno":"—")}</td>
-                  <td style="padding:9px 12px" class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}</td>
-                </tr>`;
-              }).join("")}
-            </tbody>
-          </table>
+      <div class="area-card">
+        <div class="area-header" onclick="document.getElementById('${id}-body').classList.toggle('open');this.querySelector('.area-chev').classList.toggle('open')">
+          <div class="coord-avatar" style="width:36px;height:36px;font-size:14px;background:${cor};margin:0">${nome.slice(0,2).toUpperCase()}</div>
+          <div style="flex:1;margin-left:12px">
+            <div class="area-nome">${nome}</div>
+            <div style="font-size:12px;color:var(--text2)">${ls.length} lançamento${ls.length!==1?"s":""}</div>
+          </div>
+          <div style="text-align:right;margin-right:12px">
+            <div class="area-total">${brl(caixa)}</div>
+            <div style="font-size:12px;color:${ok?"var(--success)":"var(--text2)"}">${pct.toFixed(1)}% · 🏅 ${brl(prem.valor)}</div>
+          </div>
+          <span class="area-chev">▼</span>
+        </div>
+        <div class="area-body" id="${id}-body">
+          <div class="bar-wrap" style="margin-bottom:12px"><div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div></div>
+          ${ls.length ? `<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead style="background:var(--bg2)"><tr>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Tipo</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Data/Hora</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Paciente</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Produto</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Valor</th>
+            </tr></thead>
+            <tbody>${linhas}</tbody>
+          </table></div>` : `<div style="color:var(--text2);font-size:13px;text-align:center;padding:16px">Nenhum lançamento no período.</div>`}
         </div>
       </div>
     `;
   }).join("");
+}
+
+function renderCoordPrescritores(lancs) {
+  const filtro = (document.getElementById("coord-busca-pres")?.value || "").toLowerCase();
+  const src    = lancs || filtrarLancsCCModo();
+  const lista  = src.filter(l => l.tipo === "entrada" && l.prescritor);
+  const el     = document.getElementById("coord-prescritores");
+  if(!el) return;
+
+  const por = {};
+  lista.forEach(l => {
+    const k = l.prescritor;
+    if(!por[k]) por[k] = { total:0, count:0 };
+    por[k].total += l.valor||0; por[k].count++;
+  });
+
+  const rows = Object.entries(por)
+    .filter(([n]) => !filtro || n.toLowerCase().includes(filtro))
+    .sort((a,b) => b[1].total - a[1].total);
+
+  if(!rows.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px"><div class="ei">🩺</div>Nenhum prescritor encontrado.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="tbl-wrap"><table class="pres-dash-table">
+    <thead><tr>
+      <th>Médico / Prescritor</th>
+      <th class="num">Qtd.</th>
+      <th class="num">Ticket Médio</th>
+      <th class="num">Total</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(([nome,d]) => `<tr>
+        <td><strong>${nome}</strong></td>
+        <td class="num">${d.count}</td>
+        <td class="num">${brl(d.total/d.count)}</td>
+        <td class="num vp"><strong>${brl(d.total)}</strong></td>
+      </tr>`).join("")}
+    </tbody>
+  </table></div>`;
+}
+
+function mudarSubCompCC(sub) {
+  coordSubComp = sub;
+  const map = { dias_uteis:"coord-comp-tab-du", dia_semana:"coord-comp-tab-ds", semanas:"coord-comp-tab-sem" };
+  Object.entries(map).forEach(([s,id]) => document.getElementById(id)?.classList.toggle("active", s===sub));
+}
+
+async function executarComparativoCC() {
+  const mesA = document.getElementById("coord-comp-mes-a")?.value;
+  const mesB = document.getElementById("coord-comp-mes-b")?.value;
+  const el   = document.getElementById("coord-comp-resultado");
+  if(!el) return;
+  if(!mesA || !mesB) {
+    el.innerHTML = '<div class="empty"><div class="ei">📅</div>Selecione os dois períodos.</div>';
+    return;
+  }
+
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando comparativo...</div>';
+  try {
+    const [snapA, snapB] = await Promise.all([
+      db.collection("lancamentos").where("mes_ano","==",mesA).where("perfil","in",["callcenter","lider_callcenter"]).get(),
+      db.collection("lancamentos").where("mes_ano","==",mesB).where("perfil","in",["callcenter","lider_callcenter"]).get(),
+    ]);
+    const la = snapA.docs.map(d => d.data());
+    const lb = snapB.docs.map(d => d.data());
+
+    const totA = CC_TODOS.reduce((s,n) => s + calcTotais(la.filter(l=>l.usuario_nome===n)).caixa, 0);
+    const totB = CC_TODOS.reduce((s,n) => s + calcTotais(lb.filter(l=>l.usuario_nome===n)).caixa, 0);
+    const varT = totA > 0 ? ((totB-totA)/totA*100) : 0;
+    const vCls = varT > 0 ? "var-pos" : varT < 0 ? "var-neg" : "var-neu";
+
+    const nomesMes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const [anoA,mA] = mesA.split("-"); const [anoB,mB] = mesB.split("-");
+    const lblA = `${nomesMes[+mA-1]}/${anoA}`; const lblB = `${nomesMes[+mB-1]}/${anoB}`;
+
+    el.innerHTML = `<div class="card">
+      <div class="comp-dash-info">Comparando <strong>${lblA}</strong> vs <strong>${lblB}</strong></div>
+      <div class="tbl-wrap"><table class="comp-dash-table">
+        <thead><tr>
+          <th>Atendente</th>
+          <th class="num">${lblA}</th>
+          <th class="num">${lblB}</th>
+          <th class="num">Variação</th>
+        </tr></thead>
+        <tbody>
+          ${CC_TODOS.map(nome => {
+            const ca = calcTotais(la.filter(l=>l.usuario_nome===nome)).caixa;
+            const cb = calcTotais(lb.filter(l=>l.usuario_nome===nome)).caixa;
+            const vr = ca > 0 ? ((cb-ca)/ca*100) : 0;
+            const vc = vr > 0 ? "var-pos" : vr < 0 ? "var-neg" : "var-neu";
+            const cor = CC_CORES[nome] || "var(--primary)";
+            return `<tr>
+              <td><strong style="color:${cor}">${nome}</strong></td>
+              <td class="num">${brl(ca)}</td>
+              <td class="num">${brl(cb)}</td>
+              <td class="num"><span class="${vc}">${vr>0?"+":""}${vr.toFixed(1)}%</span></td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+        <tfoot><tr class="diff-row${varT<0?" neg":""}">
+          <td>TOTAL EQUIPE</td>
+          <td class="num">${brl(totA)}</td>
+          <td class="num">${brl(totB)}</td>
+          <td class="num"><span class="${vCls}">${varT>0?"+":""}${varT.toFixed(1)}%</span></td>
+        </tr></tfoot>
+      </table></div>
+    </div>`;
+  } catch(e) {
+    console.error("comparativo CC:", e);
+    el.innerHTML = '<div class="empty"><div class="ei">⚠️</div>Erro ao carregar comparativo.</div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
