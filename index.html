@@ -1549,12 +1549,21 @@ const PLANILHAS_HISTORICAS = {
 const PLANILHA_EQUIPE_URL = "https://docs.google.com/spreadsheets/d/1o9vfvoXREHZzdJv8ngAYFW6VXVaEk_OiNt053Npf-P8";
 
 // Índices de coluna (base 0) por campo/mês na planilha de equipe
-// Cada aba = um dia; linha 0 = cabeçalho; demais linhas = uma recepcionista cada
+// Estrutura real: cada aba = um mês; col A (0) = dia da semana, col B (1) = número do dia; demais = totais diários
+// injetaveis:null = campo não existe naquele mês
 const COLUNAS_EQUIPE = {
-  "2026-01": { laboratorio:5, procedimentos:14, imagem:23, caixa:32, credito:41, boleto:50 },
-  "2026-02": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50 },
+  "2026-01": { laboratorio:5, procedimentos:14, imagem:23, caixa:32, credito:41, boleto:50, injetaveis:null },
+  "2026-02": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:null },
   "2026-03": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
   "2026-04": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
+};
+
+// Nomes exatos das abas mensais na planilha de equipe (tenta variações de capitalização)
+const NOMES_ABAS_EQUIPE = {
+  "2026-01": ["JANEIRO 2026", "Janeiro 2026", "janeiro 2026"],
+  "2026-02": ["FEVEREIRO 2026", "Fevereiro 2026", "fevereiro 2026"],
+  "2026-03": ["MARÇO 2026", "MARCO 2026", "Março 2026", "Marco 2026", "março 2026", "marco 2026"],
+  "2026-04": ["ABRIL 2026", "Abril 2026", "abril 2026"],
 };
 
 // Mapeamento de campos para busca de labels na planilha (normalizado sem acentos)
@@ -5653,16 +5662,48 @@ function extrairCamposPorColunaJK(linhas) {
   return resultado;
 }
 
-// Extrai campos de uma aba diária da planilha de equipe usando índices de coluna fixos
-// Pula linha 0 (cabeçalho) e soma todas as demais linhas (uma por recepcionista)
+// Lê aba mensal da planilha de equipe e retorna [{dia, dataStr, campos}]
+// Col A (0) = dia da semana, Col B (1) = número do dia (1-31), demais = totais diários
+function parsearAbaEquipeMensal(linhas, mes) {
+  const colunas = COLUNAS_EQUIPE[mes];
+  if(!colunas || !linhas.length) return [];
+  const [ano, mesNum] = mes.split("-").map(Number);
+  const resultado = [];
+
+  for(const linha of linhas) {
+    const celB = linha[1];
+    if(!celB) continue;
+    const valB = celB.valor;
+    const dia = typeof valB === "number" ? Math.round(valB) : parseInt(String(valB ?? ""), 10);
+    if(!dia || dia < 1 || dia > 31) continue;
+
+    const campos = {};
+    for(const [campo, colIdx] of Object.entries(colunas)) {
+      if(colIdx === null) continue;
+      const celRaw = linha[colIdx];
+      const num = parseCelula(celRaw);
+      campos[campo] = Math.round(num * 100) / 100;
+      console.log(`[equipe] dia=${dia} campo=${campo} col=${colIdx} bruto=${JSON.stringify(celRaw?.valor)} limpo=${campos[campo]}`);
+    }
+
+    const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+    resultado.push({ dia, dataStr, campos });
+  }
+
+  console.log(`[equipe] ${mes}: ${resultado.length} dias detectados`);
+  return resultado;
+}
+
+// Mantido apenas como fallback para planilhas individuais (não equipe)
 function extrairCamposAbaEquipe(linhas, mes) {
   const colunas = COLUNAS_EQUIPE[mes];
   if(!colunas || linhas.length < 2) return {};
   const totais = {};
   Object.keys(colunas).forEach(k => totais[k] = 0);
-  for(let r = 1; r < linhas.length; r++) {   // linha 0 = cabeçalho
+  for(let r = 1; r < linhas.length; r++) {
     const linha = linhas[r];
     for(const [campo, colIdx] of Object.entries(colunas)) {
+      if(colIdx === null) continue;
       const num = parseCelula(linha[colIdx]);
       if(num > 0) totais[campo] += num;
     }
@@ -5837,40 +5878,37 @@ async function importarEquipe() {
   _diasEquipePendentes = [];
   _mesPendente = mes;
 
-  const [ano, mesNum] = mes.split("-").map(Number);
-  const diasNoMes = new Date(ano, mesNum, 0).getDate();
+  progEl.innerHTML = `<div class="import-progress">⏳ Buscando aba do mês na planilha...</div>`;
 
-  // Monta grid de progresso
-  const spans = Array.from({ length: diasNoMes }, (_, i) => {
-    const d = i + 1;
-    return `<span id="prog-dia-${d}" style="font-size:12px;color:var(--text2);margin-right:6px">📋 ${d}</span>`;
-  });
-  progEl.innerHTML = `
-    <div class="import-progress" style="line-height:2.2">
-      <strong>Lendo abas...</strong><br>
-      ${spans.join("")}
-    </div>`;
+  const nomes = NOMES_ABAS_EQUIPE[mes] || [];
+  let linhas = null;
+  let abaUsada = null;
 
-  for(let dia = 1; dia <= diasNoMes; dia++) {
-    const elDia = document.getElementById(`prog-dia-${dia}`);
+  for(const nome of nomes) {
     try {
-      const data   = await fetchGviz(id, String(dia));
-      const linhas = gvizParaLinhas(data);
-      const campos = extrairCamposAbaEquipe(linhas, _mesPendente);
-
-      const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
-      _diasEquipePendentes.push({ dia, dataStr, campos });
-      if(elDia) elDia.innerHTML = `<span style="color:#10B981;font-size:12px;margin-right:6px">✅ ${dia}</span>`;
+      const data = await fetchGviz(id, nome);
+      linhas = gvizParaLinhas(data);
+      abaUsada = nome;
+      console.log(`[equipe] Aba encontrada: "${nome}", ${linhas.length} linhas`);
+      break;
     } catch(e) {
-      // Aba não existe ou vazia — pula sem erro
-      if(elDia) elDia.innerHTML = `<span style="color:#D1D5DB;font-size:12px;margin-right:6px">— ${dia}</span>`;
+      console.log(`[equipe] Aba "${nome}" não encontrada, tentando próxima...`);
     }
-    // Delay para não sobrecarregar o servidor do Google
-    await new Promise(r => setTimeout(r, 100));
   }
 
-  if(_diasEquipePendentes.length === 0) {
-    statusEl.innerHTML = '<div class="import-err">❌ Nenhum dia com dados encontrado. Verifique se a planilha é pública e se as abas estão numeradas (1, 2, 3...).</div>';
+  if(!linhas) {
+    progEl.innerHTML = "";
+    statusEl.innerHTML = `<div class="import-err">❌ Aba do mês não encontrada. Tentativas: ${nomes.join(", ")}.<br>Verifique se a planilha é pública e se o nome da aba está correto.</div>`;
+    return;
+  }
+
+  progEl.innerHTML = `<div class="import-progress">✅ Aba "<strong>${abaUsada}</strong>" lida — ${linhas.length} linhas. Processando dias...</div>`;
+
+  const dias = parsearAbaEquipeMensal(linhas, mes);
+  _diasEquipePendentes = dias;
+
+  if(dias.length === 0) {
+    statusEl.innerHTML = `<div class="import-err">❌ Nenhum dia encontrado na aba "${abaUsada}". Verifique se a coluna B contém os números dos dias (1, 2, 3...). Veja o console para detalhes.</div>`;
     return;
   }
 
@@ -5881,7 +5919,8 @@ function renderPreviewEquipe() {
   const mesLabel = { "2026-01":"Janeiro 2026","2026-02":"Fevereiro 2026","2026-03":"Março 2026","2026-04":"Abril 2026" }[_mesPendente] || _mesPendente;
   const statusEl = document.getElementById("imp-equipe-status");
 
-  const camposEquipe = Object.keys(COLUNAS_EQUIPE[_mesPendente] || COLUNAS_EQUIPE["2026-04"]);
+  const colsMes = COLUNAS_EQUIPE[_mesPendente] || COLUNAS_EQUIPE["2026-04"];
+  const camposEquipe = Object.keys(colsMes).filter(k => colsMes[k] !== null);
   const ths = camposEquipe.map(k =>
     `<th style="padding:5px 8px;font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;background:var(--bg2);text-align:right;white-space:nowrap">${LABELS_CAMPOS_PT[k]||k}</th>`
   ).join("");
@@ -5918,13 +5957,13 @@ async function confirmarImportacaoEquipe() {
 
   let ok = 0, erros = 0;
   const colsMes = COLUNAS_EQUIPE[_mesPendente] || {};
-  const temInjetaveis = "injetaveis" in colsMes;
-  for(const { dataStr, campos } of _diasEquipePendentes) {
+  for(const { dia, dataStr, campos } of _diasEquipePendentes) {
     const docId = dataStr;
     try {
       const payload = {
         data:          dataStr,
         mes_ano:       _mesPendente,
+        dia:           dia,
         caixa:         campos.caixa         || 0,
         credito:       campos.credito        || 0,
         boleto:        campos.boleto         || 0,
@@ -5934,7 +5973,9 @@ async function confirmarImportacaoEquipe() {
         fonte:         "importacao_historica",
         importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
       };
-      if(temInjetaveis) payload.injetaveis = campos.injetaveis || 0;
+      if(colsMes.injetaveis !== null && colsMes.injetaveis !== undefined) {
+        payload.injetaveis = campos.injetaveis || 0;
+      }
       await db.collection("historico_equipe").doc(docId).set(payload);
       ok++;
     } catch(e) {
