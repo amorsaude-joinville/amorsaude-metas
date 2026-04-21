@@ -406,6 +406,9 @@
     .prem-faixa.ok { background:#D1FAE5; color:#065F46; }
     .prem-faixa.top { background:#FEE2E2; color:#991B1B; }
     .prem-proj { font-size:11px; color:var(--text2); margin-top:2px; }
+    .prem-grupo-sep td { background:#F3F4F6; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); padding:6px 12px; border-top:2px solid var(--border); }
+    .rank-grupo-sep td { background:#F3F4F6; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); padding:5px 12px; border-top:2px solid var(--border); }
+    .colab-grupo-header { background:#F3F4F6; padding:8px 14px; border-radius:var(--r2); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); margin:14px 0 8px; }
 
     /* ── ABAS LIDER ── */
     #lider-nav, #lider-cc-nav {
@@ -811,6 +814,8 @@
           </div>
           <div id="dash-areas"></div>
         </div>
+
+      </div><!-- fim card prescritores -->
 
       </div><!-- fim dash-painel-normal -->
 
@@ -3312,57 +3317,87 @@ function renderDashPremiacao() {
   if(!el) return;
 
   const m = dashMetasMes || {};
-  const metaRec  = m.meta_caixa_recepcao   || 120000;
-  const metaCred = m.meta_credito_recepcao  || 16000;
-  const metaCC   = m.meta_caixa_callcenter  || 28000;
+  const metaRec    = m.meta_caixa_recepcao   || 120000;
+  const metaCred   = m.meta_credito_recepcao  || 16000;
+  const metaCC     = m.meta_caixa_callcenter  || 28000;
+  const metaEquipeCC = metaCC * CC_TODOS.length;
   const diasUteis  = m.dias_uteis || 22;
   const diasPass   = diasUteisPassados(diasUteis);
+  const diasPassF  = diasUteisPassadosFloat();
 
-  // Agrupa lançamentos do mês inteiro por colaboradora (ignora filtros de modo/colab/prod)
+  // Agrupa lançamentos do mês inteiro por colaboradora
   const por = {};
   dashLancs.forEach(l => {
     if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
     por[l.usuario_nome].push(l);
   });
 
+  // Linhas individuais (recepção + CC atendentes)
   const linhas = Object.entries(por)
     .filter(([nome]) => {
       const p = PERFIS[nome] || "";
-      return FAZ_LANC.includes(p);
+      return p === "recepcionista" || p === "lider" || p === "callcenter";
     })
     .map(([nome, ls]) => {
       const tot    = calcTotaisDetalhados(ls);
       const perfil = PERFIS[nome] || "";
-      const mC     = (perfil === "callcenter" || perfil === "lider_callcenter") ? metaCC : metaRec;
-      const mCr    = (perfil === "callcenter" || perfil === "lider_callcenter") ? 0      : metaCred;
+      const mC     = perfil === "callcenter" ? metaCC : metaRec;
+      const mCr    = perfil === "callcenter" ? 0 : metaCred;
       const prem   = calcPremiacao(tot.caixa, tot.credito, perfil, mC, mCr);
-
-      // Projeção ao final do mês
       let premProj = prem;
       if(diasPass > 0) {
         const projC  = (tot.caixa   / diasPass) * diasUteis;
         const projCr = (tot.credito / diasPass) * diasUteis;
         premProj = calcPremiacao(projC, projCr, perfil, mC, mCr);
       }
-
       return { nome, perfil, tot, mC, mCr, prem, premProj };
-    })
-    .sort((a, b) => b.prem.valor - a.prem.valor);
+    });
+
+  const linhasRec = linhas.filter(r => r.perfil === "recepcionista" || r.perfil === "lider")
+                          .sort((a,b) => b.prem.valor - a.prem.valor);
+  const linhasCC  = linhas.filter(r => r.perfil === "callcenter")
+                          .sort((a,b) => b.prem.valor - a.prem.valor);
+
+  // CC equipe total para grupos 3 e 4
+  let totalCaixaCC = 0;
+  CC_TODOS.forEach(n => { totalCaixaCC += (por[n] ? calcTotaisDetalhados(por[n]).caixa : 0); });
+  const pctMetaCC = metaEquipeCC > 0 ? totalCaixaCC / metaEquipeCC : 0;
+  const { atual: faixaLiderAtual } = calcFaixaCC(FAIXAS_LIDER_CC, pctMetaCC);
+  const { atual: faixaCoordAtual } = calcFaixaCC(FAIXAS_COORD_CC, pctMetaCC);
+  const premLider = faixaLiderAtual ? faixaLiderAtual.prem : 0;
+  const premCoord = faixaCoordAtual ? faixaCoordAtual.prem : 0;
+  const faixaLiderLabel = faixaLiderAtual ? faixaLiderAtual.label : "Abaixo de 80%";
+  const faixaCoordLabel = faixaCoordAtual ? faixaCoordAtual.label : "Abaixo de 80%";
+
+  // Projeção CC equipe para grupos 3 e 4
+  let premLiderProj = premLider, premCoordProj = premCoord;
+  let faixaLiderLabelProj = faixaLiderLabel, faixaCoordLabelProj = faixaCoordLabel;
+  if(diasPassF > 0) {
+    const projCaixaCC = (totalCaixaCC / diasPassF) * diasUteis;
+    const pctProj = metaEquipeCC > 0 ? projCaixaCC / metaEquipeCC : 0;
+    const { atual: lProj } = calcFaixaCC(FAIXAS_LIDER_CC, pctProj);
+    const { atual: cProj } = calcFaixaCC(FAIXAS_COORD_CC, pctProj);
+    premLiderProj = lProj ? lProj.prem : 0;
+    premCoordProj = cProj ? cProj.prem : 0;
+    faixaLiderLabelProj = lProj ? lProj.label : "Abaixo de 80%";
+    faixaCoordLabelProj = cProj ? cProj.label : "Abaixo de 80%";
+  }
+
+  // Totalizadores
+  const totalRec     = linhasRec.reduce((s,r) => s + r.prem.valor, 0);
+  const totalCCInd   = linhasCC.reduce((s,r) => s + r.prem.valor, 0);
+  const totalLider   = premLider + premCoord;
+  const totalGeral   = totalRec + totalCCInd + totalLider;
+  const totalProjRec   = linhasRec.reduce((s,r) => s + r.premProj.valor, 0);
+  const totalProjCCInd = linhasCC.reduce((s,r) => s + r.premProj.valor, 0);
+  const totalProjLider = premLiderProj + premCoordProj;
+  const totalProj      = totalProjRec + totalProjCCInd + totalProjLider;
 
   if(!linhas.length) {
     el.innerHTML = '<div class="empty"><div class="ei">💰</div>Nenhum dado disponível.</div>';
     return;
   }
 
-  // Totalizadores por grupo
-  const totalRec  = linhas.filter(r => r.perfil !== "callcenter" && r.perfil !== "lider_callcenter").reduce((s,r) => s + r.prem.valor, 0);
-  const totalCC   = linhas.filter(r => (r.perfil === "callcenter" || r.perfil === "lider_callcenter")).reduce((s,r) => s + r.prem.valor, 0);
-  const totalGeral = totalRec + totalCC;
-  const totalProjRec = linhas.filter(r => r.perfil !== "callcenter" && r.perfil !== "lider_callcenter").reduce((s,r) => s + r.premProj.valor, 0);
-  const totalProjCC  = linhas.filter(r => (r.perfil === "callcenter" || r.perfil === "lider_callcenter")).reduce((s,r) => s + r.premProj.valor, 0);
-  const totalProj    = totalProjRec + totalProjCC;
-
-  // Define classe visual da faixa
   function faixaClass(prem) {
     if(!prem.valor) return "";
     if(prem.faixa.includes("🏆") || prem.faixa.includes("150%")) return "top";
@@ -3370,27 +3405,72 @@ function renderDashPremiacao() {
     return "";
   }
 
+  function rowInd(r) {
+    const pctC  = r.mC  > 0 ? (r.tot.caixa   / r.mC  * 100).toFixed(1) : "—";
+    const pctCr = r.mCr > 0 ? (r.tot.credito / r.mCr * 100).toFixed(1) : "—";
+    const temCred = r.perfil !== "callcenter";
+    const fc = faixaClass(r.prem);
+    return `<tr>
+      <td><strong>${r.nome}</strong></td>
+      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
+      <td class="num">${brl(r.tot.caixa)}</td>
+      <td class="num" style="font-weight:600;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</td>
+      <td class="num">${temCred ? brl(r.tot.credito) : "—"}</td>
+      <td class="num" style="color:${pctCr!=="—"&&+pctCr>=100?"var(--success)":"inherit"}">${temCred && pctCr !== "—" ? pctCr+"%" : "—"}</td>
+      <td><span class="prem-faixa ${fc}">${r.prem.faixa || "Abaixo de 80%"}</span></td>
+      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">${brl(r.prem.valor)}</td>
+      <td class="num">
+        <div style="font-weight:700;color:${r.premProj.valor>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valor)}</div>
+        ${r.premProj.valor !== r.prem.valor ? `<div class="prem-proj">${r.premProj.faixa}</div>` : ""}
+      </td>
+    </tr>`;
+  }
+
+  function rowLidGestao(nome, perfil, caixaEquipe, metaEq, premAtual, premProj, faixaAtual, faixaProj) {
+    const pctC = metaEq > 0 ? (caixaEquipe / metaEq * 100).toFixed(1) : "—";
+    const fc = premAtual > 0 ? (faixaAtual.includes("150%") ? "top" : faixaAtual.includes("100%") ? "ok" : "") : "";
+    return `<tr>
+      <td><strong>${nome}</strong></td>
+      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[perfil]||perfil}</td>
+      <td class="num">${brl(caixaEquipe)}<div style="font-size:11px;color:var(--text2)">equipe CC</div></td>
+      <td class="num" style="font-weight:600;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td><span class="prem-faixa ${fc}">${faixaAtual}</span></td>
+      <td class="num" style="font-weight:700;color:${premAtual>0?"#B45309":"var(--text2)"}">${brl(premAtual)}</td>
+      <td class="num">
+        <div style="font-weight:700;color:${premProj>0?"#B45309":"var(--text2)"}">${brl(premProj)}</div>
+        ${premProj !== premAtual ? `<div class="prem-proj">${faixaProj}</div>` : ""}
+      </td>
+    </tr>`;
+  }
+
+  const pctCCEquipe = metaEquipeCC > 0 ? (totalCaixaCC / metaEquipeCC * 100).toFixed(1) : "—";
+
   el.innerHTML = `
-    <!-- Cards de resumo -->
     <div class="prem-resumo-grid">
       <div class="prem-resumo-card">
-        <div class="prc-label">💰 Total Equipe</div>
+        <div class="prc-label">💰 Total Geral</div>
         <div class="prc-val">${brl(totalGeral)}</div>
         <div class="prc-sub">Projeção: ${brl(totalProj)}</div>
       </div>
       <div class="prem-resumo-card">
-        <div class="prc-label">🩺 Recepção</div>
+        <div class="prc-label">🩺 Recepção Médica</div>
         <div class="prc-val">${brl(totalRec)}</div>
         <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
       </div>
       <div class="prem-resumo-card">
-        <div class="prc-label">📞 Call Center</div>
-        <div class="prc-val">${brl(totalCC)}</div>
-        <div class="prc-sub">Projeção: ${brl(totalProjCC)}</div>
+        <div class="prc-label">📞 CC Individual</div>
+        <div class="prc-val">${brl(totalCCInd)}</div>
+        <div class="prc-sub">Projeção: ${brl(totalProjCCInd)}</div>
+      </div>
+      <div class="prem-resumo-card">
+        <div class="prc-label">🏅 Liderança + Coord CC</div>
+        <div class="prc-val">${brl(totalLider)}</div>
+        <div class="prc-sub">Projeção: ${brl(totalProjLider)} · CC equipe ${pctCCEquipe !== "—" ? pctCCEquipe+"%" : "—"} (meta ${brl(metaEquipeCC)})</div>
       </div>
     </div>
 
-    <!-- Tabela individual -->
     <div class="tbl-wrap">
       <table class="prem-table">
         <thead><tr>
@@ -3405,29 +3485,17 @@ function renderDashPremiacao() {
           <th class="num">Projeção</th>
         </tr></thead>
         <tbody>
-          ${linhas.map(r => {
-            const pctC  = r.mC  > 0 ? (r.tot.caixa   / r.mC  * 100).toFixed(1) : "—";
-            const pctCr = r.mCr > 0 ? (r.tot.credito / r.mCr * 100).toFixed(1) : "—";
-            const temCred = r.perfil !== "callcenter" && r.perfil !== "lider_callcenter"; // CC não tem meta de crédito
-            const fc = faixaClass(r.prem);
-            return `<tr>
-              <td><strong>${r.nome}</strong></td>
-              <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
-              <td class="num">${brl(r.tot.caixa)}</td>
-              <td class="num" style="font-weight:600;color:${pctC!=="—"&&+pctC>=100?"var(--success)":"var(--primary)"}">${pctC !== "—" ? pctC+"%" : "—"}</td>
-              <td class="num">${temCred ? brl(r.tot.credito) : "—"}</td>
-              <td class="num" style="color:${pctCr!=="—"&&+pctCr>=100?"var(--success)":"inherit"}">${temCred && pctCr !== "—" ? pctCr+"%" : "—"}</td>
-              <td><span class="prem-faixa ${fc}">${r.prem.faixa || "Abaixo de 80%"}</span></td>
-              <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">${brl(r.prem.valor)}</td>
-              <td class="num">
-                <div style="font-weight:700;color:${r.premProj.valor>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valor)}</div>
-                ${r.premProj.valor !== r.prem.valor ? `<div class="prem-proj">${r.premProj.faixa}</div>` : ""}
-              </td>
-            </tr>`;
-          }).join("")}
+          <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica</td></tr>
+          ${linhasRec.map(rowInd).join("")}
+          <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
+          ${linhasCC.map(rowInd).join("")}
+          <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
+          ${rowLidGestao("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,faixaLiderLabelProj)}
+          <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
+          ${rowLidGestao("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,faixaCoordLabelProj)}
         </tbody>
         <tfoot><tr>
-          <td colspan="7">Total</td>
+          <td colspan="7">Total Geral</td>
           <td class="num">${brl(totalGeral)}</td>
           <td class="num">${brl(totalProj)}</td>
         </tr></tfoot>
@@ -3443,9 +3511,13 @@ function renderDashRanking(lista) {
     if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
     por[l.usuario_nome].push(l);
   });
-  const rank = Object.entries(por).map(([nome,ls]) => ({
-    nome, ...calcTotaisDetalhados(ls)
-  })).sort((a,b) => b.caixa - a.caixa);
+  const todos = Object.entries(por).map(([nome,ls]) => ({
+    nome, perfil: PERFIS[nome]||"", ...calcTotaisDetalhados(ls)
+  }));
+
+  const rankRec = todos.filter(r => r.perfil==="recepcionista"||r.perfil==="lider").sort((a,b)=>b.caixa-a.caixa);
+  const rankCC  = todos.filter(r => r.perfil==="callcenter"||r.perfil==="lider_callcenter").sort((a,b)=>b.caixa-a.caixa);
+  const rank = [...rankRec, ...rankCC];
 
   const maxCaixa = rank[0]?.caixa || 1;
   const medals = ["🥇","🥈","🥉"];
@@ -3453,6 +3525,28 @@ function renderDashRanking(lista) {
   if(!rank.length) {
     document.getElementById("dash-ranking").innerHTML = '<div class="empty"><div class="ei">📊</div>Nenhum lançamento no período.</div>';
     return;
+  }
+
+  function rankRow(r, posicao) {
+    const metaC = (r.perfil==="callcenter"||r.perfil==="lider_callcenter")
+      ? (dashMetasMes?.meta_caixa_callcenter||0)
+      : (dashMetasMes?.meta_caixa_recepcao||0);
+    const pct = metaC > 0 ? (r.caixa/metaC*100).toFixed(1) : "—";
+    const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
+    const premBadge = metaC > 0
+      ? (() => { const p=calcPremiacao(r.caixa,r.credito,r.perfil,metaC,dashMetasMes?.meta_credito_recepcao||0); return p.valor>0?`<span class="prem-badge">🏅 ${brl(p.valor)}</span>`:""; })()
+      : "";
+    return `<tr>
+      <td><span class="rank-medal">${medals[posicao]||posicao+1}</span></td>
+      <td><strong>${r.nome}</strong>${premBadge ? "<br>"+premBadge : ""}</td>
+      <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
+      <td>
+        ${brl(r.caixa)}
+        <div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div>
+      </td>
+      <td>${brl(r.credito)}</td>
+      <td style="font-weight:600;color:${pct!=="—"&&+pct>=100?"var(--success)":"var(--primary)"}">${pct !== "—" ? pct+"%" : "—"}</td>
+    </tr>`;
   }
 
   document.getElementById("dash-ranking").innerHTML = `
@@ -3463,28 +3557,8 @@ function renderDashRanking(lista) {
           <th>Caixa</th><th>Crédito</th><th>% da Meta</th>
         </tr></thead>
         <tbody>
-          ${rank.map((r,i) => {
-            const perfil = PERFIS[r.nome] || "";
-            const metaC = (perfil === "callcenter" || perfil === "lider_callcenter")
-              ? (dashMetasMes?.meta_caixa_callcenter||0)
-              : (dashMetasMes?.meta_caixa_recepcao||0);
-            const pct = metaC > 0 ? (r.caixa/metaC*100).toFixed(1) : "—";
-            const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
-            const premBadge = metaC > 0
-              ? (() => { const p=calcPremiacao(r.caixa,r.credito,perfil,metaC,dashMetasMes?.meta_credito_recepcao||0); return p.valor>0?`<span class="prem-badge">🏅 ${brl(p.valor)}</span>`:""; })()
-              : "";
-            return `<tr>
-              <td><span class="rank-medal">${medals[i]||i+1}</span></td>
-              <td><strong>${r.nome}</strong>${premBadge ? "<br>"+premBadge : ""}</td>
-              <td style="color:var(--text2);font-size:12px">${PERFIL_LABEL[perfil]||perfil}</td>
-              <td>
-                ${brl(r.caixa)}
-                <div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div>
-              </td>
-              <td>${brl(r.credito)}</td>
-              <td style="font-weight:600;color:${pct!=="—"&&+pct>=100?"var(--success)":"var(--primary)"}">${pct !== "—" ? pct+"%" : "—"}</td>
-            </tr>`;
-          }).join("")}
+          ${rankRec.length ? `<tr class="rank-grupo-sep"><td colspan="6">🩺 Recepção Médica</td></tr>${rankRec.map((r,i)=>rankRow(r,i)).join("")}` : ""}
+          ${rankCC.length  ? `<tr class="rank-grupo-sep"><td colspan="6">📞 Call Center</td></tr>${rankCC.map((r,i)=>rankRow(r,i)).join("")}` : ""}
         </tbody>
       </table>
     </div>
@@ -3499,13 +3573,16 @@ function renderDashColaboradoras(lista) {
     por[l.usuario_nome].push(l);
   });
 
-  const nomes = Object.keys(por).sort((a,b)=>a.localeCompare(b));
-  if(!nomes.length) {
+  const todosNomes = Object.keys(por).sort((a,b)=>a.localeCompare(b));
+  if(!todosNomes.length) {
     document.getElementById("dash-colaboradoras").innerHTML = '<div class="empty"><div class="ei">👥</div>Nenhum dado no período.</div>';
     return;
   }
 
-  document.getElementById("dash-colaboradoras").innerHTML = nomes.map(nome => {
+  const nomesRec = todosNomes.filter(n => { const p=PERFIS[n]||""; return p==="recepcionista"||p==="lider"; });
+  const nomesCC  = todosNomes.filter(n => { const p=PERFIS[n]||""; return p==="callcenter"||p==="lider_callcenter"; });
+
+  function renderCard(nome) {
     const ls = por[nome];
     const tot = calcTotaisDetalhados(ls);
     const perfil = PERFIS[nome] || "";
@@ -3548,7 +3625,18 @@ function renderDashColaboradoras(lista) {
         </div>
       </div>
     `;
-  }).join("");
+  }
+
+  let html = "";
+  if(nomesRec.length) {
+    html += `<div class="colab-grupo-header">🩺 Recepção Médica</div>`;
+    html += nomesRec.map(renderCard).join("");
+  }
+  if(nomesCC.length) {
+    html += `<div class="colab-grupo-header">📞 Call Center</div>`;
+    html += nomesCC.map(renderCard).join("");
+  }
+  document.getElementById("dash-colaboradoras").innerHTML = html;
 }
 
 function toggleColab(header) {
