@@ -3316,6 +3316,9 @@ function renderDashPremiacao() {
   const el = document.getElementById("dash-premiacao");
   if(!el) return;
 
+  // gestor e subgestora veem todos os 4 grupos; lider vê somente Recepção Médica
+  const verCC = SO_DASHBOARD.includes(usuario?.perfil);
+
   const m = dashMetasMes || {};
   const metaRec    = m.meta_caixa_recepcao   || 120000;
   const metaCred   = m.meta_credito_recepcao  || 16000;
@@ -3446,7 +3449,6 @@ function renderDashPremiacao() {
   }
 
   const pctCCEquipe = metaEquipeCC > 0 ? (totalCaixaCC / metaEquipeCC * 100).toFixed(1) : "—";
-  const verCC = usuario?.perfil === "gestor" || usuario?.perfil === "subgestora";
 
   if(verCC) {
     // Painel completo: 4 grupos + 4 cards resumo
