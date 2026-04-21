@@ -3446,62 +3446,102 @@ function renderDashPremiacao() {
   }
 
   const pctCCEquipe = metaEquipeCC > 0 ? (totalCaixaCC / metaEquipeCC * 100).toFixed(1) : "—";
+  const verCC = usuario?.perfil === "gestor" || usuario?.perfil === "subgestora";
 
-  el.innerHTML = `
-    <div class="prem-resumo-grid">
-      <div class="prem-resumo-card">
-        <div class="prc-label">💰 Total Geral</div>
-        <div class="prc-val">${brl(totalGeral)}</div>
-        <div class="prc-sub">Projeção: ${brl(totalProj)}</div>
+  if(verCC) {
+    // Painel completo: 4 grupos + 4 cards resumo
+    el.innerHTML = `
+      <div class="prem-resumo-grid">
+        <div class="prem-resumo-card">
+          <div class="prc-label">💰 Total Geral</div>
+          <div class="prc-val">${brl(totalGeral)}</div>
+          <div class="prc-sub">Projeção: ${brl(totalProj)}</div>
+        </div>
+        <div class="prem-resumo-card">
+          <div class="prc-label">🩺 Recepção Médica</div>
+          <div class="prc-val">${brl(totalRec)}</div>
+          <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
+        </div>
+        <div class="prem-resumo-card">
+          <div class="prc-label">📞 CC Individual</div>
+          <div class="prc-val">${brl(totalCCInd)}</div>
+          <div class="prc-sub">Projeção: ${brl(totalProjCCInd)}</div>
+        </div>
+        <div class="prem-resumo-card">
+          <div class="prc-label">🏅 Liderança + Coord CC</div>
+          <div class="prc-val">${brl(totalLider)}</div>
+          <div class="prc-sub">Projeção: ${brl(totalProjLider)} · CC equipe ${pctCCEquipe !== "—" ? pctCCEquipe+"%" : "—"} (meta ${brl(metaEquipeCC)})</div>
+        </div>
       </div>
-      <div class="prem-resumo-card">
-        <div class="prc-label">🩺 Recepção Médica</div>
-        <div class="prc-val">${brl(totalRec)}</div>
-        <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
-      </div>
-      <div class="prem-resumo-card">
-        <div class="prc-label">📞 CC Individual</div>
-        <div class="prc-val">${brl(totalCCInd)}</div>
-        <div class="prc-sub">Projeção: ${brl(totalProjCCInd)}</div>
-      </div>
-      <div class="prem-resumo-card">
-        <div class="prc-label">🏅 Liderança + Coord CC</div>
-        <div class="prc-val">${brl(totalLider)}</div>
-        <div class="prc-sub">Projeção: ${brl(totalProjLider)} · CC equipe ${pctCCEquipe !== "—" ? pctCCEquipe+"%" : "—"} (meta ${brl(metaEquipeCC)})</div>
-      </div>
-    </div>
 
-    <div class="tbl-wrap">
-      <table class="prem-table">
-        <thead><tr>
-          <th>Colaboradora</th>
-          <th>Perfil</th>
-          <th class="num">Caixa</th>
-          <th class="num">% Meta</th>
-          <th class="num">Crédito</th>
-          <th class="num">% Créd.</th>
-          <th>Faixa</th>
-          <th class="num">💰 Prêmio</th>
-          <th class="num">Projeção</th>
-        </tr></thead>
-        <tbody>
-          <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica</td></tr>
-          ${linhasRec.map(rowInd).join("")}
-          <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
-          ${linhasCC.map(rowInd).join("")}
-          <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
-          ${rowLidGestao("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,faixaLiderLabelProj)}
-          <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
-          ${rowLidGestao("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,faixaCoordLabelProj)}
-        </tbody>
-        <tfoot><tr>
-          <td colspan="7">Total Geral</td>
-          <td class="num">${brl(totalGeral)}</td>
-          <td class="num">${brl(totalProj)}</td>
-        </tr></tfoot>
-      </table>
-    </div>
-  `;
+      <div class="tbl-wrap">
+        <table class="prem-table">
+          <thead><tr>
+            <th>Colaboradora</th>
+            <th>Perfil</th>
+            <th class="num">Caixa</th>
+            <th class="num">% Meta</th>
+            <th class="num">Crédito</th>
+            <th class="num">% Créd.</th>
+            <th>Faixa</th>
+            <th class="num">💰 Prêmio</th>
+            <th class="num">Projeção</th>
+          </tr></thead>
+          <tbody>
+            <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica</td></tr>
+            ${linhasRec.map(rowInd).join("")}
+            <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
+            ${linhasCC.map(rowInd).join("")}
+            <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
+            ${rowLidGestao("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,faixaLiderLabelProj)}
+            <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe: ${brl(metaEquipeCC)}</td></tr>
+            ${rowLidGestao("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,faixaCoordLabelProj)}
+          </tbody>
+          <tfoot><tr>
+            <td colspan="7">Total Geral</td>
+            <td class="num">${brl(totalGeral)}</td>
+            <td class="num">${brl(totalProj)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    `;
+  } else {
+    // Perfil lider: somente Grupo 1 — Recepção Médica + 1 card resumo
+    el.innerHTML = `
+      <div class="prem-resumo-grid">
+        <div class="prem-resumo-card">
+          <div class="prc-label">🩺 Total Recepção Médica</div>
+          <div class="prc-val">${brl(totalRec)}</div>
+          <div class="prc-sub">Projeção: ${brl(totalProjRec)}</div>
+        </div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="prem-table">
+          <thead><tr>
+            <th>Colaboradora</th>
+            <th>Perfil</th>
+            <th class="num">Caixa</th>
+            <th class="num">% Meta</th>
+            <th class="num">Crédito</th>
+            <th class="num">% Créd.</th>
+            <th>Faixa</th>
+            <th class="num">💰 Prêmio</th>
+            <th class="num">Projeção</th>
+          </tr></thead>
+          <tbody>
+            <tr class="prem-grupo-sep"><td colspan="9">🩺 Recepção Médica</td></tr>
+            ${linhasRec.map(rowInd).join("")}
+          </tbody>
+          <tfoot><tr>
+            <td colspan="7">Total Recepção</td>
+            <td class="num">${brl(totalRec)}</td>
+            <td class="num">${brl(totalProjRec)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    `;
+  }
 }
 
 // ── Ranking
