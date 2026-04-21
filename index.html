@@ -3848,32 +3848,31 @@ function carregarDashListener() {
   document.getElementById("dash-prescritores").innerHTML  = '';
 
   carregarDashMetas(dashMesAno).then(async () => {
-    // Para meses passados, tenta buscar dados históricos primeiro
-    const ehPassado = dashMesAno < getMesAno();
-    if(ehPassado) {
-      try {
-        const snap = await db.collection("historico_mensal")
-          .where("mes_ano","==",dashMesAno).get();
-        console.log("Dados históricos encontrados:", snap.size);
-        if(!snap.empty) {
-          dashHistorico = snap.docs.map(d => {
-            const dado = d.data();
-            const email = dado.email || d.id.split("_").slice(0,-1).join("_");
-            const u = USUARIOS[email] || {};
-            return { email, nome: u.nome || email, perfil: u.perfil || "", ...dado };
-          });
-          dashUsandoHistorico = true;
-          renderDashboard();
-          return;
-        }
-      } catch(e) { console.warn("historico_mensal:", e); }
-    }
-    // Listener em tempo real nos lançamentos
+    // Tenta sempre historico_mensal primeiro (todos os meses, incluindo o atual)
+    try {
+      const snap = await db.collection("historico_mensal")
+        .where("mes_ano","==",dashMesAno).get();
+      console.log(`[dash] historico_mensal ${dashMesAno}: ${snap.size} documento(s) encontrado(s)`);
+      if(!snap.empty) {
+        dashHistorico = snap.docs.map(d => {
+          const dado = d.data();
+          const email = dado.email || d.id.split("_").slice(0,-1).join("_");
+          const u = USUARIOS[email] || {};
+          return { email, nome: u.nome || email, perfil: u.perfil || "", ...dado };
+        });
+        dashUsandoHistorico = true;
+        renderDashboard();
+        return;
+      }
+    } catch(e) { console.warn("[dash] historico_mensal query erro:", e); }
+
+    // Fallback: listener em tempo real nos lançamentos
+    console.log(`[dash] sem dados em historico_mensal — usando lancamentos para ${dashMesAno}`);
     unsubDash = db.collection("lancamentos")
       .where("mes_ano","==",dashMesAno)
       .onSnapshot(snap => {
         dashLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
-        console.log(`[dash] ${dashMesAno}: ${snap.size} lançamentos encontrados`);
+        console.log(`[dash] lancamentos ${dashMesAno}: ${snap.size} documento(s) encontrado(s)`);
         renderDashboard();
       }, e => console.error("dash listener:", e));
   });
