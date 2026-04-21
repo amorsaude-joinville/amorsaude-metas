@@ -478,6 +478,24 @@
       font-family:'Inter',sans-serif; font-size:14px; outline:none; color:var(--text);
     }
     .coord-filtro input[type="date"]:focus { border-color:var(--primary); }
+
+    /* ── Card Metas da Equipe (recepcionista / callcenter) ── */
+    #sec-card-equipe { margin-bottom:20px; }
+    .equipe-card-tit { font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .equipe-metricas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+    .equipe-metrica { background:var(--bg2); border-radius:var(--r2); padding:12px 14px; }
+    .equipe-met-tit { font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; }
+    .equipe-met-val { font-size:16px; font-weight:700; color:var(--text); margin-bottom:6px; }
+    .equipe-met-meta { font-size:11px; color:var(--text2); margin-bottom:6px; }
+    .equipe-bar { height:6px; border-radius:3px; background:#E5E7EB; overflow:hidden; margin-bottom:4px; }
+    .equipe-bar-fill { height:100%; border-radius:3px; transition:width .4s; }
+    .equipe-bar-fill.verde  { background:#10B981; }
+    .equipe-bar-fill.amarelo{ background:#F59E0B; }
+    .equipe-bar-fill.vermelho{ background:#EF4444; }
+    .equipe-met-pct { font-size:11px; font-weight:600; }
+    .equipe-met-pct.verde  { color:#10B981; }
+    .equipe-met-pct.amarelo{ color:#F59E0B; }
+    .equipe-met-pct.vermelho{ color:#EF4444; }
   </style>
 </head>
 <body>
@@ -884,6 +902,16 @@
       </div>
 
     </div><!-- fim sec-fechamento -->
+
+    <!-- ── CARD METAS DA EQUIPE (recepcionista/callcenter/lider) ── -->
+    <div id="sec-card-equipe" style="display:none">
+      <div class="card" style="margin-bottom:0">
+        <div class="equipe-card-tit">🎯 Metas da Equipe</div>
+        <div id="equipe-metricas" class="equipe-metricas-grid">
+          <div class="loading"><div class="spinner"></div>Carregando...</div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── METAS (recepcionista / callcenter / lider) ── -->
     <div id="sec-metas">
@@ -1385,6 +1413,10 @@ let abaPrescritor = "prescritor";
 let coordLancs  = [];        // lançamentos do CC carregados
 let unsubCoord  = null;      // listener coordenadora
 
+// Card Metas da Equipe (recepcionista/callcenter/lider)
+let equipeLancs = [];        // lançamentos do time carregados
+let unsubEquipe = null;      // listener equipe
+
 // ═══════════════════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════════════════
@@ -1619,11 +1651,12 @@ function _encerrarSessao() {
 
 // Logout: diferencia sessão Firebase de login local
 function fazerLogout() {
-  if(unsubLanc)  { unsubLanc();  unsubLanc=null;  }
-  if(unsubDash)  { unsubDash();  unsubDash=null;   }
-  if(unsubCoord) { unsubCoord(); unsubCoord=null;  }
+  if(unsubLanc)   { unsubLanc();   unsubLanc=null;   }
+  if(unsubDash)   { unsubDash();   unsubDash=null;   }
+  if(unsubCoord)  { unsubCoord();  unsubCoord=null;  }
+  if(unsubEquipe) { unsubEquipe(); unsubEquipe=null; }
   dashLancs=[]; dashMetasMes=null; dashMesAno="";
-  coordLancs=[];
+  coordLancs=[]; equipeLancs=[];
 
   if(usuario?.uid) {
     // Firebase Auth — signOut dispara onAuthStateChanged que chama _encerrarSessao
@@ -1706,6 +1739,12 @@ function iniciarApp() {
     document.getElementById("sec-dashboard").style.display = temDashboard ? "" : "none";
   }
 
+  // Card equipe — visível para quem faz lançamento (exceto gestor/subgestora)
+  const verEquipe = (temLanc || ehCoord) && !SO_DASHBOARD.includes(perfil);
+  if(!ehLider && !ehLiderCC) {
+    document.getElementById("sec-card-equipe").style.display = verEquipe ? "" : "none";
+  }
+
   // Seções de lançamento — para líderes controlado por aplicarAbaLider/LiderCC()
   if(!ehLider && !ehLiderCC) {
     document.getElementById("sec-metas").style.display     = temLanc ? "" : "none";
@@ -1729,6 +1768,8 @@ function iniciarApp() {
   if(temLanc)      iniciarListener();
   if(ehCoord)      iniciarCoord();
   if(ehGestao)     iniciarFechamento();
+  // Lider e liderCC: listener iniciado por aplicarAbaLider/CC quando aba lançamentos está ativa
+  if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
 }
 
 // Aplica visibilidade das seções conforme aba ativa da líder
@@ -1739,12 +1780,16 @@ function aplicarAbaLider() {
   document.getElementById("lider-tab-dash").classList.toggle("active",  emDash);
 
   document.getElementById("sec-dashboard").style.display   = emDash  ? "" : "none";
+  document.getElementById("sec-card-equipe").style.display = emDash  ? "none" : "";
   document.getElementById("sec-metas").style.display       = emDash  ? "none" : "";
   document.getElementById("grid-extras").style.display     = emDash  ? "none" : "";
   document.getElementById("sec-resumo").style.display      = emDash  ? "none" : "";
   document.getElementById("sec-lanc").style.display        = emDash  ? "none" : "";
   document.getElementById("sec-tabela").style.display      = emDash  ? "none" : "";
   document.getElementById("sec-historico").style.display   = emDash  ? "none" : "";
+
+  // Inicia listener equipe na primeira vez que aba lançamentos é aberta
+  if(!emDash && !unsubEquipe) iniciarListenerEquipe();
 }
 
 function mudarAbaLider(aba) {
@@ -1761,6 +1806,7 @@ function aplicarAbaLiderCC() {
   document.getElementById("lider-cc-tab-cc").classList.toggle("active",   emCC);
 
   // Aba Lançamentos: mesma interface de callcenter
+  document.getElementById("sec-card-equipe").style.display = emCC ? "none" : "";
   document.getElementById("sec-metas").style.display       = emCC ? "none" : "";
   document.getElementById("grid-extras").style.display     = emCC ? "none" : "";
   document.getElementById("sec-resumo").style.display      = emCC ? "none" : "";
@@ -1769,6 +1815,9 @@ function aplicarAbaLiderCC() {
   document.getElementById("sec-historico").style.display   = emCC ? "none" : "";
   // Aba Call Center: visão da coordenadora (dados de Erielly e Júlia)
   document.getElementById("sec-coord").style.display       = emCC ? "" : "none";
+
+  // Inicia listener equipe CC na primeira vez
+  if(!emCC && !unsubEquipe) iniciarListenerEquipe();
 }
 
 function mudarAbaLiderCC(aba) {
@@ -1808,6 +1857,8 @@ async function carregarMetas() {
     atualizarCards();
     // Re-renderiza premiação da coordenação com meta correta
     if(VE_COORD.includes(usuario?.perfil)) renderCoordPremiacaoGestao();
+    // Re-renderiza card equipe com metas atualizadas
+    if(unsubEquipe) renderCardMetasEquipe();
   } catch(e) { console.error("metas:", e); }
 }
 
@@ -2488,6 +2539,74 @@ function iniciarCoord() {
 
 function mudarFiltroCoordMes() {
   iniciarCoord();
+}
+
+// ── Card Metas da Equipe ────────────────────────────────────
+function iniciarListenerEquipe() {
+  if(unsubEquipe) { unsubEquipe(); unsubEquipe=null; }
+  const perfil = usuario?.perfil;
+
+  // Recepção: ouve recepcionistas + líderes de recepção
+  // CC / Coord: ouve callcenter + lider_callcenter
+  const grupoCC = perfil === "callcenter" || VE_COORD.includes(perfil);
+  const filtro  = grupoCC
+    ? ["callcenter","lider_callcenter"]
+    : ["recepcionista","lider"];
+
+  unsubEquipe = db.collection("lancamentos")
+    .where("mes_ano","==",mesAno)
+    .where("perfil","in",filtro)
+    .onSnapshot(snap => {
+      equipeLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
+      renderCardMetasEquipe();
+    }, e => console.error("equipe listener:", e));
+}
+
+function renderCardMetasEquipe() {
+  const el = document.getElementById("equipe-metricas");
+  if(!el) return;
+  if(!metas) { el.innerHTML = '<div style="font-size:13px;color:var(--text2)">Aguardando metas...</div>'; return; }
+
+  const perfil  = usuario?.perfil;
+  const grupoCC = perfil === "callcenter" || VE_COORD.includes(perfil);
+  const tot     = calcTotaisDetalhados(equipeLancs);
+  const m       = metas;
+
+  function metrica(tit, val, meta) {
+    const pct    = meta > 0 ? Math.min((val/meta)*100, 100) : 0;
+    const classe = pct >= 80 ? "verde" : pct >= 50 ? "amarelo" : "vermelho";
+    return `
+      <div class="equipe-metrica">
+        <div class="equipe-met-tit">${tit}</div>
+        <div class="equipe-met-val">${brl(val)}</div>
+        ${meta > 0 ? `
+          <div class="equipe-met-meta">Meta: ${brl(meta)}</div>
+          <div class="equipe-bar"><div class="equipe-bar-fill ${classe}" style="width:${pct}%"></div></div>
+          <div class="equipe-met-pct ${classe}">${pct.toFixed(1)}%</div>
+        ` : '<div class="equipe-met-meta">Meta não definida</div>'}
+      </div>`;
+  }
+
+  if(grupoCC) {
+    const metaCC = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+    el.innerHTML = metrica("💰 Caixa CC — Equipe", tot.caixa, metaCC);
+  } else {
+    // Número de recepcionistas + líderes de recepção
+    const numRec = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
+    const metaCaixa   = (m.meta_caixa_recepcao  || 0) * numRec;
+    const metaCredito = (m.meta_credito_recepcao || 0) * numRec;
+    const metaBoleto  = m.meta_boleto_equipe  || 0;
+    const metaLab     = m.meta_lab_equipe     || 0;
+    const metaImg     = m.meta_img_equipe     || 0;
+    const metaProc    = m.meta_proc_equipe    || 0;
+    el.innerHTML =
+      metrica("💰 Caixa",        tot.caixa,   metaCaixa)   +
+      metrica("💳 Crédito",      tot.credito, metaCredito) +
+      metrica("📄 Boleto",       tot.boleto,  metaBoleto)  +
+      metrica("🧪 Lab",          tot.lab,     metaLab)     +
+      metrica("🩻 Imagem",       tot.img,     metaImg)     +
+      metrica("💉 Procedimentos",tot.proc,    metaProc);
+  }
 }
 
 function mudarModoCoord(modo) {

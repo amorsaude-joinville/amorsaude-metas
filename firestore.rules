@@ -7,7 +7,7 @@ service cloud.firestore {
     match /lancamentos/{docId} {
       allow read: if request.auth != null &&
         (resource.data.usuario_id == request.auth.uid ||
-         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider', 'coordenadora']);
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider', 'coordenadora', 'recepcionista', 'callcenter', 'lider_callcenter']);
       allow create: if request.auth != null &&
         request.resource.data.usuario_id == request.auth.uid;
       allow delete: if request.auth != null &&
