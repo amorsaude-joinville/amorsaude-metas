@@ -1614,6 +1614,8 @@ const LABELS_CAMPOS_PT = {
 // Estado temporário para confirmação de importação em massa (equipe)
 let _diasEquipePendentes = [];
 let _mesPendente = "";
+// Estado temporário dos dias diários de uma colaboradora (importação individual)
+let _diasColabPendentes = null;  // { email, mes, dias: [{dia, dataStr, ...}] }
 
 // ═══════════════════════════════════════════════════════════
 //  PRESCRITORES
@@ -5842,6 +5844,53 @@ function parseCelula(cel) {
   return isNaN(n) ? 0 : n;
 }
 
+// Lê aba "Base de dados para parcial" das planilhas individuais
+// Col A (0)=dia, B(1)=lab, C(2)=imagem, D(3)=proc, E(4)=caixa, F(5)=credito, G(6)=boleto, H(7)=injetaveis
+function parsearAbaBaseDados(linhas, mes) {
+  const [ano, mesNum] = mes.split("-").map(Number);
+  const dias = [];
+  const totais = { laboratorio:0, imagem:0, procedimentos:0, caixa:0, credito:0, boleto:0, injetaveis:0 };
+  const diasVistos = new Set();
+
+  for(const linha of linhas) {
+    const valA = linha[0]?.valor;
+    let dia;
+    if(typeof valA === "number") {
+      dia = Math.round(valA);
+    } else {
+      const s = String(valA ?? "").replace(/\s/g, "");
+      dia = parseInt(s, 10);
+    }
+    if(!dia || isNaN(dia) || dia < 1 || dia > 31) continue;
+    if(diasVistos.has(dia)) continue;
+    diasVistos.add(dia);
+
+    const r = v => Math.round(parseCelula(v) * 100) / 100;
+    const laboratorio   = r(linha[1]);
+    const imagem        = r(linha[2]);
+    const procedimentos = r(linha[3]);
+    const caixa         = r(linha[4]);
+    const credito       = r(linha[5]);
+    const boleto        = r(linha[6]);
+    const injetaveis    = r(linha[7]);
+
+    const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+    dias.push({ dia, dataStr, laboratorio, imagem, procedimentos, caixa, credito, boleto, injetaveis });
+
+    totais.laboratorio   += laboratorio;
+    totais.imagem        += imagem;
+    totais.procedimentos += procedimentos;
+    totais.caixa         += caixa;
+    totais.credito       += credito;
+    totais.boleto        += boleto;
+    totais.injetaveis    += injetaveis;
+  }
+
+  Object.keys(totais).forEach(k => { totais[k] = Math.round(totais[k] * 100) / 100; });
+  console.log(`[import colab] ${mes}: ${dias.length} dias lidos, totais:`, totais);
+  return { dias, totais };
+}
+
 // Extrai campos do Dashboard individual usando coluna J (label, índice 9) e K (valor, índice 10)
 function extrairCamposPorColunaJK(linhas) {
   const resultado = {};
@@ -5956,34 +6005,24 @@ async function importarMesColaboradora() {
 
   const statusEl  = document.getElementById("imp-status");
   const previewEl = document.getElementById("imp-preview");
-  statusEl.innerHTML  = '<div class="import-progress">⏳ Lendo aba Dashboard (colunas J/K)...</div>';
+  statusEl.innerHTML  = '<div class="import-progress">⏳ Lendo aba "Base de dados para parcial"...</div>';
   previewEl.innerHTML = "";
 
   try {
-    const data   = await fetchGviz(id, "Dashboard");
+    const data   = await fetchGviz(id, "Base de dados para parcial");
     const linhas = gvizParaLinhas(data);
+    const { dias, totais } = parsearAbaBaseDados(linhas, mes);
 
-    // Tenta leitura estruturada col J (label) + col K (valor) — layout padrão das planilhas
-    let campos = extrairCamposPorColunaJK(linhas);
-    const qtdJK = Object.keys(campos).length;
-
-    // Se não encontrou nada via J/K, tenta busca genérica por label em qualquer célula
-    if(qtdJK === 0) {
-      campos = extrairCamposDeLinhas(linhas);
-    }
-
-    statusEl.innerHTML = qtdJK > 0
-      ? `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 Leitura via coluna J/K — ${qtdJK} campo(s) detectados.</div>`
-      : `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 Leitura via busca de labels — ${Object.keys(campos).length} campo(s) detectados.</div>`;
-
-    renderPreviewMes(campos, email, mes);
+    statusEl.innerHTML = `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 ${dias.length} dia(s) lidos — totais somados automaticamente.</div>`;
+    renderPreviewMes(totais, email, mes, dias);
   } catch(e) {
     console.error("importarMes:", e);
-    statusEl.innerHTML = `<div class="import-err">❌ Erro: ${e.message}<br><small>Verifique se a planilha está pública (compartilhada → "Qualquer pessoa com o link pode ver") e se existe uma aba chamada "Dashboard".</small></div>`;
+    statusEl.innerHTML = `<div class="import-err">❌ Erro: ${e.message}<br><small>Verifique se a planilha está pública e se existe uma aba chamada "Base de dados para parcial".</small></div>`;
   }
 }
 
-function renderPreviewMes(campos, email, mes) {
+function renderPreviewMes(campos, email, mes, dias = []) {
+  _diasColabPendentes = { email, mes, dias };
   const u        = USUARIOS[email];
   const mesLabel = { "2026-01":"Janeiro 2026","2026-02":"Fevereiro 2026","2026-03":"Março 2026","2026-04":"Abril 2026" }[mes] || mes;
   const previewEl = document.getElementById("imp-preview");
@@ -6038,6 +6077,7 @@ async function confirmarImportacaoMes(email, mes) {
   if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
 
   const dados = {
+    email,
     usuario_nome:  u.nome,
     usuario_email: email,
     perfil:        u.perfil,
@@ -6057,9 +6097,37 @@ async function confirmarImportacaoMes(email, mes) {
 
   try {
     await db.collection("historico_mensal").doc(docId).set(dados);
+
+    // Salvar dados diários se disponíveis
+    const pendente = _diasColabPendentes;
+    const dias = (pendente?.email === email && pendente?.mes === mes) ? pendente.dias : [];
+    let diasSalvos = 0;
+    for(const d of dias) {
+      await db.collection("historico_diario").doc(`${email}_${d.dataStr}`).set({
+        email,
+        usuario_nome:  u.nome,
+        usuario_email: email,
+        perfil:        u.perfil,
+        mes_ano:       mes,
+        data:          d.dataStr,
+        dia:           d.dia,
+        laboratorio:   d.laboratorio,
+        imagem:        d.imagem,
+        procedimentos: d.procedimentos,
+        caixa:         d.caixa,
+        credito:       d.credito,
+        boleto:        d.boleto,
+        injetaveis:    d.injetaveis,
+        fonte:         "importacao_historica",
+        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      diasSalvos++;
+    }
+
     document.getElementById("imp-preview").innerHTML =
-      `<div class="import-ok">✅ Histórico de ${u.nome} (${mes}) importado com sucesso!</div>`;
+      `<div class="import-ok">✅ Histórico de ${u.nome} (${mes}) importado!${diasSalvos > 0 ? ` + ${diasSalvos} dias em historico_diario.` : ""}</div>`;
     toast(`Importado: ${u.nome} — ${mes}`);
+    _diasColabPendentes = null;
   } catch(e) {
     console.error("confirmarImportMes:", e);
     toast("Erro ao salvar: " + e.message, "err");
@@ -6239,27 +6307,41 @@ async function importarTudoAutomaticamente(btn) {
       </div>`;
   };
 
-  // ── Seção 1: totais mensais de cada colaboradora ──
+  // ── Seção 1: totais mensais + dados diários de cada colaboradora ──
   for(const { email, nome, mes, id } of todasPlanilhas) {
     concluidos++;
     const label = `${nome} — ${mesNome[mes]||mes}`;
     try {
-      const data      = await fetchGviz(id, "Dashboard");
+      const data       = await fetchGviz(id, "Base de dados para parcial");
       const linhsSheet = gvizParaLinhas(data);
-      let campos = extrairCamposPorColunaJK(linhsSheet);
-      if(Object.keys(campos).length === 0) campos = extrairCamposDeLinhas(linhsSheet);
+      const { dias, totais } = parsearAbaBaseDados(linhsSheet, mes);
 
-      if(Object.keys(campos).length === 0) {
+      const temDados = Object.values(totais).some(v => v > 0);
+      if(!temDados) {
         linhas.push(`<div style="color:#F59E0B">⚠️ ${label} — sem dados detectados</div>`);
         erros.push(`${label}: sem dados`);
       } else {
+        const u = USUARIOS[email] || {};
         const docId = `${email}_${mes}`;
         await db.collection("historico_mensal").doc(docId).set({
-          email, mes_ano: mes, ...campos,
+          email, mes_ano: mes, ...totais,
+          usuario_nome: nome, usuario_email: email, perfil: u.perfil || "",
           fonte: "importacao_historica",
           importado_em: firebase.firestore.FieldValue.serverTimestamp(),
         });
-        linhas.push(`<div style="color:#10B981">✅ ${label}</div>`);
+        // Salvar dados diários
+        for(const d of dias) {
+          await db.collection("historico_diario").doc(`${email}_${d.dataStr}`).set({
+            email, usuario_nome: nome, usuario_email: email, perfil: u.perfil || "",
+            mes_ano: mes, data: d.dataStr, dia: d.dia,
+            laboratorio: d.laboratorio, imagem: d.imagem, procedimentos: d.procedimentos,
+            caixa: d.caixa, credito: d.credito, boleto: d.boleto, injetaveis: d.injetaveis,
+            fonte: "importacao_historica",
+            importado_em: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          await new Promise(r => setTimeout(r, 30));
+        }
+        linhas.push(`<div style="color:#10B981">✅ ${label} (${dias.length} dias)</div>`);
       }
     } catch(e) {
       console.error(`auto-import colab ${email} ${mes}:`, e);
