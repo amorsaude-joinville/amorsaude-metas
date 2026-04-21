@@ -5677,18 +5677,27 @@ function extrairCamposPorColunaJK(linhas) {
 
 // Lê aba mensal da planilha de equipe e retorna [{dia, dataStr, campos}]
 // Col A (0) = dia da semana, Col B (1) = número do dia (1-31), demais = totais diários
+// Usa SOMENTE col B para detectar o dia — col A é ignorada completamente
 function parsearAbaEquipeMensal(linhas, mes) {
   const colunas = COLUNAS_EQUIPE[mes];
   if(!colunas || !linhas.length) return [];
   const [ano, mesNum] = mes.split("-").map(Number);
   const resultado = [];
+  const diasVistos = new Set();  // evita duplicatas (ex: linhas de subtotal)
 
   for(const linha of linhas) {
-    const celB = linha[1];
-    if(!celB) continue;
-    const valB = celB.valor;
-    const dia = typeof valB === "number" ? Math.round(valB) : parseInt(String(valB ?? ""), 10);
-    if(!dia || dia < 1 || dia > 31) continue;
+    // Lê col B (índice 1) — aceita célula ausente, nula ou string
+    const valB = linha[1]?.valor;
+    let dia;
+    if(typeof valB === "number") {
+      dia = Math.round(valB);
+    } else {
+      const s = String(valB ?? "").replace(/\s/g, "");
+      dia = parseInt(s, 10);
+    }
+    if(!dia || isNaN(dia) || dia < 1 || dia > 31) continue;
+    if(diasVistos.has(dia)) continue;   // pula linhas de subtotal do mesmo dia
+    diasVistos.add(dia);
 
     const campos = {};
     for(const [campo, colIdx] of Object.entries(colunas)) {
@@ -5703,7 +5712,8 @@ function parsearAbaEquipeMensal(linhas, mes) {
     resultado.push({ dia, dataStr, campos });
   }
 
-  console.log(`[equipe] ${mes}: ${resultado.length} dias detectados`);
+  resultado.sort((a, b) => a.dia - b.dia);
+  console.log(`[equipe] ${mes}: ${resultado.length} dias detectados (${[...diasVistos].sort((a,b)=>a-b).join(",")})`);
   return resultado;
 }
 
