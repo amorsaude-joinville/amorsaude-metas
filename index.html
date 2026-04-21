@@ -1292,6 +1292,14 @@
       <div id="imp-auto-status" style="margin-top:12px"></div>
     </div>
 
+    <!-- SEÇÃO 4: Correção pontual abril 2026 -->
+    <div class="import-secao" style="border-top:2px solid #EF4444;padding-top:16px">
+      <h4>🔧 Correção Manual — Abril 2026</h4>
+      <p style="font-size:13px;color:var(--text2);margin:6px 0 12px">Sobrescreve os dados de abril 2026 no Firestore com os valores corretos lidos diretamente das planilhas. Use se o dashboard mostrar valores errados para abril.</p>
+      <button class="btn btn-primary" style="width:auto;background:linear-gradient(135deg,#DC2626,#B91C1C)" onclick="corrigirDadosFirestore(this)">🔧 Corrigir Dados Abril 2026</button>
+      <div id="imp-corrigir-status" style="margin-top:12px"></div>
+    </div>
+
   </div>
 </div>
 
@@ -6412,6 +6420,64 @@ async function importarTudoAutomaticamente(btn) {
     </div>`;
   toast(`${totalOk} itens importados!`);
   if(btn) { btn.disabled = false; btn.textContent = "🚀 Importar Tudo Automaticamente"; }
+}
+
+// ── CORREÇÃO PONTUAL ABRIL 2026 ───────────────────────────
+
+const DADOS_ABRIL_CORRETOS = [
+  { nome:'Dara',    email:'darafidelesmarques@gmail.com',       caixa:45502.89,  laboratorio:10022.39, imagem:5041.15,  procedimentos:13432.99, credito:5961.74, boleto:1227.00, injetaveis:0 },
+  { nome:'Bianca',  email:'bianca.trazibulo@gmail.com',         caixa:22092.98,  laboratorio:10282.02, imagem:9521.00,  procedimentos:6004.96,  credito:3745.00, boleto:0,       injetaveis:0 },
+  { nome:'Dawilla', email:'dawilla.stefany@hotmail.com',        caixa:73807.89,  laboratorio:39029.00, imagem:22468.40, procedimentos:15740.49, credito:10040.50,boleto:1200.00, injetaveis:0 },
+  { nome:'Thamyres',email:'thamyresilva1020@gmail.com',         caixa:62400.49,  laboratorio:9405.00,  imagem:5761.90,  procedimentos:15454.40, credito:4645.81, boleto:0,       injetaveis:0 },
+  { nome:'Leticia', email:'leticiaac.reis@gmail.com',           caixa:65098.81,  laboratorio:12974.83, imagem:9116.20,  procedimentos:18149.89, credito:7707.46, boleto:0,       injetaveis:0 },
+  { nome:'Suelen',  email:'susuh.medeiros28@gmail.com',         caixa:49944.50,  laboratorio:21777.69, imagem:13151.74, procedimentos:14839.72, credito:6342.65, boleto:0,       injetaveis:0 },
+  { nome:'Graziele',email:'graziiaraujo8@gmail.com',            caixa:64090.52,  laboratorio:31914.61, imagem:17348.90, procedimentos:14566.28, credito:7805.27, boleto:0,       injetaveis:0 },
+  { nome:'Raiane',  email:'raiiane.almeida1401@gmail.com',      caixa:52888.23,  laboratorio:17836.30, imagem:3419.00,  procedimentos:9027.88,  credito:3636.70, boleto:0,       injetaveis:0 },
+  { nome:'Erielly', email:'eriellypachecodossant@gmail.com',    caixa:16954.54,  laboratorio:11239.86, imagem:5349.50,  procedimentos:1906.99,  credito:0,       boleto:0,       injetaveis:0 },
+  { nome:'Julia',   email:'juluise2005@gmail.com',              caixa:14660.24,  laboratorio:7610.85,  imagem:5999.40,  procedimentos:1769.98,  credito:0,       boleto:0,       injetaveis:0 },
+];
+
+async function corrigirDadosFirestore(btn) {
+  if(btn) { btn.disabled = true; btn.textContent = "⏳ Corrigindo..."; }
+  const statusEl = document.getElementById("imp-corrigir-status");
+  statusEl.innerHTML = '<div class="import-progress">⏳ Sobrescrevendo dados de abril 2026...</div>';
+
+  let ok = 0, erros = [];
+  for(const d of DADOS_ABRIL_CORRETOS) {
+    const docId = `${d.email}_2026-04`;
+    const u = USUARIOS[d.email] || {};
+    try {
+      await db.collection("historico_mensal").doc(docId).set({
+        email:         d.email,
+        usuario_nome:  d.nome,
+        usuario_email: d.email,
+        perfil:        u.perfil || "",
+        mes_ano:       "2026-04",
+        caixa:         d.caixa,
+        credito:       d.credito,
+        boleto:        d.boleto,
+        laboratorio:   d.laboratorio,
+        imagem:        d.imagem,
+        procedimentos: d.procedimentos,
+        injetaveis:    d.injetaveis,
+        consultas:     0,
+        saidas:        0,
+        fonte:         "correcao_manual",
+        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      ok++;
+    } catch(e) {
+      console.error("corrigir:", docId, e);
+      erros.push(`${d.nome}: ${e.message}`);
+    }
+  }
+
+  const msg = erros.length
+    ? `<div class="import-ok">✅ ${ok} registros corrigidos. ⚠️ Erros: ${erros.join(", ")}</div>`
+    : `<div class="import-ok">✅ ${ok} registros de abril 2026 corrigidos com sucesso!</div>`;
+  statusEl.innerHTML = msg;
+  toast(`${ok} registros corrigidos!`);
+  if(btn) { btn.disabled = false; btn.textContent = "🔧 Corrigir Dados Abril 2026"; }
 }
 
 function fecharModalMetas() {
