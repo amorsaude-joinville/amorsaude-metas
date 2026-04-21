@@ -2289,11 +2289,19 @@ async function carregarMetas() {
 async function carregarDashMetas(mesAnoAlvo) {
   try {
     const doc = await db.collection("metas").doc(mesAnoAlvo).get();
-    dashMetasMes = doc.exists ? doc.data() : {
-      meta_caixa_recepcao:0, meta_credito_recepcao:0,
-      meta_caixa_callcenter:0, dias_uteis:22
+    const base = {
+      meta_caixa_recepcao:      120000,
+      meta_credito_recepcao:     16000,
+      meta_caixa_callcenter:     28000,
+      dias_uteis:                   22,
+      ...METAS_EQUIPE_PADRAO,
     };
-  } catch(e) { console.error("dash metas:", e); dashMetasMes = {}; }
+    dashMetasMes = doc.exists ? { ...base, ...doc.data() } : base;
+    console.log("[dash] metas carregadas para", mesAnoAlvo, dashMetasMes);
+  } catch(e) {
+    console.error("dash metas:", e);
+    dashMetasMes = { ...METAS_EQUIPE_PADRAO, meta_caixa_recepcao:120000, meta_credito_recepcao:16000, meta_caixa_callcenter:28000, dias_uteis:22 };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2594,7 +2602,7 @@ async function salvarEntrada() {
     tipo:"entrada", paciente_nome:nome, paciente_cpf:cpf, valor,
     produto:prod, tipo_procedimento: prod==="Procedimento"?proced:null,
     forma_pagamento:pgto, prescritor:pres, prescritor_especialidade:presEsp,
-    motivo_saida:null, mes_ano:mesAno,
+    motivo_saida:null, mes_ano: getMesAno(),
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -2661,7 +2669,7 @@ async function salvarSaida() {
     tipo:"saida", paciente_nome:nome, paciente_cpf:cpf, valor,
     produto:prod, tipo_procedimento:null, forma_pagamento:null,
     prescritor:null, prescritor_especialidade:null, motivo_saida:motivo,
-    mes_ano:mesAno,
+    mes_ano: getMesAno(),
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -3865,6 +3873,7 @@ function carregarDashListener() {
       .where("mes_ano","==",dashMesAno)
       .onSnapshot(snap => {
         dashLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
+        console.log(`[dash] ${dashMesAno}: ${snap.size} lançamentos encontrados`);
         renderDashboard();
       }, e => console.error("dash listener:", e));
   });
