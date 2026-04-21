@@ -602,11 +602,11 @@
         <!-- Cards de resumo da equipe -->
         <div class="dash-equipe-grid" id="coord-resumo-cards" style="margin-bottom:24px"></div>
 
-        <!-- Card premiação coordenação (só Paola) -->
-        <div id="coord-card-prem-coord" style="display:none;margin-bottom:20px"></div>
-
-        <!-- Card premiação liderança (Paola + Andrielli) -->
+        <!-- Card 1: Premiação Liderança (todas as coordenadoras) -->
         <div id="coord-card-prem-lider" style="margin-bottom:20px"></div>
+
+        <!-- Card 2: Premiação Coordenação (só Paola) -->
+        <div id="coord-card-prem-coord" style="display:none;margin-bottom:20px"></div>
 
         <!-- Ranking -->
         <div class="card" style="margin-bottom:20px">
@@ -1540,7 +1540,7 @@ async function fazerLogin() {
       console.warn("[Auth] Usando login local — Firebase Auth indisponível:", e.code || e.message);
       if(SENHAS_LOCAL[nome] && senha === SENHAS_LOCAL[nome]) {
         // Login local aprovado
-        usuario = { nome, perfil: PERFIS[nome], uid: null };
+        usuario = { nome, perfil: PERFIS[nome], uid: null, email: emailPorNome(nome) };
         mesAno  = getMesAno();
         iniciarApp();
       } else {
@@ -1639,7 +1639,7 @@ auth.onAuthStateChanged(async fbUser => {
       console.warn("[Auth] Email não reconhecido:", fbUser.email);
       auth.signOut(); return;
     }
-    usuario = { nome: u.nome, perfil: u.perfil, uid: fbUser.uid };
+    usuario = { nome: u.nome, perfil: u.perfil, uid: fbUser.uid, email: fbUser.email };
     mesAno  = getMesAno();
     iniciarApp();
   } else {
@@ -1801,6 +1801,8 @@ async function carregarMetas() {
       meta_caixa_callcenter:0, dias_uteis:22
     };
     atualizarCards();
+    // Re-renderiza premiação da coordenação com meta correta
+    if(VE_COORD.includes(usuario?.perfil)) renderCoordPremiacaoGestao();
   } catch(e) { console.error("metas:", e); }
 }
 
@@ -2667,30 +2669,30 @@ function buildCardPremGestao(titulo, faixas, total, meta, cor) {
   </div>`;
 }
 
-// Renderiza cards de premiação da gestão (usa sempre o mês inteiro)
+// Renderiza cards de premiação da gestão (usa sempre o mês inteiro, não o filtro de período)
 function renderCoordPremiacaoGestao() {
   const metaEquipe = (metas?.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
   let totalCaixa = 0;
   CC_TODOS.forEach(n => { totalCaixa += calcTotais(coordLancs.filter(l => l.usuario_nome === n)).caixa; });
 
-  // Card coordenação — só Paola
-  const elCoord = document.getElementById("coord-card-prem-coord");
-  if(elCoord) {
-    const ehPaola = usuario?.nome === "Paola";
-    elCoord.style.display = ehPaola ? "" : "none";
-    if(ehPaola) {
-      elCoord.innerHTML = buildCardPremGestao(
-        "💰 Sua Premiação — Coordenação", FAIXAS_COORD_CC, totalCaixa, metaEquipe, "var(--primary)"
-      );
-    }
-  }
-
-  // Card liderança — Paola e Andrielli
+  // Card 1 — Liderança (todas as coordenadoras)
   const elLider = document.getElementById("coord-card-prem-lider");
   if(elLider) {
     elLider.innerHTML = buildCardPremGestao(
-      "🏆 Premiação — Liderança Call Center", FAIXAS_LIDER_CC, totalCaixa, metaEquipe, "#7C3AED"
+      "💰 Premiação Liderança", FAIXAS_LIDER_CC, totalCaixa, metaEquipe, "#7C3AED"
     );
+  }
+
+  // Card 2 — Coordenação (somente Paola)
+  const elCoord = document.getElementById("coord-card-prem-coord");
+  if(elCoord) {
+    const ehPaola = usuario?.email === "paola7ccristino@gmail.com";
+    elCoord.style.display = ehPaola ? "" : "none";
+    if(ehPaola) {
+      elCoord.innerHTML = buildCardPremGestao(
+        "🏆 Premiação Coordenação", FAIXAS_COORD_CC, totalCaixa, metaEquipe, "var(--primary)"
+      );
+    }
   }
 }
 
