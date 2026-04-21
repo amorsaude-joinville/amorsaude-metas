@@ -246,10 +246,12 @@
     .tag-saida { color:#DC2626; font-weight:600; }
 
     /* ── BANNER MARCO ── */
+    /* Banner fica dentro de #app (não é mais sticky) — aparece no topo do conteúdo */
     #banner-marco {
-      display:none; position:sticky; top:64px; z-index:90;
+      display:none; position:relative;
       padding:14px 28px; align-items:center; justify-content:space-between;
       font-size:15px; font-weight:700; cursor:pointer;
+      border-radius:var(--r2); margin-bottom:16px;
     }
     #banner-marco.show { display:flex; animation:slideDown .4s ease; }
     @keyframes slideDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
@@ -410,11 +412,19 @@
     .rank-grupo-sep td { background:#F3F4F6; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); padding:5px 12px; border-top:2px solid var(--border); }
     .colab-grupo-header { background:#F3F4F6; padding:8px 14px; border-radius:var(--r2); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); margin:14px 0 8px; }
 
-    /* ── ABAS LIDER / REC / CC ── */
+    /* ── ABAS LIDER / REC / CC — sticky abaixo do header ── */
     #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav {
-      display:none; position:sticky; top:64px; z-index:89;
-      background:#fff; border-bottom:2px solid var(--border);
-      padding:0 32px; gap:0; box-shadow:0 2px 6px rgba(0,0,0,.04);
+      display:none;
+      position:sticky;
+      top:64px;          /* altura exata do header */
+      z-index:89;        /* abaixo do header (z-index:100) */
+      background:#fff;
+      border-bottom:2px solid var(--border);
+      padding:0 16px;
+      gap:0;
+      box-shadow:0 2px 4px rgba(0,0,0,.08);
+      overflow-x:auto;   /* scroll horizontal em mobile */
+      -webkit-overflow-scrolling:touch;
     }
     #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show { display:flex; }
     .lider-tab {
@@ -618,40 +628,7 @@
 <!-- ══════════════ TELA APP ══════════════ -->
 <div id="tela-app" class="hidden">
 
-  <!-- Navegação por abas — líderes de recepção (4 abas) -->
-  <div id="lider-nav">
-    <button class="lider-tab active" id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
-    <button class="lider-tab"        id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Minhas Metas</button>
-    <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">👥 Equipe</button>
-    <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">📊 Dashboard</button>
-  </div>
-
-  <!-- Navegação por abas — recepcionistas (3 abas) -->
-  <div id="rec-nav">
-    <button class="lider-tab active" id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">➕ Lançamentos</button>
-    <button class="lider-tab"        id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Minhas Metas</button>
-    <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">👥 Equipe</button>
-  </div>
-
-  <!-- Navegação por abas — call center (3 abas) -->
-  <div id="cc-nav">
-    <button class="lider-tab active" id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">➕ Lançamentos</button>
-    <button class="lider-tab"        id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Minhas Metas</button>
-    <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">👥 Equipe</button>
-  </div>
-
-  <!-- Navegação por abas — líder de call center (Andrielli) -->
-  <div id="lider-cc-nav">
-    <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">➕ Lançamentos</button>
-    <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
-  </div>
-
-  <!-- Banner de marco -->
-  <div id="banner-marco" onclick="fecharBanner()">
-    <span id="banner-txt"></span>
-    <span class="bm-fechar">✕</span>
-  </div>
-
+  <!-- Header fixo — deve vir ANTES das abas para o sticky funcionar corretamente -->
   <div id="header">
     <div class="h-logo">Amor Saúde <span>Joinville</span></div>
     <div class="h-right">
@@ -664,7 +641,44 @@
     </div>
   </div>
 
+  <!-- Navegação por abas — líderes de recepção (4 abas) -->
+  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Equipe | Dashboard -->
+  <div id="lider-nav">
+    <button class="lider-tab active" id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">📊 Equipe</button>
+    <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">🏢 Dashboard</button>
+  </div>
+
+  <!-- Navegação por abas — recepcionistas (3 abas) -->
+  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Equipe -->
+  <div id="rec-nav">
+    <button class="lider-tab active" id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">📊 Equipe</button>
+  </div>
+
+  <!-- Navegação por abas — call center (3 abas) -->
+  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Metas Equipe -->
+  <div id="cc-nav">
+    <button class="lider-tab active" id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">📊 Metas Equipe</button>
+  </div>
+
+  <!-- Navegação por abas — líder de call center (Andrielli) -->
+  <div id="lider-cc-nav">
+    <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
+  </div>
+
   <div id="app">
+
+    <!-- Banner de marco (dentro do conteúdo para não conflitar com abas sticky) -->
+    <div id="banner-marco" onclick="fecharBanner()">
+      <span id="banner-txt"></span>
+      <span class="bm-fechar">✕</span>
+    </div>
 
     <!-- ══════════ DASHBOARD CALL CENTER (coordenadora / lider_callcenter) ══════════ -->
     <div id="sec-coord" style="display:none">
@@ -978,7 +992,7 @@
     <div id="sec-card-equipe" style="display:none">
       <div class="card" style="margin-bottom:0">
         <div class="equipe-card-tit">🎯 Metas da Equipe</div>
-        <div id="equipe-metricas" class="equipe-metricas-grid">
+        <div id="equipe-metricas">
           <div class="loading"><div class="spinner"></div>Carregando...</div>
         </div>
       </div>
@@ -2002,26 +2016,29 @@ function iniciarApp() {
   const ehCC  = perfil === "callcenter";
 
   // Barra de abas — líder de recepção (Dara, Bianca): 4 abas
+  // Padrão: "metas" (Meta e Premiação Individual)
   document.getElementById("lider-nav").classList.toggle("show", ehLider);
   if(ehLider) {
     const saved = localStorage.getItem("as_aba_lider");
-    abaLider = ["lancamentos","metas","equipe","dashboard"].includes(saved) ? saved : "lancamentos";
+    abaLider = ["lancamentos","metas","equipe","dashboard"].includes(saved) ? saved : "metas";
     aplicarAbaLider();
   }
 
   // Barra de abas — recepcionistas: 3 abas
+  // Padrão: "metas" (Meta e Premiação Individual)
   document.getElementById("rec-nav").classList.toggle("show", ehRec);
   if(ehRec) {
     const saved = localStorage.getItem("as_aba_rec");
-    abaRec = ["lancamentos","metas","equipe"].includes(saved) ? saved : "lancamentos";
+    abaRec = ["lancamentos","metas","equipe"].includes(saved) ? saved : "metas";
     aplicarAbaRec();
   }
 
   // Barra de abas — call center: 3 abas
+  // Padrão: "metas" (Meta e Premiação Individual)
   document.getElementById("cc-nav").classList.toggle("show", ehCC);
   if(ehCC) {
     const saved = localStorage.getItem("as_aba_cc");
-    abaCC = ["lancamentos","metas","equipe"].includes(saved) ? saved : "lancamentos";
+    abaCC = ["lancamentos","metas","equipe"].includes(saved) ? saved : "metas";
     aplicarAbaCC();
   }
 
@@ -2992,11 +3009,12 @@ function iniciarListenerEquipe() {
   if(unsubEquipe) { unsubEquipe(); unsubEquipe=null; }
   const perfil = usuario?.perfil;
 
-  // Recepção: ouve recepcionistas + líderes de recepção
-  // CC / Coord: ouve callcenter + lider_callcenter
-  const grupoCC = perfil === "callcenter" || VE_COORD.includes(perfil);
-  const filtro  = grupoCC
-    ? ["callcenter","lider_callcenter"]
+  // CC puro: busca TODOS os lancamentos (recepção + CC) para montar a aba Equipe completa
+  // Coord / lider_callcenter: idem (precisam ver CC)
+  // Recepção / lider: ouve apenas recepcionistas + líderes de recepção
+  const ehCCPuro = perfil === "callcenter";
+  const filtro   = (ehCCPuro || VE_COORD.includes(perfil))
+    ? ["callcenter","lider_callcenter","recepcionista","lider"]
     : ["recepcionista","lider"];
 
   unsubEquipe = db.collection("lancamentos")
@@ -3045,18 +3063,53 @@ function renderCardMetasEquipe() {
       </div>`;
   }
 
-  if(grupoCC) {
-    const metaCC    = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
-    const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
+  const ehCCPuro = perfil === "callcenter";
+
+  if(ehCCPuro) {
+    // ── CC puro (Erielly / Júlia): vê medicina SEM premiações + CC com ranking ──
+
+    // Separa lancamentos por grupo
+    const lancMed = equipeLancs.filter(l => ["recepcionista","lider"].includes(l.perfil));
+    const lancCC  = equipeLancs.filter(l => ["callcenter","lider_callcenter"].includes(l.perfil));
+
+    const totMed = calcTotaisDetalhados(lancMed);
+    const totCC  = calcTotaisDetalhados(lancCC);
+
+    const metaLab    = m.meta_lab_equipe          || 273000;
+    const metaImg    = m.meta_img_equipe           || 144000;
+    const metaProc   = m.meta_proc_equipe          || 227500;
+    const metaInj    = m.meta_injetaveis_equipe    || 60000;
+    const metaCxMed  = (m.meta_caixa_recepcao     || 0) *
+                        Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
+    const metaCrMed  = (m.meta_credito_recepcao   || 0) *
+                        Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
+    const metaBol    = m.meta_boleto_equipe        || 0;
+    const metaCC     = (m.meta_caixa_callcenter    || META_CC_PADRAO) * CC_TODOS.length;
+    const metaIndCC  = m.meta_caixa_callcenter     || META_CC_PADRAO;
+
+    // Seção medicina (sem "Sua parte" — CC não participa do pool)
+    const medHtml =
+      `<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🏥 Recepção Médica</div>` +
+      `<div class="equipe-metricas-grid">` +
+        metrica("💰 Caixa",   totMed.caixa,   metaCxMed) +
+        metrica("💳 Crédito", totMed.credito, metaCrMed) +
+        metrica("📄 Boleto",  totMed.boleto,  metaBol)   +
+        metrica("🔬 Lab",     totMed.lab,     metaLab)   +
+        metrica("🩻 Imagem",  totMed.img,     metaImg)   +
+        metrica("🏥 Proc",    totMed.proc,    metaProc)  +
+        metrica("💉 Injetáveis", totMed.injetaveis, metaInj) +
+      `</div>`;
+
+    // Seção CC com ranking
     const porPessoa = {};
-    equipeLancs.forEach(l => {
+    lancCC.forEach(l => {
       if(!porPessoa[l.usuario_nome]) porPessoa[l.usuario_nome] = [];
       porPessoa[l.usuario_nome].push(l);
     });
     const ranking = CC_TODOS.map(nome => {
       const { caixa } = calcTotais(porPessoa[nome]||[]);
-      const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
-      const cor  = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
+      const pct = metaIndCC > 0 ? (caixa/metaIndCC)*100 : 0;
+      const cor = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
     }).sort((a,b)=>b.caixa-a.caixa);
     const rankHtml = ranking.map((r,i)=>`
@@ -3066,11 +3119,45 @@ function renderCardMetasEquipe() {
         <span style="font-size:13px;color:var(--text2)">${brl(r.caixa)}</span>
         <span style="font-size:12px;font-weight:700;color:${r.cor}">${r.pct.toFixed(1)}%</span>
       </div>`).join("");
-    el.innerHTML =
-      metrica("💰 Caixa CC — Equipe", tot.caixa, metaCC) +
-      `<div style="margin-top:16px">
+    const ccHtml =
+      `<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin:16px 0 10px">📞 Call Center</div>` +
+      `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC.caixa, metaCC)}</div>` +
+      `<div style="margin-top:12px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
         ${rankHtml}
+       </div>`;
+
+    el.innerHTML = medHtml + ccHtml;
+
+  } else if(grupoCC) {
+    // ── Coord / lider_callcenter: vê só CC (comportamento original) ──
+    const metaCC    = (m.meta_caixa_callcenter || META_CC_PADRAO) * CC_TODOS.length;
+    const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
+    const lancCC2   = equipeLancs.filter(l => ["callcenter","lider_callcenter"].includes(l.perfil));
+    const totCC2    = calcTotaisDetalhados(lancCC2);
+    const porPessoa2 = {};
+    lancCC2.forEach(l => {
+      if(!porPessoa2[l.usuario_nome]) porPessoa2[l.usuario_nome] = [];
+      porPessoa2[l.usuario_nome].push(l);
+    });
+    const ranking2 = CC_TODOS.map(nome => {
+      const { caixa } = calcTotais(porPessoa2[nome]||[]);
+      const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
+      const cor  = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
+      return { nome, caixa, pct, cor };
+    }).sort((a,b)=>b.caixa-a.caixa);
+    const rankHtml2 = ranking2.map((r,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:18px;min-width:28px">${i===0?"🥇":i===1?"🥈":"🥉"}</span>
+        <span style="flex:1;font-weight:600;font-size:14px">${r.nome}</span>
+        <span style="font-size:13px;color:var(--text2)">${brl(r.caixa)}</span>
+        <span style="font-size:12px;font-weight:700;color:${r.cor}">${r.pct.toFixed(1)}%</span>
+      </div>`).join("");
+    el.innerHTML =
+      `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC2.caixa, metaCC)}</div>` +
+      `<div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
+        ${rankHtml2}
        </div>`;
   } else {
     const numRec      = Object.values(USUARIOS).filter(u => u.perfil==="recepcionista"||u.perfil==="lider").length;
@@ -3101,13 +3188,14 @@ function renderCardMetasEquipe() {
       projPoolProc = calcPoolPremio((tot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
     }
 
-    el.innerHTML =
+    el.innerHTML = `<div class="equipe-metricas-grid">` +
       metrica("💰 Caixa",        tot.caixa,   metaCaixa)   +
       metrica("💳 Crédito",      tot.credito, metaCredito) +
       metrica("📄 Boleto",       tot.boleto,  metaBoleto)  +
       metrica("🧪 Lab",          tot.lab,     metaLab,  parteExtra(poolLab,  projPoolLab))  +
       metrica("🩻 Imagem",       tot.img,     metaImg,  parteExtra(poolImg,  projPoolImg))  +
-      metrica("💉 Procedimentos",tot.proc,    metaProc, parteExtra(poolProc, projPoolProc));
+      metrica("💉 Procedimentos",tot.proc,    metaProc, parteExtra(poolProc, projPoolProc)) +
+      `</div>`;
   }
 }
 
