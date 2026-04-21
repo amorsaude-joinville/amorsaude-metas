@@ -1284,6 +1284,14 @@
       <div id="imp-equipe-status"></div>
     </div>
 
+    <!-- SEÇÃO 3: Importação automática completa -->
+    <div class="import-secao" style="border-top:2px solid var(--accent);padding-top:16px">
+      <h4>🚀 Importação Automática Completa</h4>
+      <p style="font-size:13px;color:var(--text2);margin:6px 0 12px">Importa todos os históricos de todas as colaboradoras (todas as planilhas e meses) e todos os meses da equipe de uma única vez.</p>
+      <button class="btn btn-primary" style="width:auto;background:linear-gradient(135deg,#7C3AED,#4F46E5)" onclick="importarTudoAutomaticamente(this)">🚀 Importar Tudo Automaticamente</button>
+      <div id="imp-auto-status" style="margin-top:12px"></div>
+    </div>
+
   </div>
 </div>
 
@@ -1568,22 +1576,27 @@ const NOMES_ABAS_EQUIPE = {
 
 // Mapeamento de campos para busca de labels na planilha (normalizado sem acentos)
 const CAMPOS_HISTORICO_ALIASES = {
-  caixa:         ["caixa","caixa total","total caixa","total de caixa","total caixa dinheiro","entrada caixa"],
-  credito:       ["credito","credito total","total credito","cartao de credito","cartão de credito"],
-  boleto:        ["boleto","boletos","total boleto","total boletos"],
-  laboratorio:   ["laboratorio","laboratorios","lab","exames laboratoriais","exames lab","total lab"],
-  imagem:        ["imagem","img","exames de imagem","exames imagem","total imagem"],
-  procedimentos: ["procedimentos","procedimento","proc","total procedimentos","total proc"],
-  consultas:     ["consultas","consulta","total consultas"],
-  injetaveis:    ["injetaveis","injetavel","total injetaveis"],
-  saidas:        ["saidas","saida","total saidas","total saida","saidas totais"]
+  caixa:          ["caixa","caixa total","total caixa","total de caixa","total caixa dinheiro","entrada caixa","vendas total","vendas"],
+  credito:        ["credito","credito total","total credito","cartao de credito","cartao credito"],
+  boleto:         ["boleto","boletos","total boleto","total boletos"],
+  dinheiro:       ["dinheiro","total dinheiro","pagamento dinheiro"],
+  debito:         ["debito","debito total","total debito","cartao de debito","cartao debito"],
+  pix:            ["pix","total pix","pagamento pix"],
+  laboratorio:    ["laboratorio","laboratorios","lab","exames laboratoriais","exames lab","total lab"],
+  imagem:         ["imagem","img","exames de imagem","exames imagem","total imagem"],
+  procedimentos:  ["procedimentos","procedimento","proc","total procedimentos","total proc"],
+  consultas:      ["consultas","consulta","total consultas"],
+  injetaveis:     ["injetaveis","injetavel","total injetaveis"],
+  testes_rapidos: ["testes rapidos","teste rapido","testes rapido","total testes rapidos"],
+  saidas:         ["saidas","saida","total saidas","total saida","saidas totais","saida de caixa"],
 };
 
 const LABELS_CAMPOS_PT = {
   caixa: "💰 Caixa", credito: "💳 Crédito", boleto: "🧾 Boleto",
+  dinheiro: "💵 Dinheiro", debito: "💳 Débito", pix: "📱 Pix",
   laboratorio: "🔬 Laboratório", imagem: "🩻 Imagem",
   procedimentos: "🏥 Procedimentos", consultas: "📋 Consultas",
-  injetaveis: "💉 Injetáveis", saidas: "📤 Saídas"
+  injetaveis: "💉 Injetáveis", testes_rapidos: "🧪 Testes Rápidos", saidas: "📤 Saídas"
 };
 
 // Estado temporário para confirmação de importação em massa (equipe)
@@ -5990,6 +6003,139 @@ async function confirmarImportacaoEquipe() {
   document.getElementById("imp-equipe-status").innerHTML = msg;
   toast(`${ok} dias da equipe importados!`);
   _diasEquipePendentes = [];
+}
+
+// ── IMPORTAÇÃO AUTOMÁTICA COMPLETA ────────────────────────
+
+function buildTodasPlanilhas() {
+  const lista = [];
+  for(const [email, meses] of Object.entries(PLANILHAS_HISTORICAS)) {
+    const u = USUARIOS[email] || {};
+    for(const [mes, id] of Object.entries(meses)) {
+      lista.push({ email, nome: u.nome || email, mes, id });
+    }
+  }
+  return lista;
+}
+
+async function importarTudoAutomaticamente(btn) {
+  if(btn) { btn.disabled = true; btn.textContent = "⏳ Importando..."; }
+  const statusEl = document.getElementById("imp-auto-status");
+
+  const todasPlanilhas = buildTodasPlanilhas();
+  const mesesEquipe    = Object.keys(NOMES_ABAS_EQUIPE);
+  const total          = todasPlanilhas.length + mesesEquipe.length;
+  let concluidos = 0;
+  const linhas = [];
+  const erros  = [];
+
+  const mesNome = { "2026-01":"Jan 2026","2026-02":"Fev 2026","2026-03":"Mar 2026","2026-04":"Abr 2026" };
+
+  const renderStatus = () => {
+    statusEl.innerHTML = `
+      <div class="import-progress">
+        <strong>Progresso: ${concluidos} / ${total}</strong>
+        <div style="background:var(--bg2);border-radius:6px;height:8px;margin:8px 0">
+          <div style="background:#10B981;height:8px;border-radius:6px;width:${Math.round(concluidos/total*100)}%;transition:width 0.3s"></div>
+        </div>
+        <div style="max-height:240px;overflow-y:auto;font-size:12px;line-height:1.7">
+          ${linhas.slice(-40).join("")}
+        </div>
+        ${erros.length ? `<div style="color:#EF4444;margin-top:6px;font-size:12px">⚠️ ${erros.length} erro(s)</div>` : ""}
+      </div>`;
+  };
+
+  // ── Seção 1: totais mensais de cada colaboradora ──
+  for(const { email, nome, mes, id } of todasPlanilhas) {
+    concluidos++;
+    const label = `${nome} — ${mesNome[mes]||mes}`;
+    try {
+      const data      = await fetchGviz(id, "Dashboard");
+      const linhsSheet = gvizParaLinhas(data);
+      let campos = extrairCamposPorColunaJK(linhsSheet);
+      if(Object.keys(campos).length === 0) campos = extrairCamposDeLinhas(linhsSheet);
+
+      if(Object.keys(campos).length === 0) {
+        linhas.push(`<div style="color:#F59E0B">⚠️ ${label} — sem dados detectados</div>`);
+        erros.push(`${label}: sem dados`);
+      } else {
+        const docId = `${email}_${mes}`;
+        await db.collection("historico_mensal").doc(docId).set({
+          email, mes_ano: mes, ...campos,
+          fonte: "importacao_historica",
+          importado_em: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        linhas.push(`<div style="color:#10B981">✅ ${label}</div>`);
+      }
+    } catch(e) {
+      console.error(`auto-import colab ${email} ${mes}:`, e);
+      linhas.push(`<div style="color:#EF4444">❌ ${label} — ${e.message}</div>`);
+      erros.push(`${label}: ${e.message}`);
+    }
+    renderStatus();
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  // ── Seção 2: totais diários da equipe por mês ──
+  const equipeId = '1o9vfvoXREHZzdJv8ngAYFW6VXVaEk_OiNt053Npf-P8';
+  for(const mes of mesesEquipe) {
+    concluidos++;
+    const label = `Equipe — ${mesNome[mes]||mes}`;
+    try {
+      let linhasMes = null;
+      for(const nomeAba of (NOMES_ABAS_EQUIPE[mes] || [])) {
+        try {
+          const data = await fetchGviz(equipeId, nomeAba);
+          linhasMes  = gvizParaLinhas(data);
+          break;
+        } catch(e) { /* tenta próxima variação */ }
+      }
+      if(!linhasMes) throw new Error(`aba não encontrada (${(NOMES_ABAS_EQUIPE[mes]||[]).join(", ")})`);
+
+      const dias    = parsearAbaEquipeMensal(linhasMes, mes);
+      if(dias.length === 0) throw new Error("nenhum dia detectado — verifique coluna B");
+
+      const colsMes = COLUNAS_EQUIPE[mes] || {};
+      for(const { dia, dataStr, campos } of dias) {
+        const payload = {
+          data: dataStr, mes_ano: mes, dia,
+          caixa:         campos.caixa         || 0,
+          credito:       campos.credito        || 0,
+          boleto:        campos.boleto         || 0,
+          laboratorio:   campos.laboratorio    || 0,
+          imagem:        campos.imagem         || 0,
+          procedimentos: campos.procedimentos  || 0,
+          fonte: "importacao_historica",
+          importado_em: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        if(colsMes.injetaveis !== null && colsMes.injetaveis !== undefined) {
+          payload.injetaveis = campos.injetaveis || 0;
+        }
+        await db.collection("historico_equipe").doc(dataStr).set(payload);
+        await new Promise(r => setTimeout(r, 60));
+      }
+      linhas.push(`<div style="color:#10B981">✅ ${label} (${dias.length} dias)</div>`);
+    } catch(e) {
+      console.error(`auto-import equipe ${mes}:`, e);
+      linhas.push(`<div style="color:#EF4444">❌ ${label} — ${e.message}</div>`);
+      erros.push(`${label}: ${e.message}`);
+    }
+    renderStatus();
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  // ── Resultado final ──
+  const totalOk = total - erros.length;
+  statusEl.innerHTML = `
+    <div class="import-preview-box">
+      <div class="import-preview-tit">${erros.length === 0 ? "🎉" : "⚠️"} Importação concluída! ${totalOk} / ${total} itens importados.</div>
+      <div style="max-height:300px;overflow-y:auto;font-size:12px;line-height:1.7;margin:10px 0">
+        ${linhas.join("")}
+      </div>
+      ${erros.length ? `<div style="font-size:12px;color:#EF4444"><strong>Erros:</strong><br>${erros.map(e => `• ${e}`).join("<br>")}</div>` : ""}
+    </div>`;
+  toast(`${totalOk} itens importados!`);
+  if(btn) { btn.disabled = false; btn.textContent = "🚀 Importar Tudo Automaticamente"; }
 }
 
 function fecharModalMetas() {
