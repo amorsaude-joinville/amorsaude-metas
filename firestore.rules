@@ -57,5 +57,13 @@ service cloud.firestore {
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
     }
+
+    // Faturamento diário consolidado da unidade (para dashboard gestora/lider)
+    match /faturamentoDiario/{docId} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
+    }
   }
 }

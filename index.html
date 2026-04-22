@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -507,34 +508,7 @@
     .equipe-met-pct.amarelo{ color:#F59E0B; }
     .equipe-met-pct.vermelho{ color:#EF4444; }
 
-    /* ── IMPORTAÇÃO HISTÓRICA ── */
-    .import-modal {
-      background:#fff; border-radius:var(--r);
-      width:720px; max-width:96vw; max-height:92vh; overflow-y:auto;
-      box-shadow:0 8px 32px rgba(0,0,0,.15);
-    }
-    .import-modal-hdr {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:24px 28px 16px; border-bottom:2px solid var(--border);
-      position:sticky; top:0; background:#fff; z-index:2;
-    }
-    .import-modal-hdr h3 { font-size:18px; font-weight:700; }
-    .import-modal-hdr button {
-      background:none; border:none; font-size:22px; cursor:pointer;
-      color:var(--text2); line-height:1; padding:4px 8px; border-radius:6px;
-    }
-    .import-modal-hdr button:hover { background:var(--bg2); }
-    .import-secao { padding:20px 28px; border-bottom:1px solid var(--border); }
-    .import-secao:last-child { border-bottom:none; }
-    .import-secao h4 {
-      font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px;
-      display:flex; align-items:center; gap:8px;
-    }
-    .import-progress {
-      background:#EFF6FF; border:1px solid #BFDBFE; border-radius:var(--r2);
-      padding:12px 16px; font-size:13px; color:#1D4ED8; margin-top:10px;
-      line-height:1.8;
-    }
+
     .import-err {
       background:#FEF2F2; border:1px solid #FECACA; border-radius:var(--r2);
       padding:12px 16px; font-size:13px; color:#DC2626; margin-top:10px;
@@ -543,23 +517,32 @@
       background:#D1FAE5; border:1px solid #6EE7B7; border-radius:var(--r2);
       padding:12px 16px; font-size:13px; color:#065F46; font-weight:600; margin-top:10px;
     }
-    .import-preview-box {
-      margin-top:14px; padding:16px; background:var(--bg2);
-      border-radius:var(--r2); border:1px solid rgba(232,0,61,.12);
+
+
+    /* ── FATURAMENTO DIÁRIO ── */
+    .fat-cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
+    .fat-card { background:var(--bg2); border:1px solid rgba(232,0,61,.1); border-radius:var(--r2); padding:14px 16px; }
+    .fat-card-label { font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; }
+    .fat-card-val { font-size:17px; font-weight:700; color:var(--text); }
+    .fat-card-val.destaque { color:var(--primary); font-size:20px; }
+    .fat-chart-wrap { margin-bottom:20px; max-height:260px; }
+    .fat-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+    .fat-tbl th { padding:9px 11px; background:var(--bg2); text-align:left; font-weight:700; font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+    .fat-tbl th.num, .fat-tbl td.num { text-align:right; }
+    .fat-tbl td { padding:9px 11px; border-top:1px solid var(--border); }
+    .fat-tbl tr.sabado td { background:#F8FAFC; color:var(--text2); }
+    .fat-tbl tr.tfoot td { font-weight:700; background:#F3F4F6; border-top:2px solid var(--border); }
+    .fat-tbl tr.fat-feriado td { background:#F9FAFB; color:#9CA3AF; }
+    .fat-comp-tbl { max-width:420px; }
+    .fat-comp-tbl td, .fat-comp-tbl th { padding:8px 12px; }
+    .fat-sel-mes {
+      padding:8px 12px; border:1.5px solid var(--border); border-radius:var(--r2);
+      font-family:'Inter',sans-serif; font-size:14px; outline:none; color:var(--text);
+      transition:border-color .2s; background:#fff;
     }
-    .import-preview-tit { font-size:13px; font-weight:700; margin-bottom:10px; }
-    .import-prev-table { width:100%; border-collapse:collapse; }
-    .import-prev-table th {
-      padding:6px 10px; font-size:10px; color:var(--text2); font-weight:700;
-      text-transform:uppercase; background:var(--bg2); text-align:left;
-    }
-    .import-prev-table td { padding:5px 10px; border-top:1px solid var(--border); font-size:13px; }
-    .import-prev-input {
-      width:140px; padding:6px 10px; border:1.5px solid var(--border);
-      border-radius:6px; font-size:13px; font-family:'Inter',sans-serif;
-      text-align:right; outline:none;
-    }
-    .import-prev-input:focus { border-color:var(--primary); }
+    .fat-sel-mes:focus { border-color:var(--primary); }
+    .fat-import-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border:1.5px dashed var(--border); border-radius:var(--r2); font-size:13px; color:var(--text2); cursor:pointer; transition:all .2s; background:#fff; font-family:'Inter',sans-serif; font-weight:500; }
+    .fat-import-badge:hover { border-color:var(--primary); color:var(--primary); }
   </style>
 </head>
 <body>
@@ -821,7 +804,7 @@
           </div>
           <div style="padding-bottom:1px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary" style="width:auto;white-space:nowrap" onclick="abrirModalMetas()">⚙️ Configurar Metas</button>
-            <button class="btn btn-ghost" id="btn-importar-historico" style="width:auto;white-space:nowrap;display:none" onclick="abrirImportacao()">📥 Importar Histórico</button>
+            <button class="btn btn-ghost" id="btn-importar-historico" style="width:auto;white-space:nowrap;display:none" onclick="abrirModalFatImport()">📊 Importar Faturamento</button>
           </div>
         </div>
       </div>
@@ -959,6 +942,32 @@
         <div id="comp-resultado-dash"></div>
 
       </div><!-- fim dash-painel-comp -->
+
+      <!-- ── FATURAMENTO DIÁRIO CONSOLIDADO ── -->
+      <div id="sec-fat-diario" style="margin-top:24px">
+        <div class="card">
+
+          <!-- Cabeçalho da seção -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+            <div class="card-title" style="margin:0">📊 Faturamento Diário Consolidado</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <select id="fat-sel-mes" class="fat-sel-mes" onchange="mudarMesFaturamento(this.value)">
+                <option value="2026-01">Janeiro 2026</option>
+              </select>
+              <!-- Visível apenas para gestora/subgestora -->
+              <button id="btn-fat-importar" class="fat-import-badge" style="display:none" onclick="abrirModalFatImport()">
+                📥 Importar Dados
+              </button>
+            </div>
+          </div>
+
+          <!-- Área de conteúdo (cards + gráfico + tabela) -->
+          <div id="fat-conteudo">
+            <div class="loading"><div class="spinner"></div>Carregando faturamento...</div>
+          </div>
+
+        </div>
+      </div><!-- fim sec-fat-diario -->
 
     </div>
 
@@ -1223,85 +1232,6 @@
 </div>
 
 <!-- Modal Importação Histórica -->
-<div class="overlay hidden" id="modal-import">
-  <div class="import-modal">
-    <div class="import-modal-hdr">
-      <h3>📥 Importar Histórico</h3>
-      <button onclick="fecharImportacao()">✕</button>
-    </div>
-
-    <!-- SEÇÃO 1: Totais mensais por colaboradora -->
-    <div class="import-secao">
-      <h4>📊 Seção 1 — Totais Mensais por Colaboradora</h4>
-      <div class="fgrid">
-        <div class="fg">
-          <label>Colaboradora</label>
-          <select id="imp-colab" onchange="autoFillLink()">
-            <option value="" disabled selected>— selecione —</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label>Mês / Ano</label>
-          <select id="imp-mes" onchange="autoFillLink()">
-            <option value="" disabled selected>— selecione —</option>
-            <option value="2026-01">Janeiro 2026</option>
-            <option value="2026-02">Fevereiro 2026</option>
-            <option value="2026-03">Março 2026</option>
-            <option value="2026-04">Abril 2026</option>
-          </select>
-        </div>
-        <div class="fg full">
-          <label>Link da Planilha Google Sheets</label>
-          <input type="text" id="imp-link" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:13px" />
-        </div>
-      </div>
-      <button class="btn btn-primary" style="width:auto;margin-top:4px" onclick="importarMesColaboradora()">📥 Importar Mês</button>
-      <div id="imp-status"></div>
-      <div id="imp-preview"></div>
-    </div>
-
-    <!-- SEÇÃO 2: Totais diários da equipe -->
-    <div class="import-secao">
-      <h4>📅 Seção 2 — Totais Diários da Equipe</h4>
-      <div class="fgrid">
-        <div class="fg">
-          <label>Mês / Ano</label>
-          <select id="imp-equipe-mes">
-            <option value="" disabled selected>— selecione —</option>
-            <option value="2026-01">Janeiro 2026</option>
-            <option value="2026-02">Fevereiro 2026</option>
-            <option value="2026-03">Março 2026</option>
-            <option value="2026-04">Abril 2026</option>
-          </select>
-        </div>
-        <div class="fg full">
-          <label>Link da Planilha de Equipe</label>
-          <input type="text" id="imp-equipe-link" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:13px" />
-        </div>
-      </div>
-      <button class="btn btn-primary" style="width:auto;margin-top:4px" onclick="importarEquipe()">📥 Importar Dias da Equipe</button>
-      <div id="imp-equipe-progresso"></div>
-      <div id="imp-equipe-status"></div>
-    </div>
-
-    <!-- SEÇÃO 3: Importação automática completa -->
-    <div class="import-secao" style="border-top:2px solid var(--accent);padding-top:16px">
-      <h4>🚀 Importação Automática Completa</h4>
-      <p style="font-size:13px;color:var(--text2);margin:6px 0 12px">Importa todos os históricos de todas as colaboradoras (todas as planilhas e meses) e todos os meses da equipe de uma única vez.</p>
-      <button class="btn btn-primary" style="width:auto;background:linear-gradient(135deg,#7C3AED,#4F46E5)" onclick="importarTudoAutomaticamente(this)">🚀 Importar Tudo Automaticamente</button>
-      <div id="imp-auto-status" style="margin-top:12px"></div>
-    </div>
-
-    <!-- SEÇÃO 4: Correção pontual abril 2026 -->
-    <div class="import-secao" style="border-top:2px solid #EF4444;padding-top:16px">
-      <h4>🔧 Correção Manual — Abril 2026</h4>
-      <p style="font-size:13px;color:var(--text2);margin:6px 0 12px">Sobrescreve os dados de abril 2026 no Firestore com os valores corretos lidos diretamente das planilhas. Use se o dashboard mostrar valores errados para abril.</p>
-      <button class="btn btn-primary" style="width:auto;background:linear-gradient(135deg,#DC2626,#B91C1C)" onclick="corrigirDadosFirestore(this)">🔧 Corrigir Dados Abril 2026</button>
-      <div id="imp-corrigir-status" style="margin-top:12px"></div>
-    </div>
-
-  </div>
-</div>
 
 <!-- Toast -->
 <div id="toast"></div>
@@ -1420,6 +1350,71 @@
   </div>
 </div>
 
+<!-- Modal: Importar Faturamento Histórico -->
+<div class="overlay hidden" id="modal-fat-import">
+  <div class="modal" style="width:500px;max-height:92vh;overflow-y:auto">
+    <h3>📊 Importar Faturamento Histórico</h3>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:20px">Faturamento diário consolidado da unidade — Jan a Abr/2026.</p>
+
+    <!-- Inserir todos de uma vez -->
+    <div style="background:var(--primary);border-radius:var(--r2);padding:16px 20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:15px;color:#fff">🚀 Inserir Todos os Meses</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">92 dias — Jan/2026 a Abr/2026</div>
+        </div>
+        <button class="btn" style="background:#fff;color:var(--primary);width:auto;white-space:nowrap"
+          onclick="importarFaturamentoHistorico(this)">
+          Inserir 92 dias
+        </button>
+      </div>
+      <div id="fat-import-status-todos" style="margin-top:10px"></div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">— ou mês a mês —</div>
+
+    <!-- Janeiro -->
+    <div style="background:var(--bg2);border-radius:var(--r2);padding:12px 16px;margin-bottom:8px;border:1px solid rgba(232,0,61,.1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div><div style="font-weight:700">Janeiro/2026</div><div style="font-size:12px;color:var(--text2)">26 dias</div></div>
+        <button class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px" onclick="inserirFaturamentoMes('2026-01', this)">Inserir</button>
+      </div>
+      <div id="fat-import-status-202601" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Fevereiro -->
+    <div style="background:var(--bg2);border-radius:var(--r2);padding:12px 16px;margin-bottom:8px;border:1px solid rgba(232,0,61,.1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div><div style="font-weight:700">Fevereiro/2026</div><div style="font-size:12px;color:var(--text2)">24 dias</div></div>
+        <button class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px" onclick="inserirFaturamentoMes('2026-02', this)">Inserir</button>
+      </div>
+      <div id="fat-import-status-202602" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Março -->
+    <div style="background:var(--bg2);border-radius:var(--r2);padding:12px 16px;margin-bottom:8px;border:1px solid rgba(232,0,61,.1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div><div style="font-weight:700">Março/2026</div><div style="font-size:12px;color:var(--text2)">26 dias (inc. feriado 09/03)</div></div>
+        <button class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px" onclick="inserirFaturamentoMes('2026-03', this)">Inserir</button>
+      </div>
+      <div id="fat-import-status-202603" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Abril -->
+    <div style="background:var(--bg2);border-radius:var(--r2);padding:12px 16px;margin-bottom:16px;border:1px solid rgba(232,0,61,.1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div><div style="font-weight:700">Abril/2026</div><div style="font-size:12px;color:var(--text2)">16 dias (parcial até 21/04)</div></div>
+        <button class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px" onclick="inserirFaturamentoMes('2026-04', this)">Inserir</button>
+      </div>
+      <div id="fat-import-status-202604" style="margin-top:8px"></div>
+    </div>
+
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="fecharModalFatImport()">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 //  🔥 FIREBASE — SUBSTITUA PELOS SEUS DADOS DO CONSOLE
@@ -1511,119 +1506,11 @@ const FAIXAS_POOL_LAB    = [{pct:1.0,pool:1500},{pct:0.9,pool:1125},{pct:0.8,poo
 const FAIXAS_POOL_IMG    = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 const FAIXAS_POOL_PROC   = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 
-// ═══════════════════════════════════════════════════════════
-//  PLANILHAS HISTÓRICAS — IDs das sheets por email/mês
-// ═══════════════════════════════════════════════════════════
-const PLANILHAS_HISTORICAS = {
-  'darafidelesmarques@gmail.com': {
-    '2026-01': '1jxJGIniks5rcBsTGdIU0ytTclzucgnyt1aFdafQlqlc',
-    '2026-02': '1EEJrbbzC6IM4bWYoKT4sHAYXipMKA0ou_WMYeK4_JYQ',
-    '2026-03': '1oYnlRMbkCwpPAVVrFvWELpvPd5ZsA64k9iWd4ZEpfpg',
-    '2026-04': '1U6MnRlO6CULzJc0RF7Ife0liY06-HaNF1asf19Awq70'
-  },
-  'bianca.trazibulo@gmail.com': {
-    '2026-01': '12T1UyVGp3V8nH462YsVXzI1bhqtW20YmlIv-NYVudFM',
-    '2026-02': '1FX51SAFjzogsy4Gf9fMBAqTjDvtVtgFLtkSKYCpEuqk',
-    '2026-03': '1WluP_GvjOQ_RPnYQd8O_2snrCiy20ckrK164AyqLbe0',
-    '2026-04': '1EiImUPzX0fzZORKtDd2WLNCxGj753S4xkaXpls5I8v8'
-  },
-  'dawilla.stefany@hotmail.com': {
-    '2026-01': '1wFCUNCZU44EBvM1g2N1ARPZLFZCXB9q5S-Z0ktB_FaA',
-    '2026-02': '1qeCAGl21Yfz2kN_uK3V90AW45oWiMqOQ-3r3sYFniHY',
-    '2026-03': '15gNPY8_VDn1KOtqsi-KICB0A4aJFGHlc5Lc69gkeoXI',
-    '2026-04': '12_mIChD0KC3Me9NVyM-VVoe-a0t2k0UGJ2aTA8phl8o'
-  },
-  'thamyresilva1020@gmail.com': {
-    '2026-01': '1iJzqu3o3TVf7P36c7qnqRVCkYriTT8DlGLMkAIYaGI0',
-    '2026-02': '1zg6_ZN4FfwUAU-PPWY0D1dPipoSWo8nF0skwrRwULvE',
-    '2026-03': '1eI_LzS2H5sYHa9L6YMjJETUbU3ZOfOlKyRtA8G9xfVc',
-    '2026-04': '1M6aan6g2TREpvE3TWuLyjn8lxyIuaQkdz-aK5b36v5I'
-  },
-  'leticiaac.reis@gmail.com': {
-    '2026-01': '1LPlCAYXUnuFK8-oUgWy8Dj5oSm2rPNwsSMO_kclF4kM',
-    '2026-02': '1fcCsr1W75j4dKNP7SGE4Fd8s5z0G7dBF3GfhKsHW8fs',
-    '2026-03': '1zf1UprriU-AyEatke1VKDCcsDFvXO0h4XvxlNLgzIo4',
-    '2026-04': '1Jafs88fGpG5fH5UtQtdsMgl4_Yk54YAQ5U0d1XrqX5M'
-  },
-  'susuh.medeiros28@gmail.com': {
-    '2026-01': '1N8cVs3RtzUullc8hJ6IQhiJHRsVjqdI_ZcJQ4NdVJyo',
-    '2026-02': '1wVVL-Pu93SlfDMGaCe_EKg8WOYNSsiq7aza9bECYZlA',
-    '2026-03': '1m6ZvxJQYYNI-34yPLnvPkxOEYO4gijcqoKf1NcmGWhQ',
-    '2026-04': '1yunVb5oLi0xQZVInAc0cguStD1cgSq3MvqSKr6hcO38'
-  },
-  'graziiaraujo8@gmail.com': {
-    '2026-01': '1EpebTjwQYnoqHBGDb_cn0biuOltz_OxgWYp0jcEgqzQ',
-    '2026-02': '1hDerKwPVc2myEtySNy_eKI4jI0dBmu-9T7rSabdPBIE',
-    '2026-03': '1z3sDdrY45VZBeR4cbaFpb0k2B015jsfguWBxZKZA7fQ',
-    '2026-04': '1g8FyxxNgiuGbzJyVH6pdJqyORTrZBYl0YlLBNKTJk38'
-  },
-  'raiiane.almeida1401@gmail.com': {
-    '2026-01': '1FO8UqlmM6AupXrsl01DRjRAsYISAa0y0jMXUUu0-RmY',
-    '2026-02': '1KFaabrSGeS-QtjGdv0P_nwmcyKJvyHCYg8NliFjMPJk',
-    '2026-03': '1s8Wg0Sg6pnTY7WEsNh2fyNCoJWf5az1Autrd78wxb8E',
-    '2026-04': '17kzEl1lTqKcgneRAExrT064qMqpTSSpj8D_TDQdou7c'
-  },
-  'eriellypachecodossant@gmail.com': {
-    '2026-02': '1dT7D3kKpDi57QQn9Mv_ZmHTNsYJBMCI6HRO_DJZe3Ws',
-    '2026-03': '1bD5JMqRDH5zRXHwRIiKqBjbyo_1iMhIqzossMTbFffY',
-    '2026-04': '1uPVxiUrMFPqVV5ucL6ghfFOFUQIjXzKGgqUJI4FdNTc'
-  },
-  'juluise2005@gmail.com': {
-    '2026-04': '1jV5yPW6XI1NJPgxQJxOXVeK8QKaR_CZ6J5EXI0dbak0'
-  }
-};
 
-// URL fixo da planilha de equipe (dias)
-const PLANILHA_EQUIPE_URL = "https://docs.google.com/spreadsheets/d/1o9vfvoXREHZzdJv8ngAYFW6VXVaEk_OiNt053Npf-P8";
 
-// Índices de coluna (base 0) por campo/mês na planilha de equipe
-// Estrutura real: cada aba = um mês; col A (0) = dia da semana, col B (1) = número do dia; demais = totais diários
-// injetaveis:null = campo não existe naquele mês
-const COLUNAS_EQUIPE = {
-  "2026-01": { laboratorio:5, procedimentos:14, imagem:23, caixa:32, credito:41, boleto:50, injetaveis:null },
-  "2026-02": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:null },
-  "2026-03": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
-  "2026-04": { laboratorio:5, imagem:14, procedimentos:23, caixa:32, credito:41, boleto:50, injetaveis:59 },
-};
 
-// Nomes exatos das abas mensais na planilha de equipe (tenta variações de capitalização)
-const NOMES_ABAS_EQUIPE = {
-  "2026-01": ["JANEIRO 2026", "Janeiro 2026", "janeiro 2026"],
-  "2026-02": ["FEVEREIRO 2026", "Fevereiro 2026", "fevereiro 2026"],
-  "2026-03": ["MARÇO 2026", "MARCO 2026", "Março 2026", "Marco 2026", "março 2026", "marco 2026"],
-  "2026-04": ["ABRIL 2026", "Abril 2026", "abril 2026"],
-};
 
-// Mapeamento de campos para busca de labels na planilha (normalizado sem acentos)
-const CAMPOS_HISTORICO_ALIASES = {
-  caixa:          ["caixa","caixa total","total caixa","total de caixa","total caixa dinheiro","entrada caixa","vendas total","vendas"],
-  credito:        ["credito","credito total","total credito","cartao de credito","cartao credito"],
-  boleto:         ["boleto","boletos","total boleto","total boletos"],
-  dinheiro:       ["dinheiro","total dinheiro","pagamento dinheiro"],
-  debito:         ["debito","debito total","total debito","cartao de debito","cartao debito"],
-  pix:            ["pix","total pix","pagamento pix"],
-  laboratorio:    ["laboratorio","laboratorios","lab","exames laboratoriais","exames lab","total lab"],
-  imagem:         ["imagem","img","exames de imagem","exames imagem","total imagem"],
-  procedimentos:  ["procedimentos","procedimento","proc","total procedimentos","total proc"],
-  consultas:      ["consultas","consulta","total consultas"],
-  injetaveis:     ["injetaveis","injetavel","total injetaveis"],
-  testes_rapidos: ["testes rapidos","teste rapido","testes rapido","total testes rapidos"],
-  saidas:         ["saidas","saida","total saidas","total saida","saidas totais","saida de caixa"],
-};
 
-const LABELS_CAMPOS_PT = {
-  caixa: "💰 Caixa", credito: "💳 Crédito", boleto: "🧾 Boleto",
-  dinheiro: "💵 Dinheiro", debito: "💳 Débito", pix: "📱 Pix",
-  laboratorio: "🔬 Laboratório", imagem: "🩻 Imagem",
-  procedimentos: "🏥 Procedimentos", consultas: "📋 Consultas",
-  injetaveis: "💉 Injetáveis", testes_rapidos: "🧪 Testes Rápidos", saidas: "📤 Saídas"
-};
-
-// Estado temporário para confirmação de importação em massa (equipe)
-let _diasEquipePendentes = [];
-let _mesPendente = "";
-// Estado temporário dos dias diários de uma colaboradora (importação individual)
-let _diasColabPendentes = null;  // { email, mes, dias: [{dia, dataStr, ...}] }
 
 // ═══════════════════════════════════════════════════════════
 //  PRESCRITORES
@@ -1700,6 +1587,15 @@ let dashMesAno          = "";    // mês/ano selecionado no dashboard
 let unsubDash           = null;  // listener do dashboard
 let dashHistorico       = [];    // docs de historico_mensal quando mês é histórico
 let dashUsandoHistorico = false; // true quando dashboard exibe dados de historico_mensal
+
+let historicoIndividual  = null;  // doc de historico_mensal do usuário logado
+let historicoEquipeAtual = [];    // todos docs de historico_mensal do mês atual
+
+// Faturamento diário consolidado
+let faturamentoDiarioAtual = [];       // todos docs da coleção faturamentoDiario
+let faturamentoMesSel      = "";       // mês selecionado (vazio = usa o mais recente)
+let unsubFaturamento       = null;     // listener do faturamento
+let faturamentoChart       = null;     // instância Chart.js atual
 
 // Modo de visualização do dashboard ("dia" | "semana" | "mes" | "comparativo")
 let dashModo    = localStorage.getItem("as_dash_modo") || "mes";
@@ -2143,6 +2039,10 @@ function iniciarApp() {
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
+  // Botão de importação de faturamento histórico — somente gestora/subgestora
+  const btnFatImp = document.getElementById("btn-fat-importar");
+  if(btnFatImp) btnFatImp.style.display = ehGestao ? "" : "none";
+
   carregarMetas();
   if(temDashboard) iniciarDashboard();
   if(temLanc)      iniciarListener();
@@ -2151,6 +2051,9 @@ function iniciarApp() {
   // Rec/CC: inicia equipe imediatamente (pool calc necessário para aba Metas)
   // Lider e liderCC: listener iniciado por aplicarAbaLider/CC quando sai do dashboard
   if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
+  if(temLanc) carregarHistoricoMensal();
+  // Faturamento diário: carrega para gestora, subgestora e líderes
+  if(temDashboard) carregarFaturamentoDiario();
 }
 
 // Aplica visibilidade das seções conforme aba ativa da líder (4 abas)
@@ -2173,6 +2076,7 @@ function aplicarAbaLider() {
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
 
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
+  if(!emDash && !historicoIndividual) carregarHistoricoMensal();
 }
 
 function mudarAbaLider(aba) {
@@ -2374,7 +2278,13 @@ function atualizarCards() {
   const { perfil } = usuario;
   if(!FAZ_LANC.includes(perfil)) return;
 
-  const { caixa, credito } = calcTotais(lancMes);
+  let caixa, credito;
+  if(historicoIndividual) {
+    caixa   = historicoIndividual.caixa   || 0;
+    credito = historicoIndividual.credito || 0;
+  } else {
+    ({ caixa, credito } = calcTotais(lancMes));
+  }
   const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
   const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metas.meta_caixa_recepcao||0);
   const metaCredito = metas.meta_credito_recepcao||0;
@@ -2845,7 +2755,9 @@ function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, 
   const diasUteis  = m.dias_uteis        || 22;
   const diasPassF  = diasUteisPassadosFloat();
 
-  const teamTot   = calcTotaisDetalhados(equipeLancs);
+  const teamTot = historicoEquipeAtual.length > 0
+    ? calcTotaisFromHistoricoDocs(historicoEquipeAtual.filter(d => ["recepcionista","lider"].includes(d.perfil)))
+    : calcTotaisDetalhados(equipeLancs);
   const poolLab   = calcPoolPremio(teamTot.lab,  metaLab,  FAIXAS_POOL_LAB);
   const poolImg   = calcPoolPremio(teamTot.img,  metaImg,  FAIXAS_POOL_IMG);
   const poolProc  = calcPoolPremio(teamTot.proc, metaProc, FAIXAS_POOL_PROC);
@@ -3089,6 +3001,24 @@ function iniciarListenerEquipe() {
     }, e => console.error("equipe listener:", e));
 }
 
+async function carregarHistoricoMensal() {
+  try {
+    const snap = await db.collection("historico_mensal")
+      .where("mes_ano","==",mesAno).get();
+    historicoEquipeAtual = snap.docs.map(d => {
+      const dado = d.data();
+      const email = dado.email || d.id.split("_").slice(0,-1).join("_");
+      const u = USUARIOS[email] || {};
+      return { email, perfil: dado.perfil || u.perfil || "", usuario_nome: dado.usuario_nome || u.nome || email, ...dado };
+    });
+    historicoIndividual = historicoEquipeAtual.find(d => d.email === usuario.email) || null;
+    console.log(`[historico_mensal] ${mesAno}: ${snap.size} doc(s), individual: ${historicoIndividual ? "✓" : "nenhum"}`);
+    atualizarCards();
+    renderCardMetasEquipe();
+  } catch(e) { console.warn("[historico_mensal] erro:", e); }
+}
+
+
 function renderCardMetasEquipe() {
   const el = document.getElementById("equipe-metricas");
   if(!el) return;
@@ -3096,7 +3026,10 @@ function renderCardMetasEquipe() {
 
   const perfil   = usuario?.perfil;
   const grupoCC  = perfil === "callcenter" || VE_COORD.includes(perfil);
-  const tot      = calcTotaisDetalhados(equipeLancs);
+  const usarHist = historicoEquipeAtual.length > 0;
+  const tot      = usarHist
+    ? calcTotaisFromHistoricoDocs(historicoEquipeAtual)
+    : calcTotaisDetalhados(equipeLancs);
   const m        = metas;
   const diasUteis = m.dias_uteis || 22;
   const diasPassF = diasUteisPassadosFloat();
@@ -3131,12 +3064,12 @@ function renderCardMetasEquipe() {
   if(ehCCPuro) {
     // ── CC puro (Erielly / Júlia): vê medicina SEM premiações + CC com ranking ──
 
-    // Separa lancamentos por grupo
-    const lancMed = equipeLancs.filter(l => ["recepcionista","lider"].includes(l.perfil));
-    const lancCC  = equipeLancs.filter(l => ["callcenter","lider_callcenter"].includes(l.perfil));
+    // Separa por grupo (historico ou lancamentos)
+    const srcRec = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["recepcionista","lider"].includes(d.perfil));
+    const srcCC  = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
 
-    const totMed = calcTotaisDetalhados(lancMed);
-    const totCC  = calcTotaisDetalhados(lancCC);
+    const totMed = usarHist ? calcTotaisFromHistoricoDocs(srcRec) : calcTotaisDetalhados(srcRec);
+    const totCC  = usarHist ? calcTotaisFromHistoricoDocs(srcCC)  : calcTotaisDetalhados(srcCC);
 
     const metaLab    = m.meta_lab_equipe          || 273000;
     const metaImg    = m.meta_img_equipe           || 144000;
@@ -3163,12 +3096,16 @@ function renderCardMetasEquipe() {
 
     // Seção CC com ranking
     const porPessoa = {};
-    lancCC.forEach(l => {
-      if(!porPessoa[l.usuario_nome]) porPessoa[l.usuario_nome] = [];
-      porPessoa[l.usuario_nome].push(l);
-    });
+    if(usarHist) {
+      srcCC.forEach(d => { porPessoa[d.usuario_nome] = d.caixa || 0; });
+    } else {
+      srcCC.forEach(l => {
+        if(!porPessoa[l.usuario_nome]) porPessoa[l.usuario_nome] = [];
+        porPessoa[l.usuario_nome].push(l);
+      });
+    }
     const ranking = CC_TODOS.map(nome => {
-      const { caixa } = calcTotais(porPessoa[nome]||[]);
+      const caixa = usarHist ? (porPessoa[nome] || 0) : calcTotais(porPessoa[nome]||[]).caixa;
       const pct = metaIndCC > 0 ? (caixa/metaIndCC)*100 : 0;
       const cor = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
@@ -3194,15 +3131,19 @@ function renderCardMetasEquipe() {
     // ── Coord / lider_callcenter: vê só CC (comportamento original) ──
     const metaCC    = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
     const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
-    const lancCC2   = equipeLancs.filter(l => ["callcenter","lider_callcenter"].includes(l.perfil));
-    const totCC2    = calcTotaisDetalhados(lancCC2);
+    const srcCC2    = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
+    const totCC2    = usarHist ? calcTotaisFromHistoricoDocs(srcCC2) : calcTotaisDetalhados(srcCC2);
     const porPessoa2 = {};
-    lancCC2.forEach(l => {
-      if(!porPessoa2[l.usuario_nome]) porPessoa2[l.usuario_nome] = [];
-      porPessoa2[l.usuario_nome].push(l);
-    });
+    if(usarHist) {
+      srcCC2.forEach(d => { porPessoa2[d.usuario_nome] = d.caixa || 0; });
+    } else {
+      srcCC2.forEach(l => {
+        if(!porPessoa2[l.usuario_nome]) porPessoa2[l.usuario_nome] = [];
+        porPessoa2[l.usuario_nome].push(l);
+      });
+    }
     const ranking2 = CC_TODOS.map(nome => {
-      const { caixa } = calcTotais(porPessoa2[nome]||[]);
+      const caixa = usarHist ? (porPessoa2[nome] || 0) : calcTotais(porPessoa2[nome]||[]).caixa;
       const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
       const cor  = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
@@ -4016,6 +3957,21 @@ function mudarModoDash(modo) {
     renderControlesModo(modo);
     renderDashboard();
   }
+}
+
+function calcTotaisFromHistoricoDocs(docs) {
+  let caixa=0, credito=0, boleto=0, lab=0, img=0, proc=0, injetaveis=0, consultas=0;
+  docs.forEach(d => {
+    caixa      += d.caixa         || 0;
+    credito    += d.credito       || 0;
+    boleto     += d.boleto        || 0;
+    lab        += d.laboratorio   || 0;
+    img        += d.imagem        || 0;
+    proc       += d.procedimentos || 0;
+    injetaveis += d.injetaveis    || 0;
+    consultas  += d.consultas     || 0;
+  });
+  return { caixa, credito, boleto, lab, img, proc, injetaveis, consultas, porProcTipo:{} };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5753,733 +5709,6 @@ function abrirModalMetas() {
   document.getElementById("modal-metas").classList.remove("hidden");
 }
 
-// ═══════════════════════════════════════════════════════════
-//  IMPORTAÇÃO HISTÓRICA
-// ═══════════════════════════════════════════════════════════
-
-function abrirImportacao() {
-  // Preenche select de colaboradoras
-  const sel = document.getElementById("imp-colab");
-  sel.innerHTML = '<option value="" disabled selected>— selecione —</option>';
-  Object.entries(USUARIOS).forEach(([email, u]) => {
-    if(["recepcionista","lider","callcenter"].includes(u.perfil)) {
-      sel.innerHTML += `<option value="${email}">${u.nome}</option>`;
-    }
-  });
-
-  // Preenche link padrão da equipe
-  document.getElementById("imp-equipe-link").value = PLANILHA_EQUIPE_URL;
-
-  // Limpa estados anteriores
-  ["imp-status","imp-preview","imp-equipe-progresso","imp-equipe-status"].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.innerHTML = "";
-  });
-  document.getElementById("imp-link").value  = "";
-  document.getElementById("imp-colab").value = "";
-  document.getElementById("imp-mes").value   = "";
-
-  document.getElementById("modal-import").classList.remove("hidden");
-}
-
-function fecharImportacao() {
-  document.getElementById("modal-import").classList.add("hidden");
-}
-
-// Preenche automaticamente o link quando colaboradora + mês são selecionados
-function autoFillLink() {
-  const email = document.getElementById("imp-colab").value;
-  const mes   = document.getElementById("imp-mes").value;
-  if(!email || !mes) return;
-
-  const id = PLANILHAS_HISTORICAS[email]?.[mes];
-  document.getElementById("imp-link").value = id
-    ? `https://docs.google.com/spreadsheets/d/${id}`
-    : "";
-
-  // Limpa preview anterior
-  document.getElementById("imp-preview").innerHTML = "";
-  document.getElementById("imp-status").innerHTML  = "";
-}
-
-// Extrai o ID da planilha de um link do Google Sheets
-function extrairIdPlanilha(link) {
-  const m = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : null;
-}
-
-// Busca dados de uma aba via gviz (funciona com sheets públicas)
-async function fetchGviz(id, aba) {
-  const url  = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(aba)}`;
-  const resp = await fetch(url);
-  if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const texto = await resp.text();
-  // Gviz retorna: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-  const json  = texto.replace(/^[^(]+\(/, "").replace(/\);\s*$/, "");
-  const data  = JSON.parse(json);
-  if(data.status === "error") throw new Error(data.errors?.[0]?.detailed_message || "Erro gviz");
-  return data;
-}
-
-// Converte resposta gviz em matriz de linhas/colunas
-function gvizParaLinhas(data) {
-  if(!data?.table?.rows) return [];
-  const { cols = [], rows } = data.table;
-  return rows.map(row =>
-    (row.c || []).map((cell, i) => ({
-      valor:     cell?.v ?? null,
-      formatted: cell?.f ?? null,
-      tipo:      cols[i]?.type ?? "string"
-    }))
-  );
-}
-
-// Normaliza string para comparação (sem acentos, minúsculas)
-const normStr = s =>
-  (s ?? "").toString().toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-// Converte célula gviz para número (trata R$, pontos de milhar, vírgula decimal)
-function parseCelula(cel) {
-  if(!cel) return 0;
-  if(typeof cel.valor === "number") return cel.valor;
-  const s = (cel.formatted || cel.valor || "").toString()
-    .replace(/R\$\s*/g, "")
-    .replace(/\s/g, "")
-    .replace(/\.(?=\d{3})/g, "")   // remove pontos de milhar
-    .replace(",", ".");             // vírgula decimal → ponto
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
-// Lê aba "Base de dados para parcial" das planilhas individuais
-// Col A (0)=dia, B(1)=lab, C(2)=imagem, D(3)=proc, E(4)=caixa, F(5)=credito, G(6)=boleto, H(7)=injetaveis
-function parsearAbaBaseDados(linhas, mes) {
-  const [ano, mesNum] = mes.split("-").map(Number);
-  const dias = [];
-  const totais = { laboratorio:0, imagem:0, procedimentos:0, caixa:0, credito:0, boleto:0, injetaveis:0 };
-  const diasVistos = new Set();
-
-  for(const linha of linhas) {
-    const valA = linha[0]?.valor;
-    let dia;
-    if(typeof valA === "number") {
-      dia = Math.round(valA);
-    } else {
-      const s = String(valA ?? "").replace(/\s/g, "");
-      dia = parseInt(s, 10);
-    }
-    if(!dia || isNaN(dia) || dia < 1 || dia > 31) continue;
-    if(diasVistos.has(dia)) continue;
-    diasVistos.add(dia);
-
-    const r = v => Math.round(parseCelula(v) * 100) / 100;
-    const laboratorio   = r(linha[1]);
-    const imagem        = r(linha[2]);
-    const procedimentos = r(linha[3]);
-    const caixa         = r(linha[4]);
-    const credito       = r(linha[5]);
-    const boleto        = r(linha[6]);
-    const injetaveis    = r(linha[7]);
-
-    const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
-    dias.push({ dia, dataStr, laboratorio, imagem, procedimentos, caixa, credito, boleto, injetaveis });
-
-    totais.laboratorio   += laboratorio;
-    totais.imagem        += imagem;
-    totais.procedimentos += procedimentos;
-    totais.caixa         += caixa;
-    totais.credito       += credito;
-    totais.boleto        += boleto;
-    totais.injetaveis    += injetaveis;
-  }
-
-  Object.keys(totais).forEach(k => { totais[k] = Math.round(totais[k] * 100) / 100; });
-  console.log(`[import colab] ${mes}: ${dias.length} dias lidos, totais:`, totais);
-  return { dias, totais };
-}
-
-// Extrai campos do Dashboard individual usando coluna J (label, índice 9) e K (valor, índice 10)
-function extrairCamposPorColunaJK(linhas) {
-  const resultado = {};
-  for(const linha of linhas) {
-    const label  = normStr(linha[9]?.valor);   // coluna J
-    const valCel = linha[10];                  // coluna K
-    if(!label || !valCel) continue;
-    for(const [campo, aliases] of Object.entries(CAMPOS_HISTORICO_ALIASES)) {
-      if(campo in resultado) continue;
-      if(!aliases.includes(label)) continue;
-      const num = parseCelula(valCel);
-      if(num >= 0) resultado[campo] = Math.round(num * 100) / 100;
-    }
-  }
-  return resultado;
-}
-
-// Lê aba mensal da planilha de equipe e retorna [{dia, dataStr, campos}]
-// Col A (0) = dia da semana, Col B (1) = número do dia (1-31), demais = totais diários
-// Usa SOMENTE col B para detectar o dia — col A é ignorada completamente
-function parsearAbaEquipeMensal(linhas, mes) {
-  const colunas = COLUNAS_EQUIPE[mes];
-  if(!colunas || !linhas.length) return [];
-  const [ano, mesNum] = mes.split("-").map(Number);
-  const resultado = [];
-  const diasVistos = new Set();  // evita duplicatas (ex: linhas de subtotal)
-
-  for(const linha of linhas) {
-    // Lê col B (índice 1) — aceita célula ausente, nula ou string
-    const valB = linha[1]?.valor;
-    let dia;
-    if(typeof valB === "number") {
-      dia = Math.round(valB);
-    } else {
-      const s = String(valB ?? "").replace(/\s/g, "");
-      dia = parseInt(s, 10);
-    }
-    if(!dia || isNaN(dia) || dia < 1 || dia > 31) continue;
-    if(diasVistos.has(dia)) continue;   // pula linhas de subtotal do mesmo dia
-    diasVistos.add(dia);
-
-    const campos = {};
-    for(const [campo, colIdx] of Object.entries(colunas)) {
-      if(colIdx === null) continue;
-      const celRaw = linha[colIdx];
-      const num = parseCelula(celRaw);
-      campos[campo] = Math.round(num * 100) / 100;
-      console.log(`[equipe] dia=${dia} campo=${campo} col=${colIdx} bruto=${JSON.stringify(celRaw?.valor)} limpo=${campos[campo]}`);
-    }
-
-    const dataStr = `${ano}-${String(mesNum).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
-    resultado.push({ dia, dataStr, campos });
-  }
-
-  resultado.sort((a, b) => a.dia - b.dia);
-  console.log(`[equipe] ${mes}: ${resultado.length} dias detectados (${[...diasVistos].sort((a,b)=>a-b).join(",")})`);
-  return resultado;
-}
-
-// Mantido apenas como fallback para planilhas individuais (não equipe)
-function extrairCamposAbaEquipe(linhas, mes) {
-  const colunas = COLUNAS_EQUIPE[mes];
-  if(!colunas || linhas.length < 2) return {};
-  const totais = {};
-  Object.keys(colunas).forEach(k => totais[k] = 0);
-  for(let r = 1; r < linhas.length; r++) {
-    const linha = linhas[r];
-    for(const [campo, colIdx] of Object.entries(colunas)) {
-      if(colIdx === null) continue;
-      const num = parseCelula(linha[colIdx]);
-      if(num > 0) totais[campo] += num;
-    }
-  }
-  // Arredonda para evitar float impreciso
-  Object.keys(totais).forEach(k => totais[k] = Math.round(totais[k] * 100) / 100);
-  return totais;
-}
-
-// Extrai campos conhecidos de uma matriz de linhas (busca por label genérica)
-// Usado como fallback para planilhas individuais sem col J/K definidas
-function extrairCamposDeLinhas(linhas) {
-  const resultado = {};
-  for(const linha of linhas) {
-    for(let i = 0; i < linha.length; i++) {
-      const label = normStr(linha[i]?.valor);
-      if(!label) continue;
-      for(const [campo, aliases] of Object.entries(CAMPOS_HISTORICO_ALIASES)) {
-        if(campo in resultado) continue;
-        if(!aliases.includes(label)) continue;
-        for(let j = i + 1; j < Math.min(i + 5, linha.length); j++) {
-          const num = parseCelula(linha[j]);
-          if(num >= 0) { resultado[campo] = Math.round(num * 100) / 100; break; }
-        }
-      }
-    }
-  }
-  return resultado;
-}
-
-// ── SEÇÃO 1: importar mês de uma colaboradora ─────────────
-
-async function importarMesColaboradora() {
-  const email = document.getElementById("imp-colab").value;
-  const mes   = document.getElementById("imp-mes").value;
-  const link  = document.getElementById("imp-link").value.trim();
-
-  if(!email || !mes) { toast("Selecione colaboradora e mês.", "err"); return; }
-  if(!link)          { toast("Informe o link da planilha.", "err"); return; }
-
-  const id = extrairIdPlanilha(link);
-  if(!id) { toast("Link da planilha inválido.", "err"); return; }
-
-  const statusEl  = document.getElementById("imp-status");
-  const previewEl = document.getElementById("imp-preview");
-  statusEl.innerHTML  = '<div class="import-progress">⏳ Lendo aba "Base de dados para parcial"...</div>';
-  previewEl.innerHTML = "";
-
-  try {
-    const data   = await fetchGviz(id, "Base de dados para parcial");
-    const linhas = gvizParaLinhas(data);
-    const { dias, totais } = parsearAbaBaseDados(linhas, mes);
-
-    statusEl.innerHTML = `<div style="font-size:12px;color:var(--text2);margin-top:6px">📍 ${dias.length} dia(s) lidos — totais somados automaticamente.</div>`;
-    renderPreviewMes(totais, email, mes, dias);
-  } catch(e) {
-    console.error("importarMes:", e);
-    statusEl.innerHTML = `<div class="import-err">❌ Erro: ${e.message}<br><small>Verifique se a planilha está pública e se existe uma aba chamada "Base de dados para parcial".</small></div>`;
-  }
-}
-
-function renderPreviewMes(campos, email, mes, dias = []) {
-  _diasColabPendentes = { email, mes, dias };
-  const u        = USUARIOS[email];
-  const mesLabel = { "2026-01":"Janeiro 2026","2026-02":"Fevereiro 2026","2026-03":"Março 2026","2026-04":"Abril 2026" }[mes] || mes;
-  const previewEl = document.getElementById("imp-preview");
-
-  const linhas = Object.entries(LABELS_CAMPOS_PT).map(([k, lbl]) => `
-    <tr>
-      <td style="padding:6px 10px;font-size:13px">${lbl}</td>
-      <td style="padding:6px 10px">
-        <input class="import-prev-input" id="prev-${k}" type="text"
-          value="${brl(campos[k] || 0)}" oninput="mascaraValor(this)" />
-      </td>
-    </tr>`).join("");
-
-  const aviso = Object.keys(campos).length === 0
-    ? '<div class="import-err" style="margin-bottom:12px">⚠️ Nenhum valor detectado automaticamente. Preencha manualmente os campos.</div>'
-    : `<div class="import-progress" style="margin-bottom:12px">✅ ${Object.keys(campos).length} campo(s) detectados automaticamente. Revise e ajuste se necessário.</div>`;
-
-  previewEl.innerHTML = `
-    <div class="import-preview-box">
-      <div class="import-preview-tit">Preview — ${u.nome} — ${mesLabel}</div>
-      ${aviso}
-      <div style="overflow-x:auto">
-        <table class="import-prev-table">
-          <thead><tr>
-            <th>Campo</th>
-            <th>Valor (edite se necessário)</th>
-          </tr></thead>
-          <tbody>${linhas}</tbody>
-        </table>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <button class="btn btn-primary" style="width:auto" onclick="confirmarImportacaoMes('${email}','${mes}')">✅ Confirmar Importação</button>
-        <button class="btn btn-ghost" style="width:auto" onclick="document.getElementById('imp-preview').innerHTML=''">Cancelar</button>
-      </div>
-    </div>`;
-}
-
-async function confirmarImportacaoMes(email, mes) {
-  const get = k => parseBRL(document.getElementById(`prev-${k}`)?.value || "0");
-  const u   = USUARIOS[email];
-  const docId = `${email}_${mes}`;
-
-  // Verificar sobrescrita
-  try {
-    const existeDoc = await db.collection("historico_mensal").doc(docId).get();
-    if(existeDoc.exists) {
-      if(!confirm(`Já existe importação de ${u.nome} em ${mes}. Deseja sobrescrever?`)) return;
-    }
-  } catch(e) { /* ignora erro de leitura */ }
-
-  const btn = document.querySelector("#imp-preview .btn-primary");
-  if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
-
-  const dados = {
-    email,
-    usuario_nome:  u.nome,
-    usuario_email: email,
-    perfil:        u.perfil,
-    mes_ano:       mes,
-    caixa:         get("caixa"),
-    credito:       get("credito"),
-    boleto:        get("boleto"),
-    laboratorio:   get("laboratorio"),
-    imagem:        get("imagem"),
-    procedimentos: get("procedimentos"),
-    consultas:     get("consultas"),
-    injetaveis:    get("injetaveis"),
-    saidas:        get("saidas"),
-    fonte:         "importacao_historica",
-    importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
-  };
-
-  try {
-    await db.collection("historico_mensal").doc(docId).set(dados);
-
-    // Salvar dados diários se disponíveis
-    const pendente = _diasColabPendentes;
-    const dias = (pendente?.email === email && pendente?.mes === mes) ? pendente.dias : [];
-    let diasSalvos = 0;
-    for(const d of dias) {
-      await db.collection("historico_diario").doc(`${email}_${d.dataStr}`).set({
-        email,
-        usuario_nome:  u.nome,
-        usuario_email: email,
-        perfil:        u.perfil,
-        mes_ano:       mes,
-        data:          d.dataStr,
-        dia:           d.dia,
-        laboratorio:   d.laboratorio,
-        imagem:        d.imagem,
-        procedimentos: d.procedimentos,
-        caixa:         d.caixa,
-        credito:       d.credito,
-        boleto:        d.boleto,
-        injetaveis:    d.injetaveis,
-        fonte:         "importacao_historica",
-        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      diasSalvos++;
-    }
-
-    document.getElementById("imp-preview").innerHTML =
-      `<div class="import-ok">✅ Histórico de ${u.nome} (${mes}) importado!${diasSalvos > 0 ? ` + ${diasSalvos} dias em historico_diario.` : ""}</div>`;
-    toast(`Importado: ${u.nome} — ${mes}`);
-    _diasColabPendentes = null;
-  } catch(e) {
-    console.error("confirmarImportMes:", e);
-    toast("Erro ao salvar: " + e.message, "err");
-    if(btn) { btn.disabled = false; btn.textContent = "✅ Confirmar Importação"; }
-  }
-}
-
-// ── SEÇÃO 2: importar dias da equipe ──────────────────────
-
-async function importarEquipe() {
-  const mes  = document.getElementById("imp-equipe-mes").value;
-  const link = document.getElementById("imp-equipe-link").value.trim();
-
-  if(!mes)  { toast("Selecione o mês.", "err"); return; }
-  if(!link) { toast("Informe o link da planilha.", "err"); return; }
-
-  const id = extrairIdPlanilha(link);
-  if(!id) { toast("Link inválido.", "err"); return; }
-
-  const progEl   = document.getElementById("imp-equipe-progresso");
-  const statusEl = document.getElementById("imp-equipe-status");
-  statusEl.innerHTML = "";
-  _diasEquipePendentes = [];
-  _mesPendente = mes;
-
-  progEl.innerHTML = `<div class="import-progress">⏳ Buscando aba do mês na planilha...</div>`;
-
-  const nomes = NOMES_ABAS_EQUIPE[mes] || [];
-  let linhas = null;
-  let abaUsada = null;
-
-  for(const nome of nomes) {
-    try {
-      const data = await fetchGviz(id, nome);
-      linhas = gvizParaLinhas(data);
-      abaUsada = nome;
-      console.log(`[equipe] Aba encontrada: "${nome}", ${linhas.length} linhas`);
-      break;
-    } catch(e) {
-      console.log(`[equipe] Aba "${nome}" não encontrada, tentando próxima...`);
-    }
-  }
-
-  if(!linhas) {
-    progEl.innerHTML = "";
-    statusEl.innerHTML = `<div class="import-err">❌ Aba do mês não encontrada. Tentativas: ${nomes.join(", ")}.<br>Verifique se a planilha é pública e se o nome da aba está correto.</div>`;
-    return;
-  }
-
-  progEl.innerHTML = `<div class="import-progress">✅ Aba "<strong>${abaUsada}</strong>" lida — ${linhas.length} linhas. Processando dias...</div>`;
-
-  const dias = parsearAbaEquipeMensal(linhas, mes);
-  _diasEquipePendentes = dias;
-
-  if(dias.length === 0) {
-    statusEl.innerHTML = `<div class="import-err">❌ Nenhum dia encontrado na aba "${abaUsada}". Verifique se a coluna B contém os números dos dias (1, 2, 3...). Veja o console para detalhes.</div>`;
-    return;
-  }
-
-  renderPreviewEquipe();
-}
-
-function renderPreviewEquipe() {
-  const mesLabel = { "2026-01":"Janeiro 2026","2026-02":"Fevereiro 2026","2026-03":"Março 2026","2026-04":"Abril 2026" }[_mesPendente] || _mesPendente;
-  const statusEl = document.getElementById("imp-equipe-status");
-
-  const colsMes = COLUNAS_EQUIPE[_mesPendente] || COLUNAS_EQUIPE["2026-04"];
-  const camposEquipe = Object.keys(colsMes).filter(k => colsMes[k] !== null);
-  const ths = camposEquipe.map(k =>
-    `<th style="padding:5px 8px;font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;background:var(--bg2);text-align:right;white-space:nowrap">${LABELS_CAMPOS_PT[k]||k}</th>`
-  ).join("");
-
-  const trs = _diasEquipePendentes.map(({ dia, campos }) => {
-    const tds = camposEquipe.map(k =>
-      `<td style="text-align:right;padding:5px 8px;font-size:12px">${brl(campos[k]||0)}</td>`
-    ).join("");
-    return `<tr><td style="padding:5px 8px;font-size:12px;font-weight:600">${dia}</td>${tds}</tr>`;
-  }).join("");
-
-  statusEl.innerHTML = `
-    <div class="import-preview-box">
-      <div class="import-preview-tit">${_diasEquipePendentes.length} dias encontrados — ${mesLabel}</div>
-      <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr>
-            <th style="padding:5px 8px;font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;background:var(--bg2);text-align:left">Dia</th>
-            ${ths}
-          </tr></thead>
-          <tbody>${trs}</tbody>
-        </table>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <button class="btn btn-primary" style="width:auto" onclick="confirmarImportacaoEquipe()">✅ Confirmar ${_diasEquipePendentes.length} dias</button>
-        <button class="btn btn-ghost" style="width:auto" onclick="document.getElementById('imp-equipe-status').innerHTML=''">Cancelar</button>
-      </div>
-    </div>`;
-}
-
-async function confirmarImportacaoEquipe() {
-  const btn = document.querySelector("#imp-equipe-status .btn-primary");
-  if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
-
-  let ok = 0, erros = 0;
-  const colsMes = COLUNAS_EQUIPE[_mesPendente] || {};
-  for(const { dia, dataStr, campos } of _diasEquipePendentes) {
-    const docId = dataStr;
-    try {
-      const payload = {
-        data:          dataStr,
-        mes_ano:       _mesPendente,
-        dia:           dia,
-        caixa:         campos.caixa         || 0,
-        credito:       campos.credito        || 0,
-        boleto:        campos.boleto         || 0,
-        laboratorio:   campos.laboratorio    || 0,
-        imagem:        campos.imagem         || 0,
-        procedimentos: campos.procedimentos  || 0,
-        fonte:         "importacao_historica",
-        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
-      };
-      if(colsMes.injetaveis !== null && colsMes.injetaveis !== undefined) {
-        payload.injetaveis = campos.injetaveis || 0;
-      }
-      await db.collection("historico_equipe").doc(docId).set(payload);
-      ok++;
-    } catch(e) {
-      console.error("equipe dia:", dataStr, e);
-      erros++;
-    }
-  }
-
-  const msg = erros > 0
-    ? `<div class="import-ok">✅ ${ok} dias importados (${erros} erro(s) — verifique o console).</div>`
-    : `<div class="import-ok">✅ Importação concluída! ${ok} dias importados para ${_mesPendente}.</div>`;
-  document.getElementById("imp-equipe-status").innerHTML = msg;
-  toast(`${ok} dias da equipe importados!`);
-  _diasEquipePendentes = [];
-}
-
-// ── IMPORTAÇÃO AUTOMÁTICA COMPLETA ────────────────────────
-
-function buildTodasPlanilhas() {
-  const lista = [];
-  for(const [email, meses] of Object.entries(PLANILHAS_HISTORICAS)) {
-    const u = USUARIOS[email] || {};
-    for(const [mes, id] of Object.entries(meses)) {
-      lista.push({ email, nome: u.nome || email, mes, id });
-    }
-  }
-  return lista;
-}
-
-async function importarTudoAutomaticamente(btn) {
-  if(btn) { btn.disabled = true; btn.textContent = "⏳ Importando..."; }
-  const statusEl = document.getElementById("imp-auto-status");
-
-  const todasPlanilhas = buildTodasPlanilhas();
-  const mesesEquipe    = Object.keys(NOMES_ABAS_EQUIPE);
-  const total          = todasPlanilhas.length + mesesEquipe.length;
-  let concluidos = 0;
-  const linhas = [];
-  const erros  = [];
-
-  const mesNome = { "2026-01":"Jan 2026","2026-02":"Fev 2026","2026-03":"Mar 2026","2026-04":"Abr 2026" };
-
-  const renderStatus = () => {
-    statusEl.innerHTML = `
-      <div class="import-progress">
-        <strong>Progresso: ${concluidos} / ${total}</strong>
-        <div style="background:var(--bg2);border-radius:6px;height:8px;margin:8px 0">
-          <div style="background:#10B981;height:8px;border-radius:6px;width:${Math.round(concluidos/total*100)}%;transition:width 0.3s"></div>
-        </div>
-        <div style="max-height:240px;overflow-y:auto;font-size:12px;line-height:1.7">
-          ${linhas.slice(-40).join("")}
-        </div>
-        ${erros.length ? `<div style="color:#EF4444;margin-top:6px;font-size:12px">⚠️ ${erros.length} erro(s)</div>` : ""}
-      </div>`;
-  };
-
-  // ── Seção 1: totais mensais + dados diários de cada colaboradora ──
-  for(const { email, nome, mes, id } of todasPlanilhas) {
-    concluidos++;
-    const label = `${nome} — ${mesNome[mes]||mes}`;
-    try {
-      const data       = await fetchGviz(id, "Base de dados para parcial");
-      const linhsSheet = gvizParaLinhas(data);
-      const { dias, totais } = parsearAbaBaseDados(linhsSheet, mes);
-
-      const temDados = Object.values(totais).some(v => v > 0);
-      if(!temDados) {
-        linhas.push(`<div style="color:#F59E0B">⚠️ ${label} — sem dados detectados</div>`);
-        erros.push(`${label}: sem dados`);
-      } else {
-        const u = USUARIOS[email] || {};
-        const docId = `${email}_${mes}`;
-        await db.collection("historico_mensal").doc(docId).set({
-          email, mes_ano: mes, ...totais,
-          usuario_nome: nome, usuario_email: email, perfil: u.perfil || "",
-          fonte: "importacao_historica",
-          importado_em: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        // Salvar dados diários
-        for(const d of dias) {
-          await db.collection("historico_diario").doc(`${email}_${d.dataStr}`).set({
-            email, usuario_nome: nome, usuario_email: email, perfil: u.perfil || "",
-            mes_ano: mes, data: d.dataStr, dia: d.dia,
-            laboratorio: d.laboratorio, imagem: d.imagem, procedimentos: d.procedimentos,
-            caixa: d.caixa, credito: d.credito, boleto: d.boleto, injetaveis: d.injetaveis,
-            fonte: "importacao_historica",
-            importado_em: firebase.firestore.FieldValue.serverTimestamp(),
-          });
-          await new Promise(r => setTimeout(r, 30));
-        }
-        linhas.push(`<div style="color:#10B981">✅ ${label} (${dias.length} dias)</div>`);
-      }
-    } catch(e) {
-      console.error(`auto-import colab ${email} ${mes}:`, e);
-      linhas.push(`<div style="color:#EF4444">❌ ${label} — ${e.message}</div>`);
-      erros.push(`${label}: ${e.message}`);
-    }
-    renderStatus();
-    await new Promise(r => setTimeout(r, 200));
-  }
-
-  // ── Seção 2: totais diários da equipe por mês ──
-  const equipeId = '1o9vfvoXREHZzdJv8ngAYFW6VXVaEk_OiNt053Npf-P8';
-  for(const mes of mesesEquipe) {
-    concluidos++;
-    const label = `Equipe — ${mesNome[mes]||mes}`;
-    try {
-      let linhasMes = null;
-      for(const nomeAba of (NOMES_ABAS_EQUIPE[mes] || [])) {
-        try {
-          const data = await fetchGviz(equipeId, nomeAba);
-          linhasMes  = gvizParaLinhas(data);
-          break;
-        } catch(e) { /* tenta próxima variação */ }
-      }
-      if(!linhasMes) throw new Error(`aba não encontrada (${(NOMES_ABAS_EQUIPE[mes]||[]).join(", ")})`);
-
-      const dias    = parsearAbaEquipeMensal(linhasMes, mes);
-      if(dias.length === 0) throw new Error("nenhum dia detectado — verifique coluna B");
-
-      const colsMes = COLUNAS_EQUIPE[mes] || {};
-      for(const { dia, dataStr, campos } of dias) {
-        const payload = {
-          data: dataStr, mes_ano: mes, dia,
-          caixa:         campos.caixa         || 0,
-          credito:       campos.credito        || 0,
-          boleto:        campos.boleto         || 0,
-          laboratorio:   campos.laboratorio    || 0,
-          imagem:        campos.imagem         || 0,
-          procedimentos: campos.procedimentos  || 0,
-          fonte: "importacao_historica",
-          importado_em: firebase.firestore.FieldValue.serverTimestamp(),
-        };
-        if(colsMes.injetaveis !== null && colsMes.injetaveis !== undefined) {
-          payload.injetaveis = campos.injetaveis || 0;
-        }
-        await db.collection("historico_equipe").doc(dataStr).set(payload);
-        await new Promise(r => setTimeout(r, 60));
-      }
-      linhas.push(`<div style="color:#10B981">✅ ${label} (${dias.length} dias)</div>`);
-    } catch(e) {
-      console.error(`auto-import equipe ${mes}:`, e);
-      linhas.push(`<div style="color:#EF4444">❌ ${label} — ${e.message}</div>`);
-      erros.push(`${label}: ${e.message}`);
-    }
-    renderStatus();
-    await new Promise(r => setTimeout(r, 200));
-  }
-
-  // ── Resultado final ──
-  const totalOk = total - erros.length;
-  statusEl.innerHTML = `
-    <div class="import-preview-box">
-      <div class="import-preview-tit">${erros.length === 0 ? "🎉" : "⚠️"} Importação concluída! ${totalOk} / ${total} itens importados.</div>
-      <div style="max-height:300px;overflow-y:auto;font-size:12px;line-height:1.7;margin:10px 0">
-        ${linhas.join("")}
-      </div>
-      ${erros.length ? `<div style="font-size:12px;color:#EF4444"><strong>Erros:</strong><br>${erros.map(e => `• ${e}`).join("<br>")}</div>` : ""}
-    </div>`;
-  toast(`${totalOk} itens importados!`);
-  if(btn) { btn.disabled = false; btn.textContent = "🚀 Importar Tudo Automaticamente"; }
-}
-
-// ── CORREÇÃO PONTUAL ABRIL 2026 ───────────────────────────
-
-const DADOS_ABRIL_CORRETOS = [
-  { nome:'Dara',    email:'darafidelesmarques@gmail.com',       caixa:45502.89,  laboratorio:10022.39, imagem:5041.15,  procedimentos:13432.99, credito:5961.74, boleto:1227.00, injetaveis:0 },
-  { nome:'Bianca',  email:'bianca.trazibulo@gmail.com',         caixa:22092.98,  laboratorio:10282.02, imagem:9521.00,  procedimentos:6004.96,  credito:3745.00, boleto:0,       injetaveis:0 },
-  { nome:'Dawilla', email:'dawilla.stefany@hotmail.com',        caixa:73807.89,  laboratorio:39029.00, imagem:22468.40, procedimentos:15740.49, credito:10040.50,boleto:1200.00, injetaveis:0 },
-  { nome:'Thamyres',email:'thamyresilva1020@gmail.com',         caixa:62400.49,  laboratorio:9405.00,  imagem:5761.90,  procedimentos:15454.40, credito:4645.81, boleto:0,       injetaveis:0 },
-  { nome:'Leticia', email:'leticiaac.reis@gmail.com',           caixa:65098.81,  laboratorio:12974.83, imagem:9116.20,  procedimentos:18149.89, credito:7707.46, boleto:0,       injetaveis:0 },
-  { nome:'Suelen',  email:'susuh.medeiros28@gmail.com',         caixa:49944.50,  laboratorio:21777.69, imagem:13151.74, procedimentos:14839.72, credito:6342.65, boleto:0,       injetaveis:0 },
-  { nome:'Graziele',email:'graziiaraujo8@gmail.com',            caixa:64090.52,  laboratorio:31914.61, imagem:17348.90, procedimentos:14566.28, credito:7805.27, boleto:0,       injetaveis:0 },
-  { nome:'Raiane',  email:'raiiane.almeida1401@gmail.com',      caixa:52888.23,  laboratorio:17836.30, imagem:3419.00,  procedimentos:9027.88,  credito:3636.70, boleto:0,       injetaveis:0 },
-  { nome:'Erielly', email:'eriellypachecodossant@gmail.com',    caixa:16954.54,  laboratorio:11239.86, imagem:5349.50,  procedimentos:1906.99,  credito:0,       boleto:0,       injetaveis:0 },
-  { nome:'Julia',   email:'juluise2005@gmail.com',              caixa:14660.24,  laboratorio:7610.85,  imagem:5999.40,  procedimentos:1769.98,  credito:0,       boleto:0,       injetaveis:0 },
-];
-
-async function corrigirDadosFirestore(btn) {
-  if(btn) { btn.disabled = true; btn.textContent = "⏳ Corrigindo..."; }
-  const statusEl = document.getElementById("imp-corrigir-status");
-  statusEl.innerHTML = '<div class="import-progress">⏳ Sobrescrevendo dados de abril 2026...</div>';
-
-  let ok = 0, erros = [];
-  for(const d of DADOS_ABRIL_CORRETOS) {
-    const docId = `${d.email}_2026-04`;
-    const u = USUARIOS[d.email] || {};
-    try {
-      await db.collection("historico_mensal").doc(docId).set({
-        email:         d.email,
-        usuario_nome:  d.nome,
-        usuario_email: d.email,
-        perfil:        u.perfil || "",
-        mes_ano:       "2026-04",
-        caixa:         d.caixa,
-        credito:       d.credito,
-        boleto:        d.boleto,
-        laboratorio:   d.laboratorio,
-        imagem:        d.imagem,
-        procedimentos: d.procedimentos,
-        injetaveis:    d.injetaveis,
-        consultas:     0,
-        saidas:        0,
-        fonte:         "correcao_manual",
-        importado_em:  firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      ok++;
-    } catch(e) {
-      console.error("corrigir:", docId, e);
-      erros.push(`${d.nome}: ${e.message}`);
-    }
-  }
-
-  const msg = erros.length
-    ? `<div class="import-ok">✅ ${ok} registros corrigidos. ⚠️ Erros: ${erros.join(", ")}</div>`
-    : `<div class="import-ok">✅ ${ok} registros de abril 2026 corrigidos com sucesso!</div>`;
-  statusEl.innerHTML = msg;
-  toast(`${ok} registros corrigidos!`);
-  if(btn) { btn.disabled = false; btn.textContent = "🔧 Corrigir Dados Abril 2026"; }
-}
-
 function fecharModalMetas() {
   document.getElementById("modal-metas").classList.add("hidden");
 }
@@ -6520,6 +5749,503 @@ async function salvarModalMetas() {
   } finally {
     btn.disabled = false; btn.textContent = "Salvar Metas";
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FATURAMENTO DIÁRIO CONSOLIDADO
+// ═══════════════════════════════════════════════════════════
+
+// Dados históricos de faturamento diário — Jan a Abr/2026
+// caixa = dinheiro + pix + boleto; credito = cartão; totalDia calculado na inserção
+// injetaveis: informativo (já embutido em caixa)
+const DADOS_FAT_JAN = [
+  { data:"2026-01-02", diaSemana:"SEXTA",   dia:2,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:1009.00,  procedimentos:1447.60,  imagem:780.00,   caixa:3329.00,   credito:807.60,  boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-03", diaSemana:"SABADO",  dia:3,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:1054.50,  procedimentos:0.00,     imagem:889.90,   caixa:2365.65,   credito:528.75,  boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-05", diaSemana:"SEGUNDA", dia:5,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:9302.00,  procedimentos:8744.40,  imagem:8812.97,  caixa:33272.22,  credito:2041.15, boleto:5380.45, injetaveis:0.00 },
+  { data:"2026-01-06", diaSemana:"TERCA",   dia:6,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:9318.15,  procedimentos:5912.52,  imagem:5305.99,  caixa:24866.21,  credito:3327.45, boleto:319.50,  injetaveis:0.00 },
+  { data:"2026-01-07", diaSemana:"QUARTA",  dia:7,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:7025.50,  procedimentos:9156.78,  imagem:5244.99,  caixa:26622.78,  credito:4933.49, boleto:355.50,  injetaveis:0.00 },
+  { data:"2026-01-08", diaSemana:"QUINTA",  dia:8,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11394.78, procedimentos:9098.46,  imagem:3868.50,  caixa:31848.53,  credito:3605.21, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-09", diaSemana:"SEXTA",   dia:9,  mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11317.58, procedimentos:5310.50,  imagem:6895.65,  caixa:28877.93,  credito:3739.80, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-10", diaSemana:"SABADO",  dia:10, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:6429.50,  procedimentos:9062.31,  imagem:1820.00,  caixa:19475.31,  credito:3575.60, boleto:2999.92, injetaveis:0.00 },
+  { data:"2026-01-12", diaSemana:"SEGUNDA", dia:12, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11532.28, procedimentos:13503.25, imagem:6508.00,  caixa:39481.18,  credito:5417.85, boleto:670.00,  injetaveis:0.00 },
+  { data:"2026-01-13", diaSemana:"TERCA",   dia:13, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11104.02, procedimentos:7372.94,  imagem:5030.00,  caixa:28505.71,  credito:2448.25, boleto:759.96,  injetaveis:0.00 },
+  { data:"2026-01-14", diaSemana:"QUARTA",  dia:14, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11323.40, procedimentos:10053.96, imagem:3227.50,  caixa:29628.36,  credito:3626.00, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-15", diaSemana:"QUINTA",  dia:15, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:12471.30, procedimentos:8803.43,  imagem:7759.34,  caixa:33543.82,  credito:6541.25, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-16", diaSemana:"SEXTA",   dia:16, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:5913.00,  procedimentos:3765.09,  imagem:3328.50,  caixa:20098.89,  credito:2444.69, boleto:418.00,  injetaveis:0.00 },
+  { data:"2026-01-17", diaSemana:"SABADO",  dia:17, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:8269.50,  procedimentos:5285.00,  imagem:2915.00,  caixa:19731.25,  credito:3294.25, boleto:744.50,  injetaveis:0.00 },
+  { data:"2026-01-19", diaSemana:"SEGUNDA", dia:19, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:8208.22,  procedimentos:5690.09,  imagem:4865.40,  caixa:25291.32,  credito:4306.39, boleto:907.99,  injetaveis:0.00 },
+  { data:"2026-01-20", diaSemana:"TERCA",   dia:20, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:10224.25, procedimentos:15649.80, imagem:3375.00,  caixa:33230.24,  credito:4345.80, boleto:563.50,  injetaveis:0.00 },
+  { data:"2026-01-21", diaSemana:"QUARTA",  dia:21, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:9295.52,  procedimentos:13818.87, imagem:9038.14,  caixa:35055.81,  credito:5730.22, boleto:1015.18, injetaveis:0.00 },
+  { data:"2026-01-22", diaSemana:"QUINTA",  dia:22, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:11440.59, procedimentos:3348.26,  imagem:5477.74,  caixa:28149.60,  credito:3714.99, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-23", diaSemana:"SEXTA",   dia:23, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:6916.75,  procedimentos:5647.96,  imagem:5312.65,  caixa:24583.78,  credito:3272.58, boleto:40.00,   injetaveis:0.00 },
+  { data:"2026-01-24", diaSemana:"SABADO",  dia:24, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:10281.00, procedimentos:3898.99,  imagem:5123.00,  caixa:21971.02,  credito:4223.36, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-26", diaSemana:"SEGUNDA", dia:26, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:6979.80,  procedimentos:7171.91,  imagem:4503.79,  caixa:23193.81,  credito:3554.69, boleto:2483.46, injetaveis:0.00 },
+  { data:"2026-01-27", diaSemana:"TERCA",   dia:27, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:9972.50,  procedimentos:5850.29,  imagem:3925.00,  caixa:25590.79,  credito:2502.00, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-28", diaSemana:"QUARTA",  dia:28, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:9076.50,  procedimentos:12148.45, imagem:5559.50,  caixa:32945.68,  credito:4015.27, boleto:1684.49, injetaveis:0.00 },
+  { data:"2026-01-29", diaSemana:"QUINTA",  dia:29, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:8117.41,  procedimentos:4965.94,  imagem:5807.00,  caixa:25122.49,  credito:3293.36, boleto:898.40,  injetaveis:0.00 },
+  { data:"2026-01-30", diaSemana:"SEXTA",   dia:30, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:6586.50,  procedimentos:7185.50,  imagem:4154.99,  caixa:24451.98,  credito:3195.90, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-01-31", diaSemana:"SABADO",  dia:31, mes:1, ano:2026, mes_ano:"2026-01", exameslaboratoriais:6121.64,  procedimentos:4087.00,  imagem:2221.00,  caixa:14140.00,  credito:2800.14, boleto:0.00,    injetaveis:0.00 },
+]; // 26 dias
+
+const DADOS_FAT_FEV = [
+  { data:"2026-02-02", diaSemana:"SEGUNDA", dia:2,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:6930.00,  procedimentos:8035.96,  imagem:4130.00,  caixa:25335.18,  credito:2448.78, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-03", diaSemana:"TERCA",   dia:3,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:11102.91, procedimentos:15395.66, imagem:6713.40,  caixa:39813.67,  credito:5243.80, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-04", diaSemana:"QUARTA",  dia:4,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:7962.00,  procedimentos:8925.26,  imagem:3005.00,  caixa:27020.51,  credito:1380.75, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-05", diaSemana:"QUINTA",  dia:5,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:6234.20,  procedimentos:5149.76,  imagem:4835.28,  caixa:23694.54,  credito:1488.70, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-06", diaSemana:"SEXTA",   dia:6,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:9533.11,  procedimentos:5887.50,  imagem:6813.70,  caixa:28829.95,  credito:3230.86, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-07", diaSemana:"SABADO",  dia:7,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:8642.95,  procedimentos:2475.96,  imagem:1994.25,  caixa:16753.91,  credito:2077.75, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-09", diaSemana:"SEGUNDA", dia:9,  mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:7972.61,  procedimentos:9519.93,  imagem:6178.25,  caixa:30857.47,  credito:3195.32, boleto:1778.50, injetaveis:0.00 },
+  { data:"2026-02-10", diaSemana:"TERCA",   dia:10, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:7131.40,  procedimentos:8715.96,  imagem:7879.00,  caixa:30685.47,  credito:1550.39, boleto:867.50,  injetaveis:0.00 },
+  { data:"2026-02-11", diaSemana:"QUARTA",  dia:11, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:12013.18, procedimentos:5586.50,  imagem:5932.50,  caixa:30546.18,  credito:2685.95, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-12", diaSemana:"QUINTA",  dia:12, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:11701.00, procedimentos:15157.36, imagem:5688.75,  caixa:36525.56,  credito:6568.55, boleto:2721.99, injetaveis:0.00 },
+  { data:"2026-02-13", diaSemana:"SEXTA",   dia:13, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:8883.84,  procedimentos:14148.29, imagem:5257.90,  caixa:34483.11,  credito:3328.92, boleto:873.50,  injetaveis:0.00 },
+  { data:"2026-02-14", diaSemana:"SABADO",  dia:14, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:7698.36,  procedimentos:2631.39,  imagem:2088.50,  caixa:14582.69,  credito:2455.06, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-16", diaSemana:"SEGUNDA", dia:16, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:9815.20,  procedimentos:5835.46,  imagem:4556.35,  caixa:26822.21,  credito:1916.80, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-17", diaSemana:"TERCA",   dia:17, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:5713.90,  procedimentos:5548.94,  imagem:2684.90,  caixa:18915.35,  credito:3148.39, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-18", diaSemana:"QUARTA",  dia:18, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:4757.90,  procedimentos:7077.99,  imagem:4940.00,  caixa:22329.89,  credito:2210.00, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-19", diaSemana:"QUINTA",  dia:19, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:6225.74,  procedimentos:10208.95, imagem:5079.00,  caixa:30017.96,  credito:2176.73, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-20", diaSemana:"SEXTA",   dia:20, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:15258.34, procedimentos:7076.70,  imagem:5670.40,  caixa:34982.93,  credito:3932.50, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-21", diaSemana:"SABADO",  dia:21, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:10042.62, procedimentos:8769.99,  imagem:2699.68,  caixa:24585.19,  credito:2761.10, boleto:5153.99, injetaveis:0.00 },
+  { data:"2026-02-23", diaSemana:"SEGUNDA", dia:23, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:9646.50,  procedimentos:14737.49, imagem:5006.00,  caixa:36986.04,  credito:3980.95, boleto:3299.00, injetaveis:0.00 },
+  { data:"2026-02-24", diaSemana:"TERCA",   dia:24, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:8334.30,  procedimentos:7595.00,  imagem:7389.80,  caixa:30353.85,  credito:2750.25, boleto:3035.40, injetaveis:0.00 },
+  { data:"2026-02-25", diaSemana:"QUARTA",  dia:25, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:8898.62,  procedimentos:10414.49, imagem:4501.50,  caixa:31411.62,  credito:2573.49, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-26", diaSemana:"QUINTA",  dia:26, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:8149.51,  procedimentos:6802.84,  imagem:4896.50,  caixa:24632.13,  credito:2792.72, boleto:0.00,    injetaveis:0.00 },
+  { data:"2026-02-27", diaSemana:"SEXTA",   dia:27, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:10231.27, procedimentos:3435.55,  imagem:2281.90,  caixa:22696.64,  credito:2267.08, boleto:283.50,  injetaveis:0.00 },
+  { data:"2026-02-28", diaSemana:"SABADO",  dia:28, mes:2, ano:2026, mes_ano:"2026-02", exameslaboratoriais:9401.90,  procedimentos:3317.00,  imagem:6123.60,  caixa:22978.55,  credito:1523.95, boleto:680.00,  injetaveis:0.00 },
+]; // 24 dias
+
+const DADOS_FAT_MAR = [
+  { data:"2026-03-02", diaSemana:"SEGUNDA", dia:2,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:11317.70, procedimentos:6103.94,  imagem:4994.90,  caixa:26827.19,  credito:2575.60, boleto:630.00,  injetaveis:1645.96 },
+  { data:"2026-03-03", diaSemana:"TERCA",   dia:3,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:10057.40, procedimentos:12263.36, imagem:3959.87,  caixa:29646.00,  credito:3918.63, boleto:4554.44, injetaveis:2959.91 },
+  { data:"2026-03-04", diaSemana:"QUARTA",  dia:4,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:9069.97,  procedimentos:8762.96,  imagem:4792.50,  caixa:29401.18,  credito:3939.25, boleto:0.00,    injetaveis:2159.96 },
+  { data:"2026-03-05", diaSemana:"QUINTA",  dia:5,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:12580.37, procedimentos:11138.94, imagem:6705.85,  caixa:37075.96,  credito:3309.20, boleto:2082.00, injetaveis:3019.96 },
+  { data:"2026-03-06", diaSemana:"SEXTA",   dia:6,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:13844.93, procedimentos:8936.60,  imagem:4474.25,  caixa:31631.71,  credito:3496.07, boleto:661.65,  injetaveis:1519.60 },
+  { data:"2026-03-07", diaSemana:"SABADO",  dia:7,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:6350.50,  procedimentos:2276.00,  imagem:4963.50,  caixa:16777.72,  credito:2184.28, boleto:940.00,  injetaveis:0.00    },
+  { data:"2026-03-09", diaSemana:"SEGUNDA", dia:9,  mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:0.00,     procedimentos:0.00,     imagem:0.00,     caixa:0.00,      credito:0.00,    boleto:0.00,    injetaveis:0.00,   feriado:true },
+  { data:"2026-03-10", diaSemana:"TERCA",   dia:10, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:12024.40, procedimentos:13193.02, imagem:4401.50,  caixa:36330.45,  credito:2909.47, boleto:0.00,    injetaveis:5629.52 },
+  { data:"2026-03-11", diaSemana:"QUARTA",  dia:11, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:8502.05,  procedimentos:9361.70,  imagem:8705.25,  caixa:34389.85,  credito:1876.65, boleto:2800.00, injetaveis:898.46  },
+  { data:"2026-03-12", diaSemana:"QUINTA",  dia:12, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:10674.14, procedimentos:16245.02, imagem:6806.90,  caixa:42599.93,  credito:3552.55, boleto:2430.49, injetaveis:5546.07 },
+  { data:"2026-03-13", diaSemana:"SEXTA",   dia:13, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:10676.85, procedimentos:7620.21,  imagem:6189.20,  caixa:31742.24,  credito:2399.02, boleto:1560.00, injetaveis:5241.22 },
+  { data:"2026-03-14", diaSemana:"SABADO",  dia:14, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:7674.92,  procedimentos:2611.70,  imagem:1213.50,  caixa:16511.14,  credito:2148.98, boleto:360.00,  injetaveis:891.70  },
+  { data:"2026-03-16", diaSemana:"SEGUNDA", dia:16, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:15022.70, procedimentos:5856.79,  imagem:6164.40,  caixa:34225.23,  credito:3291.15, boleto:690.00,  injetaveis:830.80  },
+  { data:"2026-03-17", diaSemana:"TERCA",   dia:17, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:9459.39,  procedimentos:17524.36, imagem:5200.00,  caixa:36604.61,  credito:4809.14, boleto:1633.60, injetaveis:3779.92 },
+  { data:"2026-03-18", diaSemana:"QUARTA",  dia:18, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:20446.79, procedimentos:18115.47, imagem:13156.65, caixa:53529.98,  credito:7216.93, boleto:3620.95, injetaveis:896.00  },
+  { data:"2026-03-19", diaSemana:"QUINTA",  dia:19, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:13774.39, procedimentos:8503.71,  imagem:9311.75,  caixa:37330.79,  credito:5316.56, boleto:304.50,  injetaveis:2479.72 },
+  { data:"2026-03-20", diaSemana:"SEXTA",   dia:20, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:7227.50,  procedimentos:2013.30,  imagem:5641.80,  caixa:19691.85,  credito:2704.75, boleto:729.00,  injetaveis:907.30  },
+  { data:"2026-03-21", diaSemana:"SABADO",  dia:21, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:8285.80,  procedimentos:5405.90,  imagem:3890.50,  caixa:21887.52,  credito:2948.18, boleto:0.00,    injetaveis:2380.00 },
+  { data:"2026-03-23", diaSemana:"SEGUNDA", dia:23, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:9959.35,  procedimentos:9557.74,  imagem:3150.00,  caixa:24070.42,  credito:5916.67, boleto:0.00,    injetaveis:979.86  },
+  { data:"2026-03-24", diaSemana:"TERCA",   dia:24, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:10246.00, procedimentos:5971.00,  imagem:5134.80,  caixa:28321.65,  credito:2785.15, boleto:0.00,    injetaveis:1520.00 },
+  { data:"2026-03-25", diaSemana:"QUARTA",  dia:25, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:12314.59, procedimentos:11249.62, imagem:9282.55,  caixa:37640.64,  credito:4969.70, boleto:0.00,    injetaveis:801.00  },
+  { data:"2026-03-26", diaSemana:"QUINTA",  dia:26, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:8863.54,  procedimentos:10217.37, imagem:5186.00,  caixa:31989.18,  credito:3896.99, boleto:3215.49, injetaveis:2967.92 },
+  { data:"2026-03-27", diaSemana:"SEXTA",   dia:27, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:9928.72,  procedimentos:3541.38,  imagem:6159.63,  caixa:26834.00,  credito:4715.49, boleto:2785.88, injetaveis:1733.99 },
+  { data:"2026-03-28", diaSemana:"SABADO",  dia:28, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:8968.84,  procedimentos:10348.47, imagem:2116.00,  caixa:26382.81,  credito:2477.50, boleto:5216.99, injetaveis:0.00    },
+  { data:"2026-03-30", diaSemana:"SEGUNDA", dia:30, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:11318.80, procedimentos:15439.60, imagem:7762.50,  caixa:43233.25,  credito:4092.90, boleto:4981.72, injetaveis:2209.00 },
+  { data:"2026-03-31", diaSemana:"TERCA",   dia:31, mes:3, ano:2026, mes_ano:"2026-03", exameslaboratoriais:10013.36, procedimentos:19101.70, imagem:8245.15,  caixa:44530.48,  credito:3601.22, boleto:1141.00, injetaveis:1440.00 },
+]; // 26 dias (inc. feriado 09/03)
+
+const DADOS_FAT_ABR = [
+  { data:"2026-04-01", diaSemana:"QUARTA",  dia:1,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8830.48,  procedimentos:6211.00,  imagem:9384.30,  caixa:31128.72,  credito:3441.06, boleto:0.00,    injetaveis:1535.30 },
+  { data:"2026-04-02", diaSemana:"QUINTA",  dia:2,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9571.45,  procedimentos:6560.09,  imagem:8113.80,  caixa:28948.33,  credito:2797.01, boleto:679.99,  injetaveis:3986.10 },
+  { data:"2026-04-06", diaSemana:"SEGUNDA", dia:6,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9848.90,  procedimentos:4313.99,  imagem:10048.30, caixa:27388.04,  credito:4255.25, boleto:410.00,  injetaveis:1828.00 },
+  { data:"2026-04-07", diaSemana:"TERCA",   dia:7,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12332.44, procedimentos:5330.96,  imagem:5752.40,  caixa:27831.98,  credito:3778.82, boleto:0.00,    injetaveis:1499.96 },
+  { data:"2026-04-08", diaSemana:"QUARTA",  dia:8,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:16428.00, procedimentos:9150.98,  imagem:9350.00,  caixa:40305.90,  credito:4287.83, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-09", diaSemana:"QUINTA",  dia:9,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13272.52, procedimentos:14114.73, imagem:6635.00,  caixa:38179.26,  credito:6090.99, boleto:783.00,  injetaveis:3578.76 },
+  { data:"2026-04-10", diaSemana:"SEXTA",   dia:10, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:14192.98, procedimentos:9780.94,  imagem:5945.90,  caixa:38434.80,  credito:2961.02, boleto:3288.90, injetaveis:4239.96 },
+  { data:"2026-04-11", diaSemana:"SABADO",  dia:11, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8054.49,  procedimentos:10172.96, imagem:1832.50,  caixa:23947.97,  credito:2329.98, boleto:0.00,    injetaveis:2819.80 },
+  { data:"2026-04-13", diaSemana:"SEGUNDA", dia:13, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13113.50, procedimentos:5979.00,  imagem:8507.15,  caixa:36967.69,  credito:3005.96, boleto:2100.00, injetaveis:0.00    },
+  { data:"2026-04-14", diaSemana:"TERCA",   dia:14, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11956.14, procedimentos:14559.05, imagem:4945.99,  caixa:34390.57,  credito:6612.61, boleto:0.00,    injetaveis:3814.12 },
+  { data:"2026-04-15", diaSemana:"QUARTA",  dia:15, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13306.43, procedimentos:4890.50,  imagem:6202.00,  caixa:30514.68,  credito:2353.75, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-16", diaSemana:"QUINTA",  dia:16, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8450.50,  procedimentos:4504.00,  imagem:6421.60,  caixa:26781.70,  credito:2437.25, boleto:1500.50, injetaveis:1585.00 },
+  { data:"2026-04-17", diaSemana:"SEXTA",   dia:17, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11385.00, procedimentos:3409.98,  imagem:5500.50,  caixa:26617.75,  credito:3287.73, boleto:0.00,    injetaveis:760.00  },
+  { data:"2026-04-18", diaSemana:"SABADO",  dia:18, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7388.69,  procedimentos:4161.00,  imagem:3771.50,  caixa:19059.44,  credito:2019.75, boleto:0.00,    injetaveis:760.00  },
+  { data:"2026-04-20", diaSemana:"SEGUNDA", dia:20, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12186.03, procedimentos:3659.90,  imagem:4201.25,  caixa:26655.26,  credito:3555.92, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-21", diaSemana:"TERCA",   dia:21, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:4224.00,  procedimentos:9058.56,  imagem:1205.00,  caixa:20817.06,  credito:2732.50, boleto:759.96,  injetaveis:2333.06 },
+]; // 16 dias (parcial até 21/04)
+
+// Mapa: mes_ano → dataset de inserção
+const DATASETS_FATURAMENTO = {
+  "2026-01": DADOS_FAT_JAN,
+  "2026-02": DADOS_FAT_FEV,
+  "2026-03": DADOS_FAT_MAR,
+  "2026-04": DADOS_FAT_ABR,
+};
+const TODOS_DADOS_FATURAMENTO = [...DADOS_FAT_JAN, ...DADOS_FAT_FEV, ...DADOS_FAT_MAR, ...DADOS_FAT_ABR];
+
+// Abre o modal de importação de faturamento
+function abrirModalFatImport() {
+  document.getElementById("modal-fat-import").classList.remove("hidden");
+}
+
+// Fecha o modal de importação de faturamento
+function fecharModalFatImport() {
+  document.getElementById("modal-fat-import").classList.add("hidden");
+}
+
+// Insere dados de um mês no Firestore (com verificação de sobrescrita)
+async function inserirFaturamentoMes(mesAnoAlvo, btn) {
+  const dados = DATASETS_FATURAMENTO[mesAnoAlvo];
+  if(!dados) { toast("Dataset não encontrado para " + mesAnoAlvo, "err"); return; }
+
+  btn.disabled = true;
+  const labelOriginal = btn.textContent;
+  btn.textContent = "Verificando...";
+  const statusEl = document.getElementById("fat-import-status-" + mesAnoAlvo.replace(/-/g,""));
+
+  try {
+    // Verifica se já existem dados para este mês
+    const snap = await db.collection("faturamentoDiario")
+      .where("mes_ano","==", mesAnoAlvo).limit(1).get();
+
+    if(!snap.empty) {
+      const ok = confirm(`Dados de ${labelMes(mesAnoAlvo)} já foram inseridos. Deseja sobrescrever?`);
+      if(!ok) {
+        btn.disabled = false;
+        btn.textContent = labelOriginal;
+        return;
+      }
+    }
+
+    btn.textContent = `Inserindo ${dados.length} dias...`;
+
+    // Batch write (max 500 ops por batch; para 26 registros está OK)
+    const batch = db.batch();
+    for(const d of dados) {
+      const ref = db.collection("faturamentoDiario").doc(d.data);
+      batch.set(ref, {
+        ...d,
+        totalDia: Math.round((d.caixa + d.credito) * 100) / 100,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${dados.length} dias de ${labelMes(mesAnoAlvo)} inseridos com sucesso!</div>`;
+    toast(`✅ ${dados.length} dias de ${labelMes(mesAnoAlvo)} inseridos com sucesso!`, "ok");
+
+  } catch(e) {
+    console.error("inserirFaturamentoMes:", e);
+    if(statusEl) statusEl.innerHTML = `<div class="import-err">Erro: ${e.message}</div>`;
+    toast("Erro ao inserir faturamento: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = labelOriginal;
+  }
+}
+
+// Insere todos os 92 dias históricos de uma vez (Jan–Abr/2026)
+async function importarFaturamentoHistorico(btn) {
+  btn.disabled = true;
+  const labelOrig = btn.textContent;
+  btn.textContent = "Verificando...";
+  const statusEl = document.getElementById("fat-import-status-todos");
+
+  try {
+    const snap = await db.collection("faturamentoDiario").get();
+    const todos = TODOS_DADOS_FATURAMENTO;
+
+    if(!snap.empty) {
+      const ok = confirm(`Já existem ${snap.size} registros. Deseja sobrescrever todos os ${todos.length} dias?`);
+      if(!ok) { btn.disabled = false; btn.textContent = labelOrig; return; }
+    }
+
+    btn.textContent = `Inserindo ${todos.length} dias...`;
+    const batch = db.batch();
+    for(const d of todos) {
+      const ref = db.collection("faturamentoDiario").doc(d.data);
+      batch.set(ref, {
+        ...d,
+        totalDia: Math.round((d.caixa + d.credito) * 100) / 100,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${todos.length} dias inseridos! (Jan: 26, Fev: 24, Mar: 26, Abr: 16)</div>`;
+    toast(`✅ ${todos.length} dias históricos inseridos com sucesso!`, "ok");
+
+  } catch(e) {
+    console.error("importarFaturamentoHistorico:", e);
+    if(statusEl) statusEl.innerHTML = `<div class="import-err">Erro: ${e.message}</div>`;
+    toast("Erro ao importar: " + e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = labelOrig;
+  }
+}
+
+// Inicia o listener em tempo real da coleção faturamentoDiario
+function carregarFaturamentoDiario() {
+  if(unsubFaturamento) { unsubFaturamento(); unsubFaturamento = null; }
+
+  unsubFaturamento = db.collection("faturamentoDiario")
+    .orderBy("data")
+    .onSnapshot(snap => {
+      faturamentoDiarioAtual = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      atualizarSeletorMeses();
+      renderFaturamentoDiario();
+    }, e => console.warn("[faturamentoDiario] listener erro:", e));
+}
+
+// Atualiza o dropdown com os meses disponíveis no Firestore
+function atualizarSeletorMeses() {
+  const sel = document.getElementById("fat-sel-mes");
+  if(!sel) return;
+
+  const meses = [...new Set(faturamentoDiarioAtual.map(d => d.mes_ano).filter(Boolean))].sort();
+  if(!meses.length) return;
+
+  const atual = faturamentoMesSel || meses[meses.length - 1];
+  sel.innerHTML = meses.map(m =>
+    `<option value="${m}"${m === atual ? " selected" : ""}>${labelMes(m)}</option>`
+  ).join("");
+  faturamentoMesSel = sel.value;
+}
+
+// Troca o mês selecionado e re-renderiza
+function mudarMesFaturamento(mes) {
+  faturamentoMesSel = mes;
+  renderFaturamentoDiario();
+}
+
+// Renderiza cards de resumo, gráfico e tabela para o mês selecionado
+function renderFaturamentoDiario() {
+  const cont = document.getElementById("fat-conteudo");
+  if(!cont) return;
+
+  const dados = faturamentoDiarioAtual
+    .filter(d => d.mes_ano === faturamentoMesSel)
+    .sort((a, b) => a.dia - b.dia);
+
+  if(!dados.length) {
+    cont.innerHTML = `<div class="empty"><div class="ei">📊</div>Nenhum dado disponível para ${labelMes(faturamentoMesSel || "—")}.<br><small style="color:var(--text2)">Use "Importar Dados" para inserir o faturamento.</small></div>`;
+    return;
+  }
+
+  // Dias com receita (exclui feriados para métricas)
+  const dadosUteis = dados.filter(d => (d.caixa + d.credito) > 0);
+
+  const totalFaturado = dadosUteis.reduce((s, d) => s + d.caixa + d.credito, 0);
+  const totalLab      = dadosUteis.reduce((s, d) => s + (d.exameslaboratoriais || 0), 0);
+  const totalProc     = dadosUteis.reduce((s, d) => s + (d.procedimentos || 0), 0);
+  const totalImg      = dadosUteis.reduce((s, d) => s + (d.imagem || 0), 0);
+  const totalCaixa    = dadosUteis.reduce((s, d) => s + (d.caixa || 0), 0);
+  const totalCredito  = dadosUteis.reduce((s, d) => s + (d.credito || 0), 0);
+  const totalBoleto   = dadosUteis.reduce((s, d) => s + (d.boleto || 0), 0);
+  const totalInj      = dadosUteis.reduce((s, d) => s + (d.injetaveis || 0), 0);
+  const temInj        = totalInj > 0;
+
+  const diasEfetivos = dadosUteis.reduce((s, d) => s + (d.diaSemana === "SABADO" ? 0.5 : 1), 0);
+  const ticketMedio  = diasEfetivos > 0 ? totalFaturado / diasEfetivos : 0;
+
+  // ── Cards ──
+  const cardsHtml = `
+    <div class="fat-cards-grid">
+      <div class="fat-card" style="grid-column:span 2">
+        <div class="fat-card-label">Total Faturado do Mês</div>
+        <div class="fat-card-val destaque">${brl(totalFaturado)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Exames Laboratoriais</div>
+        <div class="fat-card-val">${brl(totalLab)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Procedimentos</div>
+        <div class="fat-card-val">${brl(totalProc)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Imagem</div>
+        <div class="fat-card-val">${brl(totalImg)}</div>
+      </div>
+      ${temInj ? `<div class="fat-card">
+        <div class="fat-card-label">Injetáveis</div>
+        <div class="fat-card-val">${brl(totalInj)}</div>
+      </div>` : ""}
+      <div class="fat-card">
+        <div class="fat-card-label">Total Caixa</div>
+        <div class="fat-card-val">${brl(totalCaixa)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Total Crédito</div>
+        <div class="fat-card-val">${brl(totalCredito)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Boleto (informativo)</div>
+        <div class="fat-card-val">${brl(totalBoleto)}</div>
+      </div>
+      <div class="fat-card">
+        <div class="fat-card-label">Ticket Médio Diário</div>
+        <div class="fat-card-val">${brl(ticketMedio)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${diasEfetivos} dias efetivos</div>
+      </div>
+    </div>`;
+
+  // ── Gráfico ──
+  const chartHtml = `<div class="fat-chart-wrap"><canvas id="fat-chart"></canvas></div>`;
+
+  // ── Tabela ──
+  const nomesDia = { SEGUNDA:"Seg", TERCA:"Ter", QUARTA:"Qua", QUINTA:"Qui", SEXTA:"Sex", SABADO:"Sáb", DOMINGO:"Dom" };
+  const colsData = temInj ? 8 : 7; // colunas de dados após Data e Dia
+
+  const linhas = dados.map(d => {
+    const ehSab     = d.diaSemana === "SABADO";
+    const ehFeriado = d.feriado || (d.caixa + d.credito) === 0;
+    if(ehFeriado) {
+      return `<tr class="fat-feriado">
+        <td>${String(d.dia).padStart(2,"0")}/${String(d.mes).padStart(2,"0")}</td>
+        <td>${nomesDia[d.diaSemana] || d.diaSemana}</td>
+        <td colspan="${colsData}" style="text-align:center;font-style:italic">Feriado/Fechado</td>
+      </tr>`;
+    }
+    const total = d.caixa + d.credito;
+    return `<tr class="${ehSab ? "sabado" : ""}">
+      <td>${String(d.dia).padStart(2,"0")}/${String(d.mes).padStart(2,"0")}</td>
+      <td>${nomesDia[d.diaSemana] || d.diaSemana}</td>
+      <td class="num">${brl(d.exameslaboratoriais || 0)}</td>
+      <td class="num">${brl(d.procedimentos || 0)}</td>
+      <td class="num">${brl(d.imagem || 0)}</td>
+      ${temInj ? `<td class="num">${brl(d.injetaveis || 0)}</td>` : ""}
+      <td class="num">${brl(d.caixa || 0)}</td>
+      <td class="num">${brl(d.credito || 0)}</td>
+      <td class="num">${brl(d.boleto || 0)}</td>
+      <td class="num" style="font-weight:700;color:var(--primary)">${brl(total)}</td>
+    </tr>`;
+  }).join("");
+
+  const tableHtml = `
+    <div class="tbl-wrap">
+      <table class="fat-tbl">
+        <thead>
+          <tr>
+            <th>Data</th><th>Dia</th>
+            <th class="num">Exames Lab</th>
+            <th class="num">Procedimentos</th>
+            <th class="num">Imagem</th>
+            ${temInj ? `<th class="num">Injetáveis</th>` : ""}
+            <th class="num">Caixa</th>
+            <th class="num">Crédito</th>
+            <th class="num">Boleto</th>
+            <th class="num">Total do Dia</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+        <tfoot>
+          <tr class="tfoot">
+            <td colspan="2">TOTAL</td>
+            <td class="num">${brl(totalLab)}</td>
+            <td class="num">${brl(totalProc)}</td>
+            <td class="num">${brl(totalImg)}</td>
+            ${temInj ? `<td class="num">${brl(totalInj)}</td>` : ""}
+            <td class="num">${brl(totalCaixa)}</td>
+            <td class="num">${brl(totalCredito)}</td>
+            <td class="num">${brl(totalBoleto)}</td>
+            <td class="num" style="color:var(--primary)">${brl(totalFaturado)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  // ── Comparativo mensal ──
+  const mesesOrdem = ["2026-01","2026-02","2026-03","2026-04"];
+  const totaisPorMes = {};
+  mesesOrdem.forEach(m => {
+    const ds = faturamentoDiarioAtual.filter(d => d.mes_ano === m && (d.caixa + d.credito) > 0);
+    if(ds.length) totaisPorMes[m] = ds.reduce((s, d) => s + d.caixa + d.credito, 0);
+  });
+  const mesesComDados = mesesOrdem.filter(m => totaisPorMes[m] !== undefined);
+
+  let compHtml = "";
+  if(mesesComDados.length > 1) {
+    const linhasComp = mesesComDados.map((m, i) => {
+      const tot  = totaisPorMes[m];
+      const prev = i > 0 ? totaisPorMes[mesesComDados[i-1]] : null;
+      const varPct = prev ? (tot - prev) / prev * 100 : null;
+      const varStr = varPct === null ? "—" : (varPct >= 0 ? `+${varPct.toFixed(1)}%` : `${varPct.toFixed(1)}%`);
+      const varColor = varPct === null ? "" : (varPct >= 0 ? "color:#16A34A" : "color:#DC2626");
+      const isSel = m === faturamentoMesSel;
+      return `<tr${isSel ? ' style="background:rgba(232,0,61,.06)"' : ""}>
+        <td style="font-weight:${isSel?700:400}">${labelMes(m)}</td>
+        <td class="num" style="font-weight:${isSel?700:400}">${brl(tot)}</td>
+        <td class="num" style="${varColor}">${varStr}</td>
+      </tr>`;
+    }).join("");
+    compHtml = `
+      <div style="margin-top:24px">
+        <div style="font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Comparativo Mensal</div>
+        <div class="tbl-wrap">
+          <table class="fat-tbl fat-comp-tbl">
+            <thead><tr><th>Mês</th><th class="num">Total Faturado</th><th class="num">Variação</th></tr></thead>
+            <tbody>${linhasComp}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  cont.innerHTML = cardsHtml + chartHtml + tableHtml + compHtml;
+  requestAnimationFrame(() => renderFaturamentoChart(dadosUteis));
+}
+
+
+
+// Renderiza o gráfico de barras com Chart.js
+function renderFaturamentoChart(dados) {
+  const canvas = document.getElementById("fat-chart");
+  if(!canvas || typeof Chart === "undefined") return;
+
+  if(faturamentoChart) { faturamentoChart.destroy(); faturamentoChart = null; }
+
+  const labels  = dados.map(d => `${d.dia}/${d.mes}`);
+  const totais  = dados.map(d => Math.round((d.caixa + d.credito) * 100) / 100);
+  const cores   = dados.map(d => d.diaSemana === "SABADO" ? "rgba(148,163,184,0.7)" : "rgba(232,0,61,0.7)");
+  const bordas  = dados.map(d => d.diaSemana === "SABADO" ? "#94A3B8" : "#E8003D");
+
+  faturamentoChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Total do Dia",
+        data: totais,
+        backgroundColor: cores,
+        borderColor: bordas,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => "  " + brl(ctx.raw),
+            title: ctxArr => {
+              const d = dados[ctxArr[0].dataIndex];
+              const nm = { SEGUNDA:"Segunda", TERCA:"Terça", QUARTA:"Quarta", QUINTA:"Quinta", SEXTA:"Sexta", SABADO:"Sábado", DOMINGO:"Domingo" };
+              return `${d.data} (${nm[d.diaSemana] || d.diaSemana})`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: v => {
+              if(v >= 1000) return "R$" + (v/1000).toFixed(0) + "k";
+              return "R$" + v;
+            },
+            font: { size: 11 },
+          },
+          grid: { color: "rgba(0,0,0,0.05)" },
+        },
+        x: {
+          ticks: { font: { size: 11 } },
+          grid: { display: false },
+        }
+      }
+    }
+  });
 }
 </script>
 </body>
