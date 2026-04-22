@@ -2357,7 +2357,7 @@ function atualizarCards() {
 
   atualizarProj(caixa, metaCaixa, credito, metaCredito);
   atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto);
-  atualizarMetaDiaria(caixa, metaCaixa);
+  atualizarMetaDiaria(caixa, metaCaixa, credito, metaCredito, perfil);
   atualizarResumoDia();
   if(metaCaixa > 0) verificarMarcos(caixa / metaCaixa, caixa, credito, metaCaixa, metaCredito, perfil);
 }
@@ -2876,33 +2876,101 @@ function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, 
 // ═══════════════════════════════════════════════════════════
 //  CARD META DIÁRIA
 // ═══════════════════════════════════════════════════════════
-function atualizarMetaDiaria(caixaAtual, metaCaixa) {
+
+// Dias úteis de 1º do mês até ontem (inclusive), considerando feriados e sábado=0.5
+function calcularDiasUteisPassados(ano, mes) {
+  const hoje = new Date();
+  const aHoje = hoje.getFullYear();
+  const mHoje = hoje.getMonth() + 1;
+  const dHoje = hoje.getDate();
+  // Se o mês ainda não começou (mês futuro), retorna 0
+  if(ano > aHoje || (ano === aHoje && mes > mHoje)) return 0;
+  const ultimo = new Date(ano, mes, 0).getDate();
+  // Limite: último dia a contar é ontem (se mesmo mês) ou último dia do mês (se mês passado)
+  const limDia = (ano === aHoje && mes === mHoje) ? dHoje - 1 : ultimo;
+  let total = 0;
+  for(let dia = 1; dia <= limDia; dia++) {
+    const dow = new Date(ano, mes - 1, dia).getDay();
+    if(dow === 0) continue;
+    const dataISO = `${ano}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+    if(ehFeriado(dataISO)) continue;
+    total += (dow === 6) ? 0.5 : 1;
+  }
+  return total;
+}
+
+function atualizarMetaDiaria(caixaAtual, metaCaixa, creditoAtual, metaCredito, perfil) {
   const el = document.getElementById("card-dia");
   if(!el) return;
 
-  const diasPass   = diasUteisPassadosFloat();
-  const diasRest   = diasUteisRestantes();
-  const mediaAtual = diasPass > 0 ? caixaAtual / diasPass : 0;
-  const falta      = Math.max(0, metaCaixa - caixaAtual);
-  const metaDia    = diasRest > 0 ? falta / diasRest : 0;
-  const noRitmo    = metaCaixa <= 0 || mediaAtual >= metaDia;
+  const hoje   = new Date();
+  const ano    = hoje.getFullYear();
+  const mes    = hoje.getMonth() + 1;
+  const diasPass = calcularDiasUteisPassados(ano, mes);
+  const diasRest = calcularDiasUteisRestantes(ano, mes);
+  const totalDias = calcularDiasUteisMes(ano, mes);
+  const mesEncerrado = diasRest === 0 && diasPass >= totalDias;
+  const ultimoDia   = diasRest > 0 && diasRest <= 0.5 && hoje.getDate() === new Date(ano, mes, 0).getDate();
+
+  // Verifica se o mês já passou completamente
+  if(diasRest === 0 && diasPass === 0) {
+    el.innerHTML = `<div class="dia-tit">📅 Meta Diária</div><div style="color:var(--text2);font-size:13px">Mês encerrado</div>`;
+    return;
+  }
+
+  const temCredito = TEM_CREDITO.includes(perfil);
+
+  function buildRow(emoji, label, realizado, meta) {
+    if(meta <= 0) return "";
+    if(realizado >= meta) {
+      return `<tr>
+        <td style="padding:6px 10px">${emoji} ${label}</td>
+        <td style="padding:6px 10px;text-align:right;color:#10B981;font-weight:700" colspan="2">✅ Meta atingida!</td>
+      </tr>`;
+    }
+    if(mesEncerrado) {
+      return `<tr>
+        <td style="padding:6px 10px">${emoji} ${label}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--text2)" colspan="2">Mês encerrado</td>
+      </tr>`;
+    }
+    const necessario = diasRest > 0 ? (meta - realizado) / diasRest : 0;
+    const media      = diasPass > 0 ? realizado / diasPass : 0;
+    const ok         = media >= necessario;
+    const icone      = ok ? "✅" : "⚠️";
+    const cor        = ok ? "#10B981" : "#DC2626";
+    return `<tr>
+      <td style="padding:6px 10px;white-space:nowrap">${emoji} ${label}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:600">${brl(necessario)}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:600;color:${cor}">${brl(media)} ${icone}</td>
+    </tr>`;
+  }
+
+  const rowCaixa   = buildRow("💰","Caixa",  caixaAtual,   metaCaixa);
+  const rowCredito = temCredito ? buildRow("💳","Crédito",creditoAtual||0,metaCredito||0) : "";
+
+  const rodapeMsg = ultimoDia
+    ? `<div style="font-size:12px;color:#D97706;font-weight:600;margin-top:8px">⚡ Último dia do mês!</div>`
+    : diasRest === 0
+      ? `<div style="font-size:12px;color:var(--text2);margin-top:8px">Mês encerrado</div>`
+      : `<div style="font-size:12px;color:var(--text2);margin-top:8px">${diasRest.toFixed(1)} dias úteis restantes no mês</div>`;
 
   el.innerHTML = `
     <div class="dia-tit">📅 Meta Diária</div>
-    <div class="dia-nums">
-      <div class="dia-num">
-        <label>Necessário hoje</label>
-        <div class="dn-val" style="color:${noRitmo?"var(--success)":"var(--primary)"}">${brl(metaDia)}</div>
-      </div>
-      <div class="dia-num">
-        <label>Sua média diária</label>
-        <div class="dn-val">${brl(mediaAtual)}</div>
-      </div>
-    </div>
-    <span class="dia-ritmo ${noRitmo?"dia-ok":"dia-nok"}">
-      ${noRitmo ? "✅ No ritmo da meta" : "⚠️ Abaixo do ritmo — acelere!"}
-    </span>
-    <div style="font-size:12px;color:var(--text2);margin-top:8px">${diasRest.toFixed(1)} dias úteis restantes no mês</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:.4px">
+          <th style="padding:4px 10px;text-align:left;font-weight:600"></th>
+          <th style="padding:4px 10px;text-align:right;font-weight:600">Necessário</th>
+          <th style="padding:4px 10px;text-align:right;font-weight:600">Sua Média</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowCaixa}
+        ${rowCredito}
+      </tbody>
+    </table>
+    ${rodapeMsg}
   `;
 }
 
