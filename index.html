@@ -3067,9 +3067,8 @@ function renderCardMetasEquipe() {
   const perfil   = usuario?.perfil;
   const grupoCC  = perfil === "callcenter" || VE_COORD.includes(perfil);
   const usarHist = historicoEquipeAtual.length > 0;
-  const tot      = usarHist
-    ? calcTotaisFromHistoricoDocs(historicoEquipeAtual)
-    : calcTotaisDetalhados(equipeLancs);
+  // Totais de medicina: lê de faturamentoDiario (dados consolidados da unidade)
+  const tot      = getTotaisEquipeFatDiario(mesAno);
   const m        = metas;
   const diasUteis = m.dias_uteis || 22;
   const diasPassF = diasUteisPassadosFloat();
@@ -3105,10 +3104,10 @@ function renderCardMetasEquipe() {
     // ── CC puro (Erielly / Júlia): vê medicina SEM premiações + CC com ranking ──
 
     // Separa por grupo (historico ou lancamentos)
-    const srcRec = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["recepcionista","lider"].includes(d.perfil));
+    // Medicina: totais consolidados de faturamentoDiario
+    const totMed = getTotaisEquipeFatDiario(mesAno);
+    // CC: mantém lancamentos para ranking individual por pessoa
     const srcCC  = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
-
-    const totMed = usarHist ? calcTotaisFromHistoricoDocs(srcRec) : calcTotaisDetalhados(srcRec);
     const totCC  = usarHist ? calcTotaisFromHistoricoDocs(srcCC)  : calcTotaisDetalhados(srcCC);
 
     const metaLab    = m.meta_lab_equipe          || 273000;
@@ -3202,12 +3201,13 @@ function renderCardMetasEquipe() {
         ${rankHtml2}
        </div>`;
   } else {
-    const metaCaixa   = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
-    const metaCredito = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
-    const metaBoleto  = m.meta_boleto_equipe   || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
-    const metaLab     = m.meta_lab_equipe     || 273000;
-    const metaImg     = m.meta_img_equipe     || 144000;
-    const metaProc    = m.meta_proc_equipe    || 227500;
+    const metaCaixa   = m.meta_caixa_equipe        || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+    const metaCredito = m.meta_credito_equipe      || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+    const metaBoleto  = m.meta_boleto_equipe       || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
+    const metaLab     = m.meta_lab_equipe          || 273000;
+    const metaImg     = m.meta_img_equipe          || 144000;
+    const metaProc    = m.meta_proc_equipe         || 227500;
+    const metaInj     = m.meta_injetaveis_equipe   || 60000;
 
     const poolLab  = calcPoolPremio(tot.lab,  metaLab,  FAIXAS_POOL_LAB);
     const poolImg  = calcPoolPremio(tot.img,  metaImg,  FAIXAS_POOL_IMG);
@@ -3230,12 +3230,13 @@ function renderCardMetasEquipe() {
     }
 
     el.innerHTML = `<div class="equipe-metricas-grid">` +
-      metrica("💰 Caixa",        tot.caixa,   metaCaixa)   +
-      metrica("💳 Crédito",      tot.credito, metaCredito) +
-      metrica("📄 Boleto",       tot.boleto,  metaBoleto)  +
-      metrica("🧪 Lab",          tot.lab,     metaLab,  parteExtra(poolLab,  projPoolLab))  +
-      metrica("🩻 Imagem",       tot.img,     metaImg,  parteExtra(poolImg,  projPoolImg))  +
-      metrica("💉 Procedimentos",tot.proc,    metaProc, parteExtra(poolProc, projPoolProc)) +
+      metrica("💰 Caixa",        tot.caixa,      metaCaixa)   +
+      metrica("💳 Crédito",      tot.credito,    metaCredito) +
+      metrica("📄 Boleto",       tot.boleto,     metaBoleto)  +
+      metrica("🧪 Lab",          tot.lab,        metaLab,  parteExtra(poolLab,  projPoolLab))  +
+      metrica("🩻 Imagem",       tot.img,        metaImg,  parteExtra(poolImg,  projPoolImg))  +
+      metrica("💉 Procedimentos",tot.proc,       metaProc, parteExtra(poolProc, projPoolProc)) +
+      metrica("💊 Injetáveis",   tot.injetaveis, metaInj) +
       `</div>`;
   }
 }
@@ -5053,6 +5054,22 @@ function mudarSubComp(sub) {
   if(res) res.innerHTML = "";
 }
 
+// Calcula totais da equipe para a aba Equipe (recepcionista/callcenter),
+// lendo de faturamentoDiario em vez de lancamentos
+function getTotaisEquipeFatDiario(mesAnoStr) {
+  const docs = faturamentoDiarioAtual.filter(d => d.mes_ano === mesAnoStr);
+  return {
+    caixa:      docs.reduce((s, d) => s + (d.caixa               || 0), 0),
+    credito:    docs.reduce((s, d) => s + (d.credito             || 0), 0),
+    boleto:     docs.reduce((s, d) => s + (d.boleto              || 0), 0),
+    lab:        docs.reduce((s, d) => s + (d.exameslaboratoriais || 0), 0),
+    img:        docs.reduce((s, d) => s + (d.imagem              || 0), 0),
+    proc:       docs.reduce((s, d) => s + (d.procedimentos       || 0), 0),
+    injetaveis: docs.reduce((s, d) => s + (d.injetaveis          || 0), 0),
+    porProcTipo: {},
+  };
+}
+
 // Calcula totais agregados de uma lista de docs de faturamentoDiario
 // Mapeia os campos do Firestore para os nomes usados nas tabelas comparativas
 function calcTotaisFatDiario(docs) {
@@ -5883,6 +5900,8 @@ function carregarFaturamentoDiario() {
         if(dashUsandoHistorico) renderDashHistorico();
         else renderDashEquipe(dashLancs);
       }
+      // Atualiza aba Equipe da recepcionista/callcenter se o listener estiver ativo
+      if(unsubEquipe) renderCardMetasEquipe();
     }, e => console.warn("[faturamentoDiario] listener erro:", e));
 }
 
