@@ -5121,6 +5121,20 @@ function mudarSubComp(sub) {
   if(res) res.innerHTML = "";
 }
 
+// Calcula totais agregados de uma lista de docs de faturamentoDiario
+// Mapeia os campos do Firestore para os nomes usados nas tabelas comparativas
+function calcTotaisFatDiario(docs) {
+  return {
+    caixa:      docs.reduce((s, d) => s + (d.caixa               || 0), 0),
+    credito:    docs.reduce((s, d) => s + (d.credito             || 0), 0),
+    boleto:     docs.reduce((s, d) => s + (d.boleto              || 0), 0),
+    lab:        docs.reduce((s, d) => s + (d.exameslaboratoriais || 0), 0),
+    img:        docs.reduce((s, d) => s + (d.imagem              || 0), 0),
+    proc:       docs.reduce((s, d) => s + (d.procedimentos       || 0), 0),
+    injetaveis: docs.reduce((s, d) => s + (d.injetaveis          || 0), 0),
+  };
+}
+
 // Busca lançamentos de um mês/ano via Firestore (one-shot)
 async function buscarLancsMes(mesAnoStr) {
   const snap = await db.collection("lancamentos")
@@ -5139,20 +5153,37 @@ function filtrarPorInterval(lista, iniDate, fimDate) {
 }
 
 // Dado um mês/ano e N dias úteis, retorna a data de corte (último dia que fecha N d.u.)
+// Respeita feriados (ehFeriado) e sábado=0,5
 function dataCorteNDiasUteis(mesAnoStr, N) {
   const [a, m] = mesAnoStr.split("-").map(Number);
   const ultimoDia = new Date(a, m, 0).getDate();
   let acum = 0;
   for(let d = 1; d <= ultimoDia; d++) {
     const dw = new Date(a, m-1, d).getDay();
-    if(dw !== 0) acum += dw === 6 ? 0.5 : 1;
+    if(dw === 0) continue; // domingo não conta
+    const dataISO = `${a}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(ehFeriado(dataISO)) continue; // feriado não conta
+    acum += dw === 6 ? 0.5 : 1;
     if(acum >= N) return new Date(a, m-1, d, 23, 59, 59, 999);
   }
-  // N maior que o mês: retorna último dia do mês
   return new Date(a, m-1, ultimoDia, 23, 59, 59, 999);
 }
 
+// Conta dias úteis de 1º do mês até o dia diaFim (inclusive), respeitando feriados e sábado=0,5
+function contarDiasUteisAte(ano, mes, diaFim) {
+  let total = 0;
+  for(let d = 1; d <= diaFim; d++) {
+    const dow = new Date(ano, mes - 1, d).getDay();
+    if(dow === 0) continue;
+    const dataISO = `${ano}-${String(mes).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(ehFeriado(dataISO)) continue;
+    total += dow === 6 ? 0.5 : 1;
+  }
+  return total;
+}
+
 // Botão principal — executa o comparativo conforme a sub-aba ativa
+// Lê de faturamentoDiario (dados consolidados da unidade), não de lancamentos
 async function executarComparativo() {
   const mesA = document.getElementById("comp-mes-a")?.value;
   const mesB = document.getElementById("comp-mes-b")?.value;
@@ -5163,20 +5194,23 @@ async function executarComparativo() {
   res.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando dados...</div>';
 
   try {
-    // Busca ambos os meses (usa cache de dashLancs se o mês já estiver carregado)
-    const [lancsA, lancsB] = await Promise.all([
-      mesA === dashMesAno ? Promise.resolve(dashLancs) : buscarLancsMes(mesA),
-      mesB === dashMesAno ? Promise.resolve(dashLancs) : buscarLancsMes(mesB),
-    ]);
+    // Usa o cache em memória de faturamentoDiarioAtual (já carregado via onSnapshot)
+    const docsA = faturamentoDiarioAtual.filter(d => d.mes_ano === mesA);
+    const docsB = faturamentoDiarioAtual.filter(d => d.mes_ano === mesB);
+
+    if(!docsA.length && !docsB.length) {
+      res.innerHTML = `<div class="empty"><div class="ei">📭</div>Nenhum dado de faturamento encontrado para os períodos selecionados.</div>`;
+      return;
+    }
 
     if(dashSubComp === "dias_uteis") {
-      renderCompDiasUteis(lancsA, mesA, lancsB, mesB, res);
+      renderCompDiasUteis(docsA, mesA, docsB, mesB, res);
     } else if(dashSubComp === "dia_semana") {
       const ds = parseInt(document.getElementById("comp-dia-semana")?.value || "1");
-      renderCompDiaSemana(lancsA, mesA, lancsB, mesB, ds, res);
+      renderCompDiaSemana(docsA, mesA, docsB, mesB, ds, res);
     } else {
       const semIdx = parseInt(document.getElementById("comp-semana-idx")?.value || "0");
-      renderCompSemanas(lancsA, mesA, lancsB, mesB, semIdx, res);
+      renderCompSemanas(docsA, mesA, docsB, mesB, semIdx, res);
     }
   } catch(e) {
     console.error("comparativo:", e);
@@ -5185,74 +5219,88 @@ async function executarComparativo() {
 }
 
 // Comparativo por Dias Úteis — equaliza os dois períodos pelo mesmo número de d.u.
-function renderCompDiasUteis(lancsA, mesA, lancsB, mesB, container) {
+// Lê docs de faturamentoDiario; respeita feriados e sábado=0,5
+function renderCompDiasUteis(docsA, mesA, docsB, mesB, container) {
   const [aA, mA] = mesA.split("-").map(Number);
-  // Calcula o corte do período A: até D-1 ou até o fim do mês se for passado
-  const ontem = new Date(); ontem.setDate(ontem.getDate()-1); ontem.setHours(23,59,59,999);
-  const fimMesA = new Date(aA, mA, 0, 23, 59, 59, 999);
-  const corteA = ontem < fimMesA ? ontem : fimMesA;
 
-  // Conta dias úteis de 1º do mês A até o corte
-  const iniA = new Date(aA, mA-1, 1);
-  const N = diasUteisFloat(iniA, corteA);
+  // Corte A: ontem (se mês corrente) ou último dia do mês (se passado)
+  const ontem    = new Date(); ontem.setDate(ontem.getDate()-1);
+  const fimMesA  = new Date(aA, mA, 0);
+  const corteADt = ontem < fimMesA ? ontem : fimMesA;
+  const corteADia = corteADt.getDate();
+  // Para meses passados o corteA vai ser o último dia do mês A
+  const corteAMes = corteADt.getMonth() + 1;
+  const corteAStr = `${aA}-${String(mA).padStart(2,"0")}-${String(
+    corteAMes === mA ? corteADia : new Date(aA, mA, 0).getDate()
+  ).padStart(2,"0")}`;
+
+  // Conta N dias úteis do período A (de 1º até corte inclusive), considerando feriados
+  const N = contarDiasUteisAte(aA, mA, parseInt(corteAStr.split("-")[2]));
 
   // Corte equivalente no período B
-  const corteB = dataCorteNDiasUteis(mesB, N);
+  const corteBDt  = dataCorteNDiasUteis(mesB, N);
+  const [aB, mB]  = mesB.split("-").map(Number);
+  const corteBStr = `${aB}-${String(mB).padStart(2,"0")}-${String(corteBDt.getDate()).padStart(2,"0")}`;
 
-  const [aB, mB] = mesB.split("-").map(Number);
-  const iniB = new Date(aB, mB-1, 1);
+  // Prefixo de data para filtrar: "YYYY-MM-"
+  const prefA = `${aA}-${String(mA).padStart(2,"0")}-`;
+  const prefB = `${aB}-${String(mB).padStart(2,"0")}-`;
 
-  const filtA = filtrarPorInterval(lancsA, iniA, corteA);
-  const filtB = filtrarPorInterval(lancsB, iniB, corteB);
+  // Filtra docs de cada período até o corte (compara strings ISO — ordenam corretamente)
+  const filtA = docsA.filter(d => d.data >= prefA + "01" && d.data <= corteAStr);
+  const filtB = docsB.filter(d => d.data >= prefB + "01" && d.data <= corteBStr);
 
-  const totA = calcTotaisDetalhados(filtA);
-  const totB = calcTotaisDetalhados(filtB);
+  const totA = calcTotaisFatDiario(filtA);
+  const totB = calcTotaisFatDiario(filtB);
 
+  const fmtDt = s => { const [,, d] = s.split("-"); return `${d}/${s.split("-")[1]}/${s.split("-")[0]}`; };
   const labelA = `${labelMes(mesA)} (${N.toFixed(1)} d.u.)`;
   const labelB = `${labelMes(mesB)} (${N.toFixed(1)} d.u.)`;
-
-  const info = `Comparando ${labelMes(mesA)} até ${corteA.toLocaleDateString("pt-BR")} ` +
-               `com ${labelMes(mesB)} até ${corteB.toLocaleDateString("pt-BR")} — ` +
-               `${N.toFixed(1)} dias úteis cada.`;
+  const info   = `Comparando ${labelMes(mesA)} até ${fmtDt(corteAStr)} ` +
+                 `com ${labelMes(mesB)} até ${fmtDt(corteBStr)} — ` +
+                 `${N.toFixed(1)} dias úteis cada.`;
 
   container.innerHTML = `
     <div class="comp-dash-info">${info}</div>
     ${renderTabelaCompDash(labelA, totA, labelB, totB)}
-    ${renderRankingComp(filtA, mesA, filtB, mesB)}
   `;
 }
 
 // Comparativo por Dia da Semana — soma todas as ocorrências daquele dia nos dois meses
-function renderCompDiaSemana(lancsA, mesA, lancsB, mesB, diaSem, container) {
+// Lê docs de faturamentoDiario; cada doc representa um dia da unidade
+function renderCompDiaSemana(docsA, mesA, docsB, mesB, diaSem, container) {
   const diasNome = ["","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
   const [aA, mA] = mesA.split("-").map(Number);
   const [aB, mB] = mesB.split("-").map(Number);
 
-  function filtrarDiaSem(lista, ano, mes) {
-    return lista.filter(l => {
-      if(!l.data_hora) return false;
-      const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
-      return d.getMonth()+1 === mes && d.getFullYear() === ano && d.getDay() === diaSem;
+  // Filtra docs cujo campo "data" (ISO "YYYY-MM-DD") cai no dia da semana solicitado
+  function filtrarDiaSemFat(docs) {
+    return docs.filter(d => {
+      if(!d.data) return false;
+      const [a, m, dia] = d.data.split("-").map(Number);
+      return new Date(a, m - 1, dia).getDay() === diaSem;
     });
   }
 
+  // Conta quantas vezes o dia da semana ocorre no mês (independente de feriado — é count de ocorrências no calendário)
   function contarOcorrencias(ano, mes, ds) {
     const ultiDia = new Date(ano, mes, 0).getDate();
     let c = 0;
-    for(let d=1; d<=ultiDia; d++) { if(new Date(ano,mes-1,d).getDay()===ds) c++; }
+    for(let d = 1; d <= ultiDia; d++) { if(new Date(ano, mes-1, d).getDay() === ds) c++; }
     return c;
   }
 
-  const filtA = filtrarDiaSem(lancsA, aA, mA);
-  const filtB = filtrarDiaSem(lancsB, aB, mB);
-  const totA  = calcTotaisDetalhados(filtA);
-  const totB  = calcTotaisDetalhados(filtB);
+  const filtA = filtrarDiaSemFat(docsA);
+  const filtB = filtrarDiaSemFat(docsB);
+  const totA  = calcTotaisFatDiario(filtA);
+  const totB  = calcTotaisFatDiario(filtB);
   const ocA   = contarOcorrencias(aA, mA, diaSem);
   const ocB   = contarOcorrencias(aB, mB, diaSem);
 
-  // Médias por ocorrência
-  const mediaA = { caixa:totA.caixa/ocA, credito:totA.credito/ocA, boleto:totA.boleto/ocA, lab:totA.lab/ocA, img:totA.img/ocA, proc:totA.proc/ocA, consultas:totA.consultas/ocA, porProcTipo:{} };
-  const mediaB = { caixa:totB.caixa/ocB, credito:totB.credito/ocB, boleto:totB.boleto/ocB, lab:totB.lab/ocB, img:totB.img/ocB, proc:totB.proc/ocB, consultas:totB.consultas/ocB, porProcTipo:{} };
+  // Médias por ocorrência (evita divisão por zero)
+  const div = (v, n) => n > 0 ? v / n : 0;
+  const mediaA = { caixa:div(totA.caixa,ocA), credito:div(totA.credito,ocA), boleto:div(totA.boleto,ocA), lab:div(totA.lab,ocA), img:div(totA.img,ocA), proc:div(totA.proc,ocA), injetaveis:div(totA.injetaveis,ocA) };
+  const mediaB = { caixa:div(totB.caixa,ocB), credito:div(totB.credito,ocB), boleto:div(totB.boleto,ocB), lab:div(totB.lab,ocB), img:div(totB.img,ocB), proc:div(totB.proc,ocB), injetaveis:div(totB.injetaveis,ocB) };
 
   const labelA = `${labelMes(mesA)} — ${diasNome[diaSem]} (${ocA}×)`;
   const labelB = `${labelMes(mesB)} — ${diasNome[diaSem]} (${ocB}×)`;
@@ -5268,46 +5316,57 @@ function renderCompDiaSemana(lancsA, mesA, lancsB, mesB, diaSem, container) {
 }
 
 // Comparativo por Semana — acumulado da semana nos dois meses
-function renderCompSemanas(lancsA, mesA, lancsB, mesB, semIdx, container) {
+// Lê docs de faturamentoDiario; filtra pelo número do dia dentro do mês
+function renderCompSemanas(docsA, mesA, docsB, mesB, semIdx, container) {
   const ranges = [{ini:1,fim:7},{ini:8,fim:14},{ini:15,fim:21},{ini:22,fim:31}];
   const r = ranges[semIdx];
 
-  function inieFim(mesAnoStr) {
+  // Filtra docs cujo dia (campo "data") está no intervalo da semana
+  function filtrarSemFat(docs, mesAnoStr) {
     const [a, m] = mesAnoStr.split("-").map(Number);
-    const ultimo = new Date(a, m, 0).getDate();
-    return {
-      ini: new Date(a, m-1, r.ini, 0, 0, 0, 0),
-      fim: new Date(a, m-1, Math.min(r.fim, ultimo), 23, 59, 59, 999),
-    };
+    const ultimoDia = new Date(a, m, 0).getDate();
+    const diaFim = Math.min(r.fim, ultimoDia);
+    const pref   = `${a}-${String(m).padStart(2,"0")}-`;
+    return docs.filter(d => {
+      if(!d.data) return false;
+      const dia = parseInt(d.data.replace(pref, ""));
+      return dia >= r.ini && dia <= diaFim;
+    });
   }
 
-  const wA = inieFim(mesA); const filtA = filtrarPorInterval(lancsA, wA.ini, wA.fim);
-  const wB = inieFim(mesB); const filtB = filtrarPorInterval(lancsB, wB.ini, wB.fim);
-  const totA = calcTotaisDetalhados(filtA);
-  const totB = calcTotaisDetalhados(filtB);
+  const filtA = filtrarSemFat(docsA, mesA);
+  const filtB = filtrarSemFat(docsB, mesB);
+  const totA  = calcTotaisFatDiario(filtA);
+  const totB  = calcTotaisFatDiario(filtB);
 
-  const fmt  = d => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-  const labelA = `${labelMes(mesA)} — Sem. ${semIdx+1} (${fmt(wA.ini)}–${fmt(wA.fim)})`;
-  const labelB = `${labelMes(mesB)} — Sem. ${semIdx+1} (${fmt(wB.ini)}–${fmt(wB.fim)})`;
+  // Labels com datas formatadas para exibição
+  function fmtRange(mesAnoStr) {
+    const [a, m] = mesAnoStr.split("-").map(Number);
+    const ult = new Date(a, m, 0).getDate();
+    const pad = n => String(n).padStart(2,"0");
+    return `${pad(r.ini)}/${pad(m)} – ${pad(Math.min(r.fim, ult))}/${pad(m)}`;
+  }
+  const labelA = `${labelMes(mesA)} — Sem. ${semIdx+1} (${fmtRange(mesA)})`;
+  const labelB = `${labelMes(mesB)} — Sem. ${semIdx+1} (${fmtRange(mesB)})`;
   const info   = `Semana ${semIdx+1}: dias ${r.ini}–${r.fim === 31 ? "fim" : r.fim} de cada mês.`;
 
   container.innerHTML = `
     <div class="comp-dash-info">${info}</div>
     ${renderTabelaCompDash(labelA, totA, labelB, totB)}
-    ${renderRankingComp(filtA, mesA, filtB, mesB)}
   `;
 }
 
 // Helper: tabela comparativa lado a lado (A vs B) com linha de diferença
+// Usa campos de faturamentoDiario (sem Consultas, com Injetáveis)
 function renderTabelaCompDash(labelA, totA, labelB, totB) {
   const metricas = [
-    { nome:"💰 Caixa",         vA:totA.caixa,    vB:totB.caixa },
-    { nome:"💳 Crédito",       vA:totA.credito,  vB:totB.credito },
-    { nome:"📄 Boleto",        vA:totA.boleto,   vB:totB.boleto },
-    { nome:"🧪 Laboratório",   vA:totA.lab,      vB:totB.lab },
-    { nome:"🩻 Imagem",        vA:totA.img,      vB:totB.img },
-    { nome:"💉 Procedimentos", vA:totA.proc,     vB:totB.proc },
-    { nome:"🩺 Consultas",     vA:totA.consultas,vB:totB.consultas },
+    { nome:"💰 Caixa",         vA:totA.caixa,      vB:totB.caixa },
+    { nome:"💳 Crédito",       vA:totA.credito,    vB:totB.credito },
+    { nome:"📄 Boleto",        vA:totA.boleto,     vB:totB.boleto },
+    { nome:"🧪 Laboratório",   vA:totA.lab,        vB:totB.lab },
+    { nome:"🩻 Imagem",        vA:totA.img,        vB:totB.img },
+    { nome:"💉 Procedimentos", vA:totA.proc,       vB:totB.proc },
+    { nome:"💊 Injetáveis",    vA:totA.injetaveis, vB:totB.injetaveis },
   ];
 
   const rows = metricas.map(({ nome, vA, vB }) => {
