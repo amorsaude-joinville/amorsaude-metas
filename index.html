@@ -1639,6 +1639,96 @@ function labelMes(ma) {
 
 function brl(v) { return (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
 
+// ═══════════════════════════════════════════════════════════
+//  FERIADOS 2026 — lista fixa + Firestore
+// ═══════════════════════════════════════════════════════════
+
+// Feriados fixos: nacionais + municipais de Joinville
+const FERIADOS_2026 = [
+  { data: "2026-01-01", nome: "Confraternização Universal" },
+  { data: "2026-03-09", nome: "Aniversário de Joinville" },
+  { data: "2026-04-03", nome: "Sexta-feira Santa" },
+  { data: "2026-04-04", nome: "Sábado Santo" },
+  { data: "2026-05-01", nome: "Dia do Trabalho" },
+  { data: "2026-05-02", nome: "Emenda Dia do Trabalho" },
+  { data: "2026-06-04", nome: "Corpus Christi" },
+  { data: "2026-09-07", nome: "Independência" },
+  { data: "2026-10-12", nome: "Nossa Senhora Aparecida" },
+  { data: "2026-11-02", nome: "Finados" },
+  { data: "2026-11-20", nome: "Consciência Negra" },
+  { data: "2026-12-25", nome: "Natal" }
+];
+
+// Feriados extras cadastrados pela gestora no Firestore (coleção "feriados")
+let feriadosFirestore = [];
+
+// Retorna true se a data (YYYY-MM-DD) é feriado
+function ehFeriado(dataISO) {
+  return FERIADOS_2026.some(f => f.data === dataISO) ||
+         feriadosFirestore.some(f => f.data === dataISO);
+}
+
+// Total de dias úteis do mês (seg-sex=1, sáb=0,5, dom e feriado=0)
+function calcularDiasUteisMes(ano, mes) {
+  const ultimo = new Date(ano, mes, 0).getDate();
+  let total = 0;
+  for(let dia = 1; dia <= ultimo; dia++) {
+    const dow = new Date(ano, mes - 1, dia).getDay(); // 0=dom, 6=sáb
+    if(dow === 0) continue; // domingo
+    const dataISO = `${ano}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+    if(ehFeriado(dataISO)) continue; // feriado não conta
+    total += (dow === 6) ? 0.5 : 1;
+  }
+  return total;
+}
+
+// Dias úteis restantes do dia de hoje (inclusive) até o último dia do mês
+// Retorna 0 se o mês já passou
+function calcularDiasUteisRestantes(ano, mes) {
+  const hoje   = new Date();
+  const aHoje  = hoje.getFullYear();
+  const mHoje  = hoje.getMonth() + 1;
+  const dHoje  = hoje.getDate();
+  if(ano < aHoje || (ano === aHoje && mes < mHoje)) return 0;
+  const ultimo = new Date(ano, mes, 0).getDate();
+  let total = 0;
+  for(let dia = 1; dia <= ultimo; dia++) {
+    // Para o mês atual: só contar a partir de hoje inclusive
+    if(ano === aHoje && mes === mHoje && dia < dHoje) continue;
+    const dow = new Date(ano, mes - 1, dia).getDay();
+    if(dow === 0) continue;
+    const dataISO = `${ano}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+    if(ehFeriado(dataISO)) continue;
+    total += (dow === 6) ? 0.5 : 1;
+  }
+  return total;
+}
+
+// Meta diária atualizada: (meta - realizado) / dias_úteis_restantes
+// Retorna 0 se a meta já foi atingida ou não há mais dias
+function calcularMetaDiariaAtualizada(meta, realizado, diasUteisRestantes) {
+  if(diasUteisRestantes <= 0) return 0;
+  const restante = meta - realizado;
+  if(restante <= 0) return 0;
+  return Math.round((restante / diasUteisRestantes) * 100) / 100;
+}
+
+// Soma campos de faturamentoDiario para o mês informado (exclui feriados e dias zerados)
+function getTotaisFaturamentoDiario(mesAnoStr) {
+  const docs = faturamentoDiarioAtual.filter(
+    d => d.mes_ano === mesAnoStr && !d.feriado && (d.caixa + d.credito) > 0
+  );
+  return {
+    caixa:         docs.reduce((s, d) => s + (d.caixa                 || 0), 0),
+    credito:       docs.reduce((s, d) => s + (d.credito               || 0), 0),
+    boleto:        docs.reduce((s, d) => s + (d.boleto                || 0), 0),
+    laboratorio:   docs.reduce((s, d) => s + (d.exameslaboratoriais   || 0), 0),
+    imagem:        docs.reduce((s, d) => s + (d.imagem                || 0), 0),
+    procedimentos: docs.reduce((s, d) => s + (d.procedimentos         || 0), 0),
+    injetaveis:    docs.reduce((s, d) => s + (d.injetaveis            || 0), 0),
+  };
+}
+
 function mascaraCPF(el) {
   let v = el.value.replace(/\D/g,"").slice(0,11);
   if(v.length>9) v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/,"$1.$2.$3-$4");
@@ -2043,6 +2133,9 @@ function iniciarApp() {
   const btnFatImp = document.getElementById("btn-fat-importar");
   if(btnFatImp) btnFatImp.style.display = ehGestao ? "" : "none";
 
+  db.collection("feriados").get().then(snap => {
+    feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }).catch(e => console.warn("[feriados]", e));
   carregarMetas();
   if(temDashboard) iniciarDashboard();
   if(temLanc)      iniciarListener();
@@ -4034,20 +4127,8 @@ function renderDashHistorico() {
     ? dashHistorico.filter(d => d.nome === filtroColab)
     : dashHistorico;
 
-  // Totais da equipe
-  const eq = { caixa:0, credito:0, boleto:0, laboratorio:0, imagem:0, procedimentos:0, consultas:0, injetaveis:0 };
-  docs.forEach(d => {
-    eq.caixa         += d.caixa         || 0;
-    eq.credito       += d.credito       || 0;
-    eq.boleto        += d.boleto        || 0;
-    eq.laboratorio   += d.laboratorio   || 0;
-    eq.imagem        += d.imagem        || 0;
-    eq.procedimentos += d.procedimentos || 0;
-    eq.consultas     += d.consultas     || 0;
-    eq.injetaveis    += d.injetaveis    || 0;
-  });
-
-  // Cards equipe
+  // Cards equipe — lê de faturamentoDiario
+  const eq = getTotaisFaturamentoDiario(dashMesAno);
   const m    = dashMetasMes || {};
   const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
   const metaCr = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
@@ -4055,6 +4136,27 @@ function renderDashHistorico() {
   function miniCard(tit, val, meta, ico) {
     const pct = meta > 0 ? Math.min((val/meta)*100,100) : 0;
     const ok  = val >= meta && meta > 0;
+    const mesAtual = getMesAno();
+    let metaDiariaHtml = "";
+    if(meta > 0) {
+      if(dashMesAno > mesAtual) {
+        metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Mês ainda não iniciado</div>`;
+      } else if(dashMesAno === mesAtual) {
+        if(ok) {
+          metaDiariaHtml = `<div style="font-size:11px;color:#16A34A;font-weight:600;margin-top:6px">✅ Meta atingida!</div>`;
+        } else {
+          const [ano, mes] = dashMesAno.split("-").map(Number);
+          const diasRest = calcularDiasUteisRestantes(ano, mes);
+          if(diasRest <= 0) {
+            metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Mês encerrado</div>`;
+          } else {
+            const metaDiaria = calcularMetaDiariaAtualizada(meta, val, diasRest);
+            const diasLabel = Number.isInteger(diasRest) ? diasRest : diasRest.toFixed(1);
+            metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Meta diária: <strong style="color:#374151">${brl(metaDiaria)}</strong> <span>(faltam ${diasLabel} dias úteis)</span></div>`;
+          }
+        }
+      }
+    }
     return `<div class="card-meta" style="padding:18px">
       <div class="meta-top" style="margin-bottom:10px">
         <div class="meta-tit" style="font-size:12px">${tit}</div>
@@ -4068,6 +4170,7 @@ function renderDashHistorico() {
         </div>
         <div class="bar-wrap"><div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div></div>
         <div class="meta-pct${ok?" ok":""}" style="font-size:12px">${pct.toFixed(1)}%</div>
+        ${metaDiariaHtml}
       ` : '<div style="font-size:12px;color:var(--text2)">Meta não definida</div>'}
     </div>`;
   }
@@ -4168,7 +4271,7 @@ function renderDashHistorico() {
 
 // ── Cards resumo da equipe
 function renderDashEquipe(lista) {
-  const tot = calcTotaisDetalhados(lista);
+  const tot = getTotaisFaturamentoDiario(dashMesAno);
   const m   = dashMetasMes || {};
   const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
   const metaCr = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
@@ -4177,6 +4280,27 @@ function renderDashEquipe(lista) {
   function miniCard(tit, val, meta, ico) {
     const pct  = meta > 0 ? Math.min((val/meta)*100,100) : 0;
     const ok   = val >= meta && meta > 0;
+    const mesAtual = getMesAno();
+    let metaDiariaHtml = "";
+    if(meta > 0) {
+      if(dashMesAno > mesAtual) {
+        metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Mês ainda não iniciado</div>`;
+      } else if(dashMesAno === mesAtual) {
+        if(ok) {
+          metaDiariaHtml = `<div style="font-size:11px;color:#16A34A;font-weight:600;margin-top:6px">✅ Meta atingida!</div>`;
+        } else {
+          const [ano, mes] = dashMesAno.split("-").map(Number);
+          const diasRest = calcularDiasUteisRestantes(ano, mes);
+          if(diasRest <= 0) {
+            metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Mês encerrado</div>`;
+          } else {
+            const metaDiaria = calcularMetaDiariaAtualizada(meta, val, diasRest);
+            const diasLabel = Number.isInteger(diasRest) ? diasRest : diasRest.toFixed(1);
+            metaDiariaHtml = `<div style="font-size:11px;color:#6B7280;margin-top:6px">Meta diária: <strong style="color:#374151">${brl(metaDiaria)}</strong> <span>(faltam ${diasLabel} dias úteis)</span></div>`;
+          }
+        }
+      }
+    }
     return `
       <div class="card-meta" style="padding:18px">
         <div class="meta-top" style="margin-bottom:10px">
@@ -4191,19 +4315,20 @@ function renderDashEquipe(lista) {
           </div>
           <div class="bar-wrap"><div class="bar-fill${ok?" ok":""}" style="width:${pct}%"></div></div>
           <div class="meta-pct${ok?" ok":""}" style="font-size:12px">${pct.toFixed(1)}%</div>
+          ${metaDiariaHtml}
         ` : '<div style="font-size:12px;color:var(--text2)">Meta não definida</div>'}
       </div>
     `;
   }
 
   document.getElementById("dash-cards-equipe").innerHTML =
-    miniCard("Caixa — Equipe",   tot.caixa,      metaC,  "💰") +
-    miniCard("Crédito — Equipe", tot.credito,    metaCr, "💳") +
-    miniCard("Boleto — Equipe",  tot.boleto,     metaB,  "📄") +
-    miniCard("Exames Lab.",      tot.lab,        m.meta_lab_equipe||0,        "🧪") +
-    miniCard("Exames Imagem",    tot.img,        m.meta_img_equipe||0,        "🩻") +
-    miniCard("Procedimentos",    tot.proc,       m.meta_proc_equipe||0,       "💉") +
-    miniCard("Injetáveis",       tot.injetaveis, m.meta_injetaveis_equipe||0, "💊");
+    miniCard("Caixa — Equipe",   tot.caixa,         metaC,  "💰") +
+    miniCard("Crédito — Equipe", tot.credito,        metaCr, "💳") +
+    miniCard("Boleto — Equipe",  tot.boleto,         metaB,  "📄") +
+    miniCard("Exames Lab.",      tot.laboratorio,    m.meta_lab_equipe||0,        "🧪") +
+    miniCard("Exames Imagem",    tot.imagem,         m.meta_img_equipe||0,        "🩻") +
+    miniCard("Procedimentos",    tot.procedimentos,  m.meta_proc_equipe||0,       "💉") +
+    miniCard("Injetáveis",       tot.injetaveis,     m.meta_injetaveis_equipe||0, "💊");
 }
 
 // ── Painel de Premiações (usa dashLancs bruto para calcular pelo mês inteiro)
@@ -5983,6 +6108,10 @@ function carregarFaturamentoDiario() {
       faturamentoDiarioAtual = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       atualizarSeletorMeses();
       renderFaturamentoDiario();
+      if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+        if(dashUsandoHistorico) renderDashHistorico();
+        else renderDashEquipe(dashLancs);
+      }
     }, e => console.warn("[faturamentoDiario] listener erro:", e));
 }
 
