@@ -31,16 +31,9 @@ service cloud.firestore {
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
     }
 
-    // Fechamentos: somente gestora e subgestora
+    // Fechamentos: somente gestora e subgestora (mantido para histórico existente)
     match /fechamentos/{docId} {
       allow read, write: if request.auth != null &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
-    }
-
-    // Histórico mensal por colaboradora (importação)
-    match /historico_mensal/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
     }
 
@@ -64,6 +57,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
+    }
+
+    // Feriados: todos os perfis leem (cálculo de dias úteis), gestão e líderes escrevem
+    match /feriados/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
     }
   }
 }

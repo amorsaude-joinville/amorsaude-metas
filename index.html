@@ -437,26 +437,7 @@
     .lider-tab:hover { color:var(--primary); }
     .lider-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
 
-    /* ── FECHAMENTO MENSAL ── */
-    .fech-resumo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
-    .fech-res-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:14px 16px; }
-    .fech-res-card .frc-lbl { font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; margin-bottom:3px; }
-    .fech-res-card .frc-val { font-size:18px; font-weight:700; color:var(--text); }
-    .hist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:16px; }
-    .hist-card { border:1px solid var(--border); border-radius:var(--r2); padding:18px 20px; cursor:pointer; transition:all .2s; background:#fff; }
-    .hist-card:hover { border-color:var(--primary); box-shadow:var(--shadow); transform:translateY(-2px); }
-    .hist-card .hc-mes { font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px; }
-    .hist-card .hc-info { font-size:12px; color:var(--text2); }
-    .hist-card .hc-total { font-size:18px; font-weight:700; color:var(--primary); margin-top:8px; }
-    .fech-rank-table { width:100%; border-collapse:collapse; font-size:13px; }
-    .fech-rank-table th { padding:9px 12px; background:var(--bg2); font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; }
-    .fech-rank-table td { padding:9px 12px; border-top:1px solid var(--border); }
-    .fech-rank-table td.num { text-align:right; }
-    .fech-rank-table th.num { text-align:right; }
-    .comp-hist-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--border); font-size:13px; }
-    .comp-hist-row:last-child { border:none; }
-    .modal-fech { width:680px; max-height:88vh; overflow-y:auto; }
-    @media(max-width:720px){ .modal-fech { width:96vw; } }
+
 
     /* ── COORDENADORA ── */
     .coord-cc-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
@@ -805,6 +786,7 @@
           <div style="padding-bottom:1px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary" style="width:auto;white-space:nowrap" onclick="abrirModalMetas()">⚙️ Configurar Metas</button>
             <button class="btn btn-ghost" id="btn-importar-historico" style="width:auto;white-space:nowrap;display:none" onclick="abrirModalFatImport()">📊 Importar Faturamento</button>
+            <button class="btn btn-ghost" id="btn-gerenciar-feriados" style="width:auto;white-space:nowrap;display:none" onclick="abrirModalFeriados()">📅 Feriados</button>
           </div>
         </div>
       </div>
@@ -971,31 +953,6 @@
 
     </div>
 
-    <!-- ── FECHAMENTO MENSAL (gestor / subgestora) ── -->
-    <div id="sec-fechamento" style="display:none">
-
-      <!-- Fechar o mês atual -->
-      <div class="card" style="margin-bottom:20px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
-          <div>
-            <div class="card-title" style="margin-bottom:4px">📦 Fechamento Mensal</div>
-            <div style="font-size:13px;color:var(--text2)">Consolida e arquiva os dados do mês atual no histórico.</div>
-          </div>
-          <button class="btn btn-primary" style="width:auto" onclick="abrirModalFechamento()">📦 Fechar Mês</button>
-        </div>
-        <!-- Resumo rápido do mês para a gestora -->
-        <div id="fech-resumo-rapido"></div>
-      </div>
-
-      <!-- Histórico de meses fechados -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-title">📚 Histórico de Meses</div>
-        <div id="hist-fechamentos">
-          <div class="loading"><div class="spinner"></div>Carregando histórico...</div>
-        </div>
-      </div>
-
-    </div><!-- fim sec-fechamento -->
 
     <!-- ── CARD METAS DA EQUIPE (recepcionista/callcenter/lider) ── -->
     <div id="sec-card-equipe" style="display:none">
@@ -1248,45 +1205,6 @@
   </div>
 </div>
 
-<!-- Modal confirmação de fechamento -->
-<div class="overlay hidden" id="modal-fech-confirmar">
-  <div class="modal modal-fech">
-    <h3>📦 Confirmar Fechamento do Mês</h3>
-    <p id="modal-fech-titulo" style="color:var(--text2);font-size:13px;margin:6px 0 16px"></p>
-
-    <!-- Resumo de totais -->
-    <div id="modal-fech-resumo" style="margin-bottom:20px"></div>
-
-    <!-- Ranking final com premiações -->
-    <div>
-      <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">Ranking Final e Premiações</div>
-      <div id="modal-fech-ranking"></div>
-    </div>
-
-    <div style="background:#FEF3C7;border-radius:var(--r2);padding:12px 14px;font-size:13px;color:#92400E;margin:16px 0">
-      ⚠️ Esta ação arquiva o mês no histórico. Os lançamentos <strong>não são apagados</strong>.
-    </div>
-
-    <div class="modal-btns">
-      <button class="btn btn-ghost" onclick="document.getElementById('modal-fech-confirmar').classList.add('hidden')">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-fech" onclick="confirmarFechamento()">✅ Confirmar Fechamento</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal histórico de fechamento -->
-<div class="overlay hidden" id="modal-fech-hist">
-  <div class="modal modal-fech">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-      <h3 id="modal-fech-hist-titulo" style="margin:0">📅 Fechamento</h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="exportarPDFFechamento()">📄 Exportar PDF</button>
-        <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="document.getElementById('modal-fech-hist').classList.add('hidden')">Fechar</button>
-      </div>
-    </div>
-    <div id="modal-fech-hist-conteudo"></div>
-  </div>
-</div>
 
 <!-- Modal configurar metas -->
 <div class="overlay hidden" id="modal-metas">
@@ -1411,6 +1329,53 @@
 
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="fecharModalFatImport()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Gerenciar Feriados (gestora, subgestora, lider) -->
+<div class="overlay hidden" id="modal-feriados">
+  <div class="modal" style="width:540px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="margin:0">📅 Gerenciar Feriados</h3>
+      <button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="fecharModalFeriados()">✕ Fechar</button>
+    </div>
+
+    <!-- Seção A: feriados fixos 2026 (somente leitura) -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🔒 Feriados Fixos 2026</div>
+      <div id="fer-lista-fixos"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Seção B: feriados cadastrados no Firestore (editável) -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">📋 Feriados Cadastrados</div>
+      <div id="fer-lista-firestore">
+        <div style="font-size:13px;color:var(--text2);padding:8px 0">Nenhum feriado cadastrado ainda.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Seção C: formulário para adicionar feriado -->
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">➕ Adicionar Feriado</div>
+      <div class="fgrid">
+        <div class="fg" style="margin-bottom:12px">
+          <label>Data *</label>
+          <input type="date" id="fer-data"
+            style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);width:100%;transition:border-color .2s" />
+        </div>
+        <div class="fg" style="margin-bottom:12px">
+          <label>Nome *</label>
+          <input type="text" id="fer-nome" placeholder="Ex: Ponto facultativo Copa"
+            style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);width:100%;transition:border-color .2s" />
+        </div>
+      </div>
+      <div id="fer-msg" style="margin-bottom:12px"></div>
+      <button class="btn btn-primary" style="width:auto" onclick="salvarFeriado()">💾 Salvar Feriado</button>
     </div>
   </div>
 </div>
@@ -2117,9 +2082,7 @@ function iniciarApp() {
     document.getElementById("sec-historico").style.display = temLanc ? "" : "none";
   }
 
-  // Seção de fechamento — somente gestor e subgestora
   const ehGestao = SO_DASHBOARD.includes(perfil);
-  document.getElementById("sec-fechamento").style.display = ehGestao ? "" : "none";
 
   // Botão importação histórica — somente gestor e subgestora
   const btnImp = document.getElementById("btn-importar-historico");
@@ -2133,6 +2096,10 @@ function iniciarApp() {
   const btnFatImp = document.getElementById("btn-fat-importar");
   if(btnFatImp) btnFatImp.style.display = ehGestao ? "" : "none";
 
+  // Botão gerenciar feriados — visível para gestora, subgestora e lider
+  const btnFer = document.getElementById("btn-gerenciar-feriados");
+  if(btnFer) btnFer.style.display = temDashboard ? "" : "none";
+
   db.collection("feriados").get().then(snap => {
     feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }).catch(e => console.warn("[feriados]", e));
@@ -2140,11 +2107,9 @@ function iniciarApp() {
   if(temDashboard) iniciarDashboard();
   if(temLanc)      iniciarListener();
   if(ehCoord)      iniciarCoord();
-  if(ehGestao)     iniciarFechamento();
   // Rec/CC: inicia equipe imediatamente (pool calc necessário para aba Metas)
   // Lider e liderCC: listener iniciado por aplicarAbaLider/CC quando sai do dashboard
   if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
-  if(temLanc) carregarHistoricoMensal();
   // Faturamento diário: carrega para gestora, subgestora e líderes
   if(temDashboard) carregarFaturamentoDiario();
 }
@@ -2169,7 +2134,6 @@ function aplicarAbaLider() {
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
 
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
-  if(!emDash && !historicoIndividual) carregarHistoricoMensal();
 }
 
 function mudarAbaLider(aba) {
@@ -3094,23 +3058,6 @@ function iniciarListenerEquipe() {
     }, e => console.error("equipe listener:", e));
 }
 
-async function carregarHistoricoMensal() {
-  try {
-    const snap = await db.collection("historico_mensal")
-      .where("mes_ano","==",mesAno).get();
-    historicoEquipeAtual = snap.docs.map(d => {
-      const dado = d.data();
-      const email = dado.email || d.id.split("_").slice(0,-1).join("_");
-      const u = USUARIOS[email] || {};
-      return { email, perfil: dado.perfil || u.perfil || "", usuario_nome: dado.usuario_nome || u.nome || email, ...dado };
-    });
-    historicoIndividual = historicoEquipeAtual.find(d => d.email === usuario.email) || null;
-    console.log(`[historico_mensal] ${mesAno}: ${snap.size} doc(s), individual: ${historicoIndividual ? "✓" : "nenhum"}`);
-    atualizarCards();
-    renderCardMetasEquipe();
-  } catch(e) { console.warn("[historico_mensal] erro:", e); }
-}
-
 
 function renderCardMetasEquipe() {
   const el = document.getElementById("equipe-metricas");
@@ -3892,26 +3839,7 @@ function carregarDashListener() {
   document.getElementById("dash-prescritores").innerHTML  = '';
 
   carregarDashMetas(dashMesAno).then(async () => {
-    // Tenta sempre historico_mensal primeiro (todos os meses, incluindo o atual)
-    try {
-      const snap = await db.collection("historico_mensal")
-        .where("mes_ano","==",dashMesAno).get();
-      console.log(`[dash] historico_mensal ${dashMesAno}: ${snap.size} documento(s) encontrado(s)`);
-      if(!snap.empty) {
-        dashHistorico = snap.docs.map(d => {
-          const dado = d.data();
-          const email = dado.email || d.id.split("_").slice(0,-1).join("_");
-          const u = USUARIOS[email] || {};
-          return { email, nome: u.nome || email, perfil: u.perfil || "", ...dado };
-        });
-        dashUsandoHistorico = true;
-        renderDashboard();
-        return;
-      }
-    } catch(e) { console.warn("[dash] historico_mensal query erro:", e); }
-
-    // Fallback: listener em tempo real nos lançamentos
-    console.log(`[dash] sem dados em historico_mensal — usando lancamentos para ${dashMesAno}`);
+    // Listener em tempo real nos lançamentos
     unsubDash = db.collection("lancamentos")
       .where("mes_ano","==",dashMesAno)
       .onSnapshot(snap => {
@@ -5383,425 +5311,209 @@ function renderRankingComp(filtA, mesA, filtB, mesB) {
     </div>`;
 }
 
+
 // ═══════════════════════════════════════════════════════════
-//  FECHAMENTO MENSAL
+//  GERENCIAR FERIADOS
 // ═══════════════════════════════════════════════════════════
 
-// Variável para guardar dados do fechamento aberto no modal de histórico
-let fechHistDados = null;
-
-// Inicializa a seção de fechamento: carrega histórico e atualiza resumo rápido
-function iniciarFechamento() {
-  renderResumoRapidoFech();
-  carregarHistoricoFechamentos();
+function abrirModalFeriados() {
+  renderListaFeriados();
+  document.getElementById("modal-feriados").classList.remove("hidden");
 }
 
-// Resumo rápido do mês atual (usa dashLancs já carregado)
-function renderResumoRapidoFech() {
-  const el = document.getElementById("fech-resumo-rapido");
-  if(!el) return;
-  if(!dashLancs.length) {
-    el.innerHTML = '<div style="font-size:13px;color:var(--text2)">Carregando dados do mês atual...</div>';
+function fecharModalFeriados() {
+  document.getElementById("modal-feriados").classList.add("hidden");
+  document.getElementById("fer-msg").innerHTML = "";
+  document.getElementById("fer-data").value = "";
+  document.getElementById("fer-nome").value = "";
+}
+
+// Renderiza as duas listas de feriados no modal
+function renderListaFeriados() {
+  // Seção A: feriados fixos
+  const elFixos = document.getElementById("fer-lista-fixos");
+  if(elFixos) {
+    elFixos.innerHTML = FERIADOS_2026.map(f => {
+      const [a,m,d] = f.data.split("-");
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px dashed var(--border);font-size:13px">
+        <span>${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${a} — ${f.nome}</span>
+        <span style="font-size:16px">🔒</span>
+      </div>`;
+    }).join("");
+  }
+
+  // Seção B: feriados cadastrados no Firestore
+  const elFS = document.getElementById("fer-lista-firestore");
+  if(elFS) {
+    if(!feriadosFirestore.length) {
+      elFS.innerHTML = '<div style="font-size:13px;color:var(--text2);padding:8px 0">Nenhum feriado cadastrado ainda.</div>';
+    } else {
+      elFS.innerHTML = feriadosFirestore
+        .slice()
+        .sort((a,b) => a.data.localeCompare(b.data))
+        .map(f => {
+          const [a,m,d] = f.data.split("-");
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px dashed var(--border);font-size:13px">
+            <span>${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${a} — ${f.nome}</span>
+            <button class="btn-danger-sm" onclick="removerFeriado('${f.id}')">🗑️ Remover</button>
+          </div>`;
+        }).join("");
+    }
+  }
+}
+
+async function salvarFeriado() {
+  const data  = document.getElementById("fer-data").value;
+  const nome  = document.getElementById("fer-nome").value.trim();
+  const msgEl = document.getElementById("fer-msg");
+
+  if(!data) { msgEl.innerHTML = '<div class="import-err">Informe a data do feriado.</div>'; return; }
+  if(!nome) { msgEl.innerHTML = '<div class="import-err">Informe o nome do feriado.</div>'; return; }
+
+  if(FERIADOS_2026.some(f => f.data === data)) {
+    msgEl.innerHTML = '<div class="import-err">Esta data já está nos feriados fixos de 2026.</div>';
     return;
   }
-  const tot = calcTotaisDetalhados(dashLancs);
-  const m   = dashMetasMes || {};
-  const premTot = calcPremiacaoTotalEquipe(dashLancs, m);
-  el.innerHTML = `
-    <div class="fech-resumo-grid">
-      <div class="fech-res-card"><div class="frc-lbl">💰 Caixa</div><div class="frc-val">${brl(tot.caixa)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💳 Crédito</div><div class="frc-val">${brl(tot.credito)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">📄 Boleto</div><div class="frc-val">${brl(tot.boleto)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🧪 Laboratório</div><div class="frc-val">${brl(tot.lab)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🩻 Imagem</div><div class="frc-val">${brl(tot.img)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💉 Procedimentos</div><div class="frc-val">${brl(tot.proc)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🏅 Premiação Total</div><div class="frc-val" style="color:#B45309">${brl(premTot)}</div></div>
-    </div>`;
-}
-
-// Helper: calcula premiação total de toda a equipe a partir de uma lista de lançamentos
-function calcPremiacaoTotalEquipe(lista, m) {
-  const mRec  = m.meta_caixa_recepcao   || 120000;
-  const mCred = m.meta_credito_recepcao  || 16000;
-  const mCC   = m.meta_caixa_callcenter  || 28000;
-  const por = {};
-  lista.forEach(l => {
-    if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
-    por[l.usuario_nome].push(l);
-  });
-  return Object.entries(por).reduce((soma, [nome, ls]) => {
-    const perfil = PERFIS[nome] || "";
-    if(!FAZ_LANC.includes(perfil)) return soma;
-    const tot  = calcTotaisDetalhados(ls);
-    const isCC = perfil === "callcenter" || perfil === "lider_callcenter";
-    const mC   = isCC ? mCC  : mRec;
-    const mCr  = isCC ? 0    : mCred;
-    const v    = isCC
-      ? calcPremiacao(tot.caixa, tot.credito, perfil, mC, mCr).valor
-      : calcPremiacaoCaixaRec(tot.caixa, tot.credito, mC, mCr).valor;
-    return soma + v;
-  }, 0);
-}
-
-// Abre modal de confirmação de fechamento com resumo completo
-function abrirModalFechamento() {
-  if(!dashLancs.length) { toast("Nenhum dado carregado para fechar.", "err"); return; }
-  const m     = dashMetasMes || {};
-  const mesLabel = labelMes(dashMesAno || getMesAno());
-  const tot   = calcTotaisDetalhados(dashLancs);
-  const mRec  = m.meta_caixa_recepcao   || 120000;
-  const mCred = m.meta_credito_recepcao  || 16000;
-  const mCC   = m.meta_caixa_callcenter  || 28000;
-
-  document.getElementById("modal-fech-titulo").textContent =
-    `Você está fechando o mês de ${mesLabel}. Confira o resumo abaixo:`;
-
-  // Resumo de totais
-  document.getElementById("modal-fech-resumo").innerHTML = `
-    <div class="fech-resumo-grid">
-      <div class="fech-res-card"><div class="frc-lbl">💰 Caixa</div><div class="frc-val">${brl(tot.caixa)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💳 Crédito</div><div class="frc-val">${brl(tot.credito)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">📄 Boleto</div><div class="frc-val">${brl(tot.boleto)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🧪 Laboratório</div><div class="frc-val">${brl(tot.lab)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🩻 Imagem</div><div class="frc-val">${brl(tot.img)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💉 Procedimentos</div><div class="frc-val">${brl(tot.proc)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🩺 Consultas</div><div class="frc-val">${brl(tot.consultas)}</div></div>
-    </div>`;
-
-  // Ranking com premiações
-  const por = {};
-  dashLancs.forEach(l => {
-    if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
-    por[l.usuario_nome].push(l);
-  });
-  const rank = Object.entries(por)
-    .filter(([nome]) => FAZ_LANC.includes(PERFIS[nome]||""))
-    .map(([nome,ls]) => {
-      const perfil = PERFIS[nome] || "";
-      const t    = calcTotaisDetalhados(ls);
-      const mC   = (perfil === "callcenter" || perfil === "lider_callcenter") ? mCC  : mRec;
-      const mCr  = (perfil === "callcenter" || perfil === "lider_callcenter") ? 0    : mCred;
-      const prem = calcPremiacao(t.caixa, t.credito, perfil, mC, mCr);
-      return { nome, perfil, caixa:t.caixa, credito:t.credito, premiacao:prem.valor, faixa:prem.faixa };
-    })
-    .sort((a,b) => b.caixa - a.caixa);
-
-  const premTotal = rank.reduce((s,r)=>s+r.premiacao, 0);
-  document.getElementById("modal-fech-ranking").innerHTML = `
-    <div class="tbl-wrap">
-      <table class="fech-rank-table">
-        <thead><tr>
-          <th>#</th><th>Colaboradora</th><th>Perfil</th>
-          <th class="num">Caixa</th><th class="num">Faixa</th><th class="num">💰 Prêmio</th>
-        </tr></thead>
-        <tbody>
-          ${rank.map((r,i)=>`<tr>
-            <td>${["🥇","🥈","🥉"][i]||i+1}</td>
-            <td><strong>${r.nome}</strong></td>
-            <td style="font-size:12px;color:var(--text2)">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
-            <td class="num">${brl(r.caixa)}</td>
-            <td style="font-size:12px">${r.faixa}</td>
-            <td class="num" style="font-weight:700;color:#B45309">${brl(r.premiacao)}</td>
-          </tr>`).join("")}
-        </tbody>
-        <tfoot><tr>
-          <td colspan="5" style="font-weight:700">Total de Premiações</td>
-          <td class="num" style="font-weight:700;color:#B45309">${brl(premTotal)}</td>
-        </tr></tfoot>
-      </table>
-    </div>`;
-
-  document.getElementById("modal-fech-confirmar").classList.remove("hidden");
-}
-
-// Confirma e salva o fechamento no Firestore
-async function confirmarFechamento() {
-  const anoMes  = dashMesAno || getMesAno();
-  const m       = dashMetasMes || {};
-  const mRec    = m.meta_caixa_recepcao   || 120000;
-  const mCred   = m.meta_credito_recepcao  || 16000;
-  const mCC     = m.meta_caixa_callcenter  || 28000;
-
-  const btn = document.getElementById("btn-confirmar-fech");
-  btn.disabled = true; btn.textContent = "Salvando...";
-
-  try {
-    const totEquipe = calcTotaisDetalhados(dashLancs);
-
-    // Dados individuais por colaboradora
-    const por = {};
-    dashLancs.forEach(l => {
-      if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
-      por[l.usuario_nome].push(l);
-    });
-
-    const colaboradoras = {};
-    const ranking = [];
-    Object.entries(por).forEach(([nome, ls]) => {
-      const perfil = PERFIS[nome] || "";
-      if(!FAZ_LANC.includes(perfil)) return;
-      const t  = calcTotaisDetalhados(ls);
-      const mC = (perfil === "callcenter" || perfil === "lider_callcenter") ? mCC  : mRec;
-      const mCr= (perfil === "callcenter" || perfil === "lider_callcenter") ? 0    : mCred;
-      const pr = calcPremiacao(t.caixa, t.credito, perfil, mC, mCr);
-      colaboradoras[nome] = { perfil, caixa:t.caixa, credito:t.credito, boleto:t.boleto,
-        lab:t.lab, img:t.img, proc:t.proc, consultas:t.consultas,
-        premiacao:pr.valor, faixa:pr.faixa };
-      ranking.push({ nome, perfil, caixa:t.caixa, credito:t.credito, premiacao:pr.valor, faixa:pr.faixa });
-    });
-    ranking.sort((a,b) => b.caixa - a.caixa);
-
-    // Dados de prescritores
-    const porPres = {};
-    dashLancs.filter(l=>l.tipo==="entrada"&&l.prescritor).forEach(l => {
-      if(!porPres[l.prescritor]) porPres[l.prescritor] = { total:0, count:0, lab:0, img:0, proc:0, consultas:0 };
-      const v=l.valor||0, p=l.produto||"";
-      porPres[l.prescritor].total += v; porPres[l.prescritor].count++;
-      if(p==="Exames Laboratoriais") porPres[l.prescritor].lab  += v;
-      if(p==="Exames de Imagem")     porPres[l.prescritor].img  += v;
-      if(p==="Procedimento")         porPres[l.prescritor].proc += v;
-      if(p==="Consultas")            porPres[l.prescritor].consultas += v;
-    });
-
-    const fechamento = {
-      ano_mes:    anoMes,
-      mes_label:  labelMes(anoMes),
-      fechado_por: usuario.nome,
-      data_fechamento: firebase.firestore.FieldValue.serverTimestamp(),
-      totais_equipe:  { caixa:totEquipe.caixa, credito:totEquipe.credito, boleto:totEquipe.boleto,
-                        lab:totEquipe.lab, img:totEquipe.img, proc:totEquipe.proc, consultas:totEquipe.consultas },
-      premiacao_total: ranking.reduce((s,r)=>s+r.premiacao, 0),
-      ranking,
-      colaboradoras,
-      prescritores: porPres,
-      metas: { meta_caixa_recepcao:mRec, meta_credito_recepcao:mCred, meta_caixa_callcenter:mCC },
-    };
-
-    await db.collection("fechamentos").doc(anoMes).set(fechamento);
-
-    document.getElementById("modal-fech-confirmar").classList.add("hidden");
-    toast(`Mês de ${labelMes(anoMes)} fechado com sucesso!`);
-    carregarHistoricoFechamentos();
-  } catch(e) {
-    console.error("fechamento:", e);
-    toast(`Erro ao fechar: ${e.message}`, "err");
-  } finally {
-    btn.disabled = false; btn.textContent = "✅ Confirmar Fechamento";
+  if(feriadosFirestore.some(f => f.data === data)) {
+    msgEl.innerHTML = '<div class="import-err">Esta data já está cadastrada nos feriados.</div>';
+    return;
   }
-}
 
-// Carrega lista de fechamentos do Firestore e renderiza os cards de histórico
-async function carregarHistoricoFechamentos() {
-  const el = document.getElementById("hist-fechamentos");
-  if(!el) return;
   try {
-    const snap = await db.collection("fechamentos").orderBy("data_fechamento","desc").get();
-    if(snap.empty) {
-      el.innerHTML = '<div class="empty"><div class="ei">📦</div>Nenhum mês fechado ainda.</div>';
-      return;
+    await db.collection("feriados").doc(data).set({
+      data, nome,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    feriadosFirestore.push({ id: data, data, nome });
+    document.getElementById("fer-data").value = "";
+    document.getElementById("fer-nome").value = "";
+    msgEl.innerHTML = '<div class="import-ok">✅ Feriado cadastrado com sucesso!</div>';
+    renderListaFeriados();
+    // Recalcula cards do dashboard
+    if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+      if(dashUsandoHistorico) renderDashHistorico();
+      else renderDashEquipe(dashLancs);
     }
-    const docs = snap.docs.map(d => ({id:d.id, ...d.data()}));
-    el.innerHTML = `<div class="hist-grid">${docs.map(d => {
-      const dataFech = d.data_fechamento?.toDate?.() || new Date(d.data_fechamento || 0);
-      const dataStr  = dataFech.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
-      return `
-        <div class="hist-card" onclick="abrirFechamentoHistorico('${d.id}')">
-          <div class="hc-mes">${d.mes_label || labelMes(d.id)}</div>
-          <div class="hc-info">Fechado em ${dataStr} por ${d.fechado_por||"—"}</div>
-          <div class="hc-total">${brl(d.totais_equipe?.caixa||0)}</div>
-          <div class="hc-info">Total Equipe · 🏅 ${brl(d.premiacao_total||0)}</div>
-        </div>`;
-    }).join("")}</div>`;
+    setTimeout(() => { msgEl.innerHTML = ""; }, 3000);
   } catch(e) {
-    console.error("hist fechamentos:", e);
-    el.innerHTML = `<div class="empty">Erro ao carregar: ${e.message}</div>`;
+    console.error("salvarFeriado:", e);
+    msgEl.innerHTML = `<div class="import-err">Erro ao salvar: ${e.message}</div>`;
   }
 }
 
-// Abre o modal de histórico para um mês específico
-async function abrirFechamentoHistorico(anoMes) {
-  const modal = document.getElementById("modal-fech-hist");
-  const conteudo = document.getElementById("modal-fech-hist-conteudo");
-  document.getElementById("modal-fech-hist-titulo").textContent = `📅 ${labelMes(anoMes)}`;
-  conteudo.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando...</div>';
-  modal.classList.remove("hidden");
-
+async function removerFeriado(docId) {
+  if(!confirm(`Remover este feriado do cadastro?`)) return;
   try {
-    const [snap, snapPrev] = await Promise.all([
-      db.collection("fechamentos").doc(anoMes).get(),
-      (async () => {
-        const [a,m] = anoMes.split("-").map(Number);
-        const prevId = m===1 ? `${a-1}-12` : `${a}-${String(m-1).padStart(2,"0")}`;
-        return db.collection("fechamentos").doc(prevId).get();
-      })(),
-    ]);
-
-    if(!snap.exists) { conteudo.innerHTML = '<div class="empty">Fechamento não encontrado.</div>'; return; }
-
-    const d = { id:snap.id, ...snap.data() };
-    fechHistDados = d;
-
-    const prevD = snapPrev.exists ? { id:snapPrev.id, ...snapPrev.data() } : null;
-    conteudo.innerHTML = renderConteudoFechamento(d, prevD);
+    await db.collection("feriados").doc(docId).delete();
+    feriadosFirestore = feriadosFirestore.filter(f => f.id !== docId);
+    renderListaFeriados();
+    // Recalcula cards do dashboard
+    if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+      if(dashUsandoHistorico) renderDashHistorico();
+      else renderDashEquipe(dashLancs);
+    }
+    toast("Feriado removido com sucesso!");
   } catch(e) {
-    console.error("abrir fechamento:", e);
-    conteudo.innerHTML = `<div class="empty">Erro: ${e.message}</div>`;
+    console.error("removerFeriado:", e);
+    toast("Erro ao remover: " + e.message, "err");
   }
 }
 
-// Gera HTML completo do conteúdo de um fechamento histórico
-function renderConteudoFechamento(d, prevD) {
-  const dataFech = d.data_fechamento?.toDate?.() || new Date(d.data_fechamento||0);
-  const t = d.totais_equipe || {};
+// ═══════════════════════════════════════════════════════════
+//  GERENCIAR FERIADOS
+// ═══════════════════════════════════════════════════════════
 
-  // Resumo geral
-  const resumoHtml = `
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
-      Fechado em ${dataFech.toLocaleString("pt-BR")} por <strong>${d.fechado_por||"—"}</strong>
-    </div>
-    <div class="fech-resumo-grid" style="margin-bottom:20px">
-      <div class="fech-res-card"><div class="frc-lbl">💰 Caixa</div><div class="frc-val">${brl(t.caixa||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💳 Crédito</div><div class="frc-val">${brl(t.credito||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">📄 Boleto</div><div class="frc-val">${brl(t.boleto||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🧪 Lab.</div><div class="frc-val">${brl(t.lab||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🩻 Imagem</div><div class="frc-val">${brl(t.img||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">💉 Proced.</div><div class="frc-val">${brl(t.proc||0)}</div></div>
-      <div class="fech-res-card"><div class="frc-lbl">🏅 Premiações</div><div class="frc-val" style="color:#B45309">${brl(d.premiacao_total||0)}</div></div>
-    </div>`;
+function abrirModalFeriados() {
+  renderListaFeriados();
+  document.getElementById("modal-feriados").classList.remove("hidden");
+}
 
-  // Ranking
-  const ranking = d.ranking || [];
-  const rankHtml = `
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">Ranking Final</div>
-    <div class="tbl-wrap" style="margin-bottom:20px">
-      <table class="fech-rank-table">
-        <thead><tr>
-          <th>#</th><th>Colaboradora</th><th>Perfil</th>
-          <th class="num">Caixa</th><th class="num">Crédito</th><th class="num">Faixa</th><th class="num">💰 Prêmio</th>
-        </tr></thead>
-        <tbody>
-          ${ranking.map((r,i)=>`<tr>
-            <td>${["🥇","🥈","🥉"][i]||i+1}</td>
-            <td><strong>${r.nome}</strong></td>
-            <td style="font-size:12px;color:var(--text2)">${PERFIL_LABEL[r.perfil]||r.perfil}</td>
-            <td class="num">${brl(r.caixa||0)}</td>
-            <td class="num">${brl(r.credito||0)}</td>
-            <td style="font-size:12px">${r.faixa||"—"}</td>
-            <td class="num" style="font-weight:700;color:#B45309">${brl(r.premiacao||0)}</td>
-          </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>`;
+function fecharModalFeriados() {
+  document.getElementById("modal-feriados").classList.add("hidden");
+  document.getElementById("fer-msg").innerHTML = "";
+  document.getElementById("fer-data").value = "";
+  document.getElementById("fer-nome").value = "";
+}
 
-  // Prescritores top 10
-  const pres = Object.entries(d.prescritores||{}).sort((a,b)=>b[1].total-a[1].total).slice(0,10);
-  const presHtml = pres.length ? `
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">Top Prescritores</div>
-    <div class="tbl-wrap" style="margin-bottom:20px">
-      <table class="fech-rank-table">
-        <thead><tr><th>Prescritor</th><th class="num">Total</th><th class="num">Qtd.</th></tr></thead>
-        <tbody>${pres.map(([nome,v])=>`
-          <tr><td>${nome}</td><td class="num">${brl(v.total||0)}</td><td class="num">${v.count||0}</td></tr>
-        `).join("")}</tbody>
-      </table>
-    </div>` : "";
-
-  // Comparação com mês anterior
-  let compHtml = "";
-  if(prevD && prevD.totais_equipe) {
-    const pt = prevD.totais_equipe;
-    const metricas = [
-      { nome:"💰 Caixa",       vA:pt.caixa||0,    vB:t.caixa||0 },
-      { nome:"💳 Crédito",     vA:pt.credito||0,  vB:t.credito||0 },
-      { nome:"🧪 Laboratório", vA:pt.lab||0,      vB:t.lab||0 },
-      { nome:"🩻 Imagem",      vA:pt.img||0,      vB:t.img||0 },
-      { nome:"💉 Procedimentos",vA:pt.proc||0,    vB:t.proc||0 },
-    ];
-    compHtml = `
-      <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">
-        Comparação com ${prevD.mes_label||labelMes(prevD.id)}
-      </div>
-      <div style="margin-bottom:20px">
-        ${metricas.map(({nome,vA,vB}) => {
-          const diff = vB-vA;
-          const pct  = vA>0 ? ((diff/vA)*100).toFixed(1) : (vB>0?"+∞":"0.0");
-          const cor  = diff>=0 ? "var(--success)" : "#DC2626";
-          const sinal= diff>=0 ? "+" : "";
-          return `<div class="comp-hist-row">
-            <span>${nome}</span>
-            <span>
-              <span style="color:var(--text2);font-size:12px">${brl(vA)} → </span>
-              <strong>${brl(vB)}</strong>
-              <span style="color:${cor};font-size:12px;margin-left:6px">(${sinal}${pct}%)</span>
-            </span>
-          </div>`;
-        }).join("")}
+// Renderiza as duas listas no modal de feriados
+function renderListaFeriados() {
+  const elFixos = document.getElementById("fer-lista-fixos");
+  if(elFixos) {
+    elFixos.innerHTML = FERIADOS_2026.map(f => {
+      const [a,m,d] = f.data.split("-");
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px dashed var(--border);font-size:13px">
+        <span>${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${a} — ${f.nome}</span>
+        <span style="font-size:16px">🔒</span>
       </div>`;
+    }).join("");
   }
-
-  return resumoHtml + rankHtml + presHtml + compHtml;
+  const elFS = document.getElementById("fer-lista-firestore");
+  if(elFS) {
+    if(!feriadosFirestore.length) {
+      elFS.innerHTML = '<div style="font-size:13px;color:var(--text2);padding:8px 0">Nenhum feriado cadastrado ainda.</div>';
+    } else {
+      elFS.innerHTML = feriadosFirestore
+        .slice().sort((a,b) => a.data.localeCompare(b.data))
+        .map(f => {
+          const [a,m,d] = f.data.split("-");
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px dashed var(--border);font-size:13px">
+            <span>${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${a} — ${f.nome}</span>
+            <button class="btn-danger-sm" onclick="removerFeriado('${f.id}')">🗑️ Remover</button>
+          </div>`;
+        }).join("");
+    }
+  }
 }
 
-// Exporta o fechamento aberto como PDF via janela de impressão
-function exportarPDFFechamento() {
-  if(!fechHistDados) { toast("Nenhum fechamento aberto.", "err"); return; }
-  const d  = fechHistDados;
-  const t  = d.totais_equipe || {};
-  const dataFech = d.data_fechamento?.toDate?.() || new Date(d.data_fechamento||0);
-  const rank = d.ranking || [];
+async function salvarFeriado() {
+  const data  = document.getElementById("fer-data").value;
+  const nome  = document.getElementById("fer-nome").value.trim();
+  const msgEl = document.getElementById("fer-msg");
+  if(!data) { msgEl.innerHTML = '<div class="import-err">Informe a data do feriado.</div>'; return; }
+  if(!nome) { msgEl.innerHTML = '<div class="import-err">Informe o nome do feriado.</div>'; return; }
+  if(FERIADOS_2026.some(f => f.data === data)) {
+    msgEl.innerHTML = '<div class="import-err">Esta data já está nos feriados fixos de 2026.</div>'; return;
+  }
+  if(feriadosFirestore.some(f => f.data === data)) {
+    msgEl.innerHTML = '<div class="import-err">Esta data já está cadastrada nos feriados.</div>'; return;
+  }
+  try {
+    await db.collection("feriados").doc(data).set({
+      data, nome, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    feriadosFirestore.push({ id: data, data, nome });
+    document.getElementById("fer-data").value = "";
+    document.getElementById("fer-nome").value = "";
+    msgEl.innerHTML = '<div class="import-ok">✅ Feriado cadastrado com sucesso!</div>';
+    renderListaFeriados();
+    // Recalcula meta diária nos cards do dashboard
+    if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+      if(dashUsandoHistorico) renderDashHistorico();
+      else renderDashEquipe(dashLancs);
+    }
+    setTimeout(() => { msgEl.innerHTML = ""; }, 3000);
+  } catch(e) {
+    console.error("salvarFeriado:", e);
+    msgEl.innerHTML = `<div class="import-err">Erro ao salvar: ${e.message}</div>`;
+  }
+}
 
-  const rankRows = rank.map((r,i)=>`
-    <tr>
-      <td>${i+1}</td><td>${r.nome}</td><td>${PERFIL_LABEL[r.perfil]||r.perfil}</td>
-      <td style="text-align:right">${brl(r.caixa||0)}</td>
-      <td>${r.faixa||"—"}</td>
-      <td style="text-align:right;font-weight:700">${brl(r.premiacao||0)}</td>
-    </tr>`).join("");
-
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR"><head>
-<meta charset="UTF-8">
-<title>Fechamento ${d.mes_label||d.id} — Amor Saúde</title>
-<style>
-  body{font-family:Arial,sans-serif;padding:24px 32px;color:#1A1A2E;font-size:13px}
-  h1{color:#E8003D;margin:0 0 4px}
-  h2{margin:0 0 16px;color:#6B7280;font-weight:400;font-size:14px}
-  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-  .card{background:#FFF5F7;border:1px solid #E5E7EB;border-radius:6px;padding:10px 12px}
-  .card .lbl{font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;margin-bottom:2px}
-  .card .val{font-size:16px;font-weight:700}
-  table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12px}
-  th{background:#F3F4F6;padding:7px 10px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase}
-  td{padding:7px 10px;border-top:1px solid #E5E7EB}
-  .num{text-align:right}
-  h3{font-size:12px;text-transform:uppercase;color:#6B7280;letter-spacing:.5px;margin:16px 0 8px}
-  @media print{body{padding:10px}}
-</style></head><body>
-  <h1>❤️ Amor Saúde — Joinville</h1>
-  <h2>Fechamento: ${d.mes_label||labelMes(d.id)} · Fechado em ${dataFech.toLocaleString("pt-BR")} por ${d.fechado_por||"—"}</h2>
-  <h3>Resumo da Equipe</h3>
-  <div class="grid">
-    <div class="card"><div class="lbl">💰 Caixa</div><div class="val">${brl(t.caixa||0)}</div></div>
-    <div class="card"><div class="lbl">💳 Crédito</div><div class="val">${brl(t.credito||0)}</div></div>
-    <div class="card"><div class="lbl">📄 Boleto</div><div class="val">${brl(t.boleto||0)}</div></div>
-    <div class="card"><div class="lbl">🧪 Lab.</div><div class="val">${brl(t.lab||0)}</div></div>
-    <div class="card"><div class="lbl">🩻 Imagem</div><div class="val">${brl(t.img||0)}</div></div>
-    <div class="card"><div class="lbl">💉 Proced.</div><div class="val">${brl(t.proc||0)}</div></div>
-    <div class="card"><div class="lbl">🩺 Consultas</div><div class="val">${brl(t.consultas||0)}</div></div>
-    <div class="card"><div class="lbl">🏅 Premiações</div><div class="val" style="color:#B45309">${brl(d.premiacao_total||0)}</div></div>
-  </div>
-  <h3>Ranking Final e Premiações</h3>
-  <table>
-    <thead><tr><th>#</th><th>Colaboradora</th><th>Perfil</th><th class="num">Caixa</th><th>Faixa</th><th class="num">Prêmio</th></tr></thead>
-    <tbody>${rankRows}</tbody>
-    <tfoot><tr><td colspan="5" style="font-weight:700">Total</td><td class="num" style="font-weight:700">${brl(d.premiacao_total||0)}</td></tr></tfoot>
-  </table>
-  <script>window.onload=()=>{ setTimeout(()=>window.print(),400); }<\/script>
-</body></html>`;
-
-  const w = window.open("","_blank");
-  w.document.write(html);
-  w.document.close();
+async function removerFeriado(docId) {
+  if(!confirm("Remover este feriado do cadastro?")) return;
+  try {
+    await db.collection("feriados").doc(docId).delete();
+    feriadosFirestore = feriadosFirestore.filter(f => f.id !== docId);
+    renderListaFeriados();
+    // Recalcula meta diária nos cards do dashboard
+    if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+      if(dashUsandoHistorico) renderDashHistorico();
+      else renderDashEquipe(dashLancs);
+    }
+    toast("Feriado removido com sucesso!");
+  } catch(e) {
+    console.error("removerFeriado:", e);
+    toast("Erro ao remover: " + e.message, "err");
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6213,7 +5925,7 @@ function renderFaturamentoDiario() {
 
   // ── Tabela ──
   const nomesDia = { SEGUNDA:"Seg", TERCA:"Ter", QUARTA:"Qua", QUINTA:"Qui", SEXTA:"Sex", SABADO:"Sáb", DOMINGO:"Dom" };
-  const colsData = temInj ? 8 : 7; // colunas de dados após Data e Dia
+  const colsData = 8; // 8 colunas de dados após Data e Dia (incl. injetáveis)
 
   const linhas = dados.map(d => {
     const ehSab     = d.diaSemana === "SABADO";
@@ -6232,10 +5944,10 @@ function renderFaturamentoDiario() {
       <td class="num">${brl(d.exameslaboratoriais || 0)}</td>
       <td class="num">${brl(d.procedimentos || 0)}</td>
       <td class="num">${brl(d.imagem || 0)}</td>
-      ${temInj ? `<td class="num">${brl(d.injetaveis || 0)}</td>` : ""}
       <td class="num">${brl(d.caixa || 0)}</td>
       <td class="num">${brl(d.credito || 0)}</td>
       <td class="num">${brl(d.boleto || 0)}</td>
+      <td class="num">${brl(d.injetaveis || 0)}</td>
       <td class="num" style="font-weight:700;color:var(--primary)">${brl(total)}</td>
     </tr>`;
   }).join("");
@@ -6249,10 +5961,10 @@ function renderFaturamentoDiario() {
             <th class="num">Exames Lab</th>
             <th class="num">Procedimentos</th>
             <th class="num">Imagem</th>
-            ${temInj ? `<th class="num">Injetáveis</th>` : ""}
             <th class="num">Caixa</th>
             <th class="num">Crédito</th>
             <th class="num">Boleto</th>
+            <th class="num">Injetáveis</th>
             <th class="num">Total do Dia</th>
           </tr>
         </thead>
@@ -6263,10 +5975,10 @@ function renderFaturamentoDiario() {
             <td class="num">${brl(totalLab)}</td>
             <td class="num">${brl(totalProc)}</td>
             <td class="num">${brl(totalImg)}</td>
-            ${temInj ? `<td class="num">${brl(totalInj)}</td>` : ""}
             <td class="num">${brl(totalCaixa)}</td>
             <td class="num">${brl(totalCredito)}</td>
             <td class="num">${brl(totalBoleto)}</td>
+            <td class="num">${brl(totalInj)}</td>
             <td class="num" style="color:var(--primary)">${brl(totalFaturado)}</td>
           </tr>
         </tfoot>
