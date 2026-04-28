@@ -767,22 +767,6 @@
             <label>Mês / Ano</label>
             <input type="month" id="dash-mes" onchange="mudarFiltroDash()" style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);transition:border-color .2s" />
           </div>
-          <div class="fg">
-            <label>Colaboradora</label>
-            <select id="dash-colab" onchange="renderDashboard()">
-              <option value="">Todas</option>
-            </select>
-          </div>
-          <div class="fg">
-            <label>Produto</label>
-            <select id="dash-prod" onchange="renderDashboard()">
-              <option value="">Todos</option>
-              <option>Exames Laboratoriais</option>
-              <option>Exames de Imagem</option>
-              <option>Procedimento</option>
-              <option>Consultas</option>
-            </select>
-          </div>
           <div style="padding-bottom:1px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary" style="width:auto;white-space:nowrap" onclick="abrirModalMetas()">⚙️ Configurar Metas</button>
             <button class="btn btn-ghost" id="btn-importar-historico" style="width:auto;white-space:nowrap;display:none" onclick="abrirModalFatImport()">📊 Importar Faturamento</button>
@@ -3846,18 +3830,6 @@ function iniciarDashboard() {
   const inp = document.getElementById("dash-mes");
   if(inp) inp.value = dashMesAno;
 
-  // Preenche select de colaboradoras (apenas quem faz lançamento)
-  const sel = document.getElementById("dash-colab");
-  if(sel) {
-    sel.innerHTML = '<option value="">Todas</option>';
-    Object.values(USUARIOS).filter(u => FAZ_LANC.includes(u.perfil))
-      .forEach(u => {
-        const o = document.createElement("option");
-        o.value = o.textContent = u.nome;
-        sel.appendChild(o);
-      });
-  }
-
   // Restaura modo salvo no localStorage sem chamar renderDashboard (ainda sem dados)
   aplicarBotoesModo(dashModo);
   renderControlesModo(dashModo);
@@ -4071,13 +4043,8 @@ function calcTotaisDetalhados(lista) {
 //  DASHBOARD — RENDER PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 function getDashLancsFiltrados() {
-  const colab = document.getElementById("dash-colab")?.value || "";
-  const prod  = document.getElementById("dash-prod")?.value  || "";
-  return filtrarLancsModo(dashLancs).filter(l => {
-    if(colab && l.usuario_nome !== colab) return false;
-    if(prod  && l.produto      !== prod)  return false;
-    return true;
-  });
+  // Os dropdowns "Colaboradora" e "Produto" foram removidos; só o modo dia/semana/mês filtra.
+  return filtrarLancsModo(dashLancs);
 }
 
 function renderDashboard() {
@@ -4095,10 +4062,8 @@ function renderDashboard() {
 
 // ── Dashboard histórico (dados de historico_mensal) ───────────
 function renderDashHistorico() {
-  const filtroColab = document.getElementById("dash-colab")?.value || "";
-  const docs = filtroColab
-    ? dashHistorico.filter(d => d.nome === filtroColab)
-    : dashHistorico;
+  // Dropdown de colaboradora removido — usa todos os docs do histórico
+  const docs = dashHistorico;
 
   // Cards equipe — lê de faturamentoDiario
   const eq = getTotaisFaturamentoDiario(dashMesAno);
