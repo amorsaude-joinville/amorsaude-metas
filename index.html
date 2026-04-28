@@ -1694,6 +1694,51 @@ function getTotaisFaturamentoDiario(mesAnoStr) {
   };
 }
 
+// Totais de UM dia específico (filtro "Por Dia" do dashboard).
+// Regra: tenta primeiro faturamentoDiario (doc com data === dataStr).
+// Se não encontrar, soma os lançamentos de dashLancs cuja data_hora bate com dataStr.
+// Retorna a fonte usada para que o indicador visual (📦/📝/⚠️) seja exibido.
+function getTotaisPorDia(dataStr) {
+  const zerado = { caixa:0, credito:0, boleto:0, laboratorio:0, imagem:0, procedimentos:0, injetaveis:0 };
+  if(!dataStr) return { ...zerado, fonte:"sem-dados" };
+
+  // 1) Procura doc consolidado em faturamentoDiario
+  const doc = faturamentoDiarioAtual.find(d => d.data === dataStr);
+  if(doc) {
+    return {
+      caixa:         doc.caixa               || 0,
+      credito:       doc.credito             || 0,
+      boleto:        doc.boleto              || 0,
+      laboratorio:   doc.exameslaboratoriais || 0,
+      imagem:        doc.imagem              || 0,
+      procedimentos: doc.procedimentos       || 0,
+      injetaveis:    doc.injetaveis          || 0,
+      fonte: "fatDiario",
+    };
+  }
+
+  // 2) Fallback: soma os lançamentos individuais do dia (dashLancs já carregado)
+  const lancsDoDia = (typeof dashLancs !== "undefined" ? dashLancs : []).filter(l => {
+    if(!l.data_hora) return false;
+    const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    return ds === dataStr;
+  });
+  if(!lancsDoDia.length) return { ...zerado, fonte:"sem-dados" };
+
+  const t = calcTotaisDetalhados(lancsDoDia);
+  return {
+    caixa:         t.caixa,
+    credito:       t.credito,
+    boleto:        t.boleto,
+    laboratorio:   t.lab,
+    imagem:        t.img,
+    procedimentos: t.proc,
+    injetaveis:    t.injetaveis,
+    fonte: "lancamentos",
+  };
+}
+
 function mascaraCPF(el) {
   let v = el.value.replace(/\D/g,"").slice(0,11);
   if(v.length>9) v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/,"$1.$2.$3-$4");
@@ -3909,20 +3954,20 @@ function renderControlesModo(modo) {
   if(!ctrl) return;
 
   if(modo === "dia") {
-    // Data padrão: ontem (D-1), limitada ao mês carregado
-    const ontem = new Date(); ontem.setDate(ontem.getDate()-1);
-    const val = `${ontem.getFullYear()}-${String(ontem.getMonth()+1).padStart(2,"0")}-${String(ontem.getDate()).padStart(2,"0")}`;
-    const [a, m2] = (dashMesAno || getMesAno()).split("-");
-    const ultimo = new Date(+a, +m2, 0).getDate();
+    // Data padrão: hoje. Permitir qualquer dia a partir de 02/01/2026
+    // (sem max, sem trava no mês carregado — calendário navega meses anteriores)
+    const hoje = new Date();
+    const val = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}-${String(hoje.getDate()).padStart(2,"0")}`;
     ctrl.innerHTML = `
       <div class="fg" style="margin:0">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block">Data</label>
         <input type="date" id="dash-filtro-data"
           value="${val}"
-          min="${a}-${m2}-01"
-          max="${a}-${m2}-${String(ultimo).padStart(2,'0')}"
+          min="2026-01-02"
           onchange="renderDashboard()"
           style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)" />
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">Os dados serão filtrados automaticamente ao selecionar uma data.</div>
+        <div id="dash-fonte-info" style="margin-top:6px"></div>
       </div>`;
     ctrl.style.display = "";
   } else if(modo === "semana") {
@@ -4198,7 +4243,56 @@ function renderDashHistorico() {
 }
 
 // ── Cards resumo da equipe
+// Renderiza os 7 cards do dashboard quando o filtro está em "Por Dia".
+// Lê de faturamentoDiario (consolidado) ou faz fallback para lançamentos do dia.
+// Atualiza também o indicador de fonte (📦/📝/⚠️) abaixo do input de data.
+function renderDashEquipeDia(dataStr) {
+  const t = getTotaisPorDia(dataStr);
+
+  // Indicador visual da fonte
+  const info = document.getElementById("dash-fonte-info");
+  if(info) {
+    if(t.fonte === "fatDiario") {
+      info.innerHTML = `<div style="font-size:12px;color:#16A34A;font-weight:600">📦 Dados consolidados (importação)</div>`;
+    } else if(t.fonte === "lancamentos") {
+      info.innerHTML = `<div style="font-size:12px;color:#E8003D;font-weight:600">📝 Dados de lançamentos da equipe</div>`;
+    } else {
+      info.innerHTML = `<div style="font-size:12px;color:#F59E0B;font-weight:600">⚠️ Sem dados para essa data</div>`;
+    }
+  }
+
+  // Card simplificado: só valor do dia (sem barra de progresso de meta mensal)
+  function cardDia(tit, val, ico) {
+    return `
+      <div class="card-meta" style="padding:18px">
+        <div class="meta-top" style="margin-bottom:10px">
+          <div class="meta-tit" style="font-size:12px">${tit}</div>
+          <div class="meta-ico" style="width:30px;height:30px;font-size:15px">${ico}</div>
+        </div>
+        <div class="meta-val" style="font-size:20px">${brl(val)}</div>
+      </div>`;
+  }
+
+  const wrap = document.getElementById("dash-cards-equipe");
+  if(!wrap) return;
+  wrap.innerHTML =
+    cardDia("Caixa — Equipe",   t.caixa,         "💰") +
+    cardDia("Crédito — Equipe", t.credito,        "💳") +
+    cardDia("Boleto — Equipe",  t.boleto,         "📄") +
+    cardDia("Exames Lab.",      t.laboratorio,    "🧪") +
+    cardDia("Exames Imagem",    t.imagem,         "🩻") +
+    cardDia("Procedimentos",    t.procedimentos,  "💉") +
+    cardDia("Injetáveis",       t.injetaveis,     "💊");
+}
+
 function renderDashEquipe(lista) {
+  // No modo "Por Dia", os 7 cards leem de faturamentoDiario (consolidado)
+  // com fallback para os lançamentos individuais do dia selecionado.
+  if(dashModo === "dia") {
+    const dataStr = document.getElementById("dash-filtro-data")?.value || "";
+    renderDashEquipeDia(dataStr);
+    return;
+  }
   const tot = getTotaisFaturamentoDiario(dashMesAno);
   const m   = dashMetasMes || {};
   const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
