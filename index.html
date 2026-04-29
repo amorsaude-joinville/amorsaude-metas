@@ -1677,6 +1677,91 @@ const VE_DASHBOARD = ["gestor","subgestora","lider"];
 // Perfis que SÓ vêem o dashboard geral (sem aba de lançamento)
 const SO_DASHBOARD = ["gestor","subgestora"];
 
+// ─────────────────────────────────────────────────────────────
+//  REESTRUTURAÇÃO — Fase A: foundation do novo modelo unificado
+// ─────────────────────────────────────────────────────────────
+// Marco temporal: meses ANTES desta string lêem do faturamentoDiario;
+// meses A PARTIR dela usam o novo schema em lancamentos (status==="pago").
+const MARCO_NOVO_MODELO = "2026-05";
+
+// Heurística do Risco 5: se um mês a partir do marco tiver MENOS docs
+// "pago" que isso, dashboard cai pra fatDiario como fallback (transição suave)
+const MIN_DOCS_LANCAMENTOS_FALLBACK = 5;
+
+// Status do kanban "Acompanhamento" (status que NÃO vão pro faturamento ainda)
+const STATUS_KANBAN = ["acompanhar","link_enviado","lancar"];
+
+// Formas de pagamento detalhadas (substituem o esquema legacy "Caixa"/"Crédito")
+const FORMAS_PAGAMENTO = ["Dinheiro","Débito","PIX","Boleto","Crédito"];
+
+// Perfis autorizados a editar lançamentos (regra D-Edição da Fase E)
+const PODE_EDITAR_LANC = ["gestor","subgestora","coordenadora","lider","lider_callcenter"];
+
+// Detecta se um documento já está no novo schema unificado.
+// Olha por presença de qualquer campo característico do modelo novo.
+function ehDocNovoSchema(l) {
+  if(!l) return false;
+  if(l.forma_pagamento_1 != null)               return true;   // pagamento detalhado
+  if(typeof l.status === "string" && l.status)  return true;   // status (ex: pago/lancar/etc)
+  if(Array.isArray(l.procedimentos))            return true;   // lista de procedimentos
+  // Presença de QUALQUER um dos 3 campos numéricos de categoria
+  if(typeof l.imagem      === "number") return true;
+  if(typeof l.consultas   === "number") return true;
+  if(typeof l.laboratorio === "number") return true;
+  return false;
+}
+
+// Recebe uma lista de pagamentos [{forma, valor}] (1 ou 2 itens) e retorna
+// {caixa, credito} aplicando a regra D7: Boleto entra no caixa também.
+// Convenção pt-BR: aceita "Pix" e "PIX" como sinônimos.
+function mapearFormasPagamentoParaCaixaCredito(pagamentos) {
+  let caixa = 0, credito = 0;
+  (pagamentos || []).forEach(p => {
+    const v = +p?.valor || 0;
+    const f = (p?.forma || "").trim();
+    if(!v || !f) return;
+    if(f === "Crédito")                     credito += v;
+    else if(["Dinheiro","Débito","PIX","Pix","Boleto"].includes(f)) caixa += v;
+  });
+  return { caixa, credito };
+}
+
+// Extrai categorias detalhadas de um doc no schema novo.
+// Retorna a mesma forma de calcTotaisDetalhados pra ser somável diretamente.
+// Regra D7: Boleto entra em CAIXA E ALÉM DISSO no campo `boleto` separado.
+function extrairCategoriasDoDocNovo(l) {
+  const out = { caixa:0, credito:0, boleto:0, lab:0, img:0, proc:0, injetaveis:0, consultas:0, porProcTipo:{} };
+
+  // Caixa/crédito a partir das 1-2 formas de pagamento
+  const pagamentos = [];
+  if(l.forma_pagamento_1) pagamentos.push({ forma:l.forma_pagamento_1, valor:l.valor_1 });
+  if(l.forma_pagamento_2) pagamentos.push({ forma:l.forma_pagamento_2, valor:l.valor_2 });
+  const { caixa, credito } = mapearFormasPagamentoParaCaixaCredito(pagamentos);
+  out.caixa   = caixa;
+  out.credito = credito;
+
+  // Boleto separado (D7): soma valor da(s) parte(s) cuja forma === "Boleto"
+  pagamentos.forEach(p => {
+    if((p.forma||"").trim() === "Boleto") out.boleto += +p.valor || 0;
+  });
+
+  // Categorias por produto (campos numéricos diretos do schema novo)
+  out.lab       = +l.laboratorio || 0;
+  out.img       = +l.imagem      || 0;
+  out.consultas = +l.consultas   || 0;
+
+  // Procedimentos: soma o total + breakdown por tipo
+  (l.procedimentos || []).forEach(p => {
+    const v = +p.valor || 0;
+    const tp = p.tipo || "";
+    out.proc += v;
+    if(tp) out.porProcTipo[tp] = (out.porProcTipo[tp] || 0) + v;
+    if(tp === "Injetáveis") out.injetaveis += v;
+  });
+
+  return out;
+}
+
 // Tipos de Procedimento — reutilizados no formulário de Orçamentos
 // (mesma lista do <select id="e-proced"> da aba Lançamentos)
 const TIPOS_PROCEDIMENTO = [
@@ -4641,6 +4726,27 @@ function calcTotaisDetalhados(lista) {
   let caixa=0, credito=0, boleto=0, lab=0, img=0, proc=0, injetaveis=0, consultas=0;
   const porProcTipo = {};
   lista.forEach(l => {
+    if(l.tipo === "saida") return; // saídas tratadas no segundo loop
+
+    // ── Schema NOVO (modelo unificado pós-marco) ──
+    // Detectado via ehDocNovoSchema(). Soma categorias e formas de pagamento.
+    if(ehDocNovoSchema(l)) {
+      const c = extrairCategoriasDoDocNovo(l);
+      caixa     += c.caixa;
+      credito   += c.credito;
+      boleto    += c.boleto;
+      lab       += c.lab;
+      img       += c.img;
+      proc      += c.proc;
+      injetaveis+= c.injetaveis;
+      consultas += c.consultas;
+      Object.entries(c.porProcTipo).forEach(([k,v]) => {
+        porProcTipo[k] = (porProcTipo[k] || 0) + v;
+      });
+      return;
+    }
+
+    // ── Schema LEGACY (1 produto + 1 forma de pagamento) ──
     if(l.tipo !== "entrada") return;
     const v=l.valor||0, fp=(l.forma_pagamento||"").normalize("NFC").trim(), p=l.produto||"", tp=l.tipo_procedimento||"";
     if(fmCaixa.includes(fp)) caixa   += v;
@@ -4655,6 +4761,7 @@ function calcTotaisDetalhados(lista) {
     }
     if(p==="Consultas") consultas += v;
   });
+  // Saídas (legacy ou pares com id_par): descontam do caixa
   lista.filter(l=>l.tipo==="saida").forEach(l => { caixa -= l.valor||0; });
   return { caixa:Math.max(0,caixa), credito:Math.max(0,credito), boleto, lab, img, proc, injetaveis, consultas, porProcTipo };
 }
