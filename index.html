@@ -752,6 +752,31 @@
               <label>Total (R$)</label>
               <input type="text" id="orc-total" readonly style="font-weight:700;color:var(--primary);font-size:16px" value="0,00" />
             </div>
+
+            <!-- Saída embutida do orçamento — armazenada no doc, vira lançamento só na Fase 2 -->
+            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+                <input type="checkbox" id="orc-tem-saida" onchange="toggleSaidaEmbutidaOrc()" />
+                ↩️ Tem desconto/saída associada?
+              </label>
+              <div id="orc-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
+                <div class="fgrid">
+                  <div class="fg">
+                    <label>Valor da Saída (R$) *</label>
+                    <input type="text" id="orc-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
+                  </div>
+                  <div class="fg">
+                    <label>Motivo *</label>
+                    <select id="orc-saida-motivo">
+                      <option value="" disabled selected>Selecione...</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic">
+                  ⓘ A saída fica registrada no orçamento. Vira lançamento de saída automaticamente quando o orçamento for marcado como Pago (Fase 2).
+                </div>
+              </div>
+            </div>
           </div>
           <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn btn-primary" style="max-width:220px" onclick="salvarOrcamento()">Salvar Orçamento</button>
@@ -1225,6 +1250,28 @@
               </div>
             </div>
 
+            <!-- Saída embutida (opcional) — gera lançamento de saída vinculado por id_par -->
+            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+                <input type="checkbox" id="e-tem-saida" onchange="toggleSaidaEmbutidaEntrada()" />
+                ↩️ Tem saída/desconto associado?
+              </label>
+              <div id="e-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
+                <div class="fgrid">
+                  <div class="fg">
+                    <label>Valor da Saída (R$) *</label>
+                    <input type="text" id="e-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
+                  </div>
+                  <div class="fg">
+                    <label>Motivo *</label>
+                    <select id="e-saida-motivo">
+                      <option value="" disabled selected>Selecione...</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
           <div style="margin-top:12px">
             <button class="btn btn-primary" style="max-width:200px" onclick="salvarEntrada()">Salvar Entrada</button>
@@ -1265,13 +1312,6 @@
               <label>Motivo *</label>
               <select id="s-motivo">
                 <option value="" disabled selected>Selecione...</option>
-                <option>Pagamento Duplicado</option>
-                <option>Atraso de Atendimento</option>
-                <option>Gratuidade Cartão de Todos</option>
-                <option>Insatisfação no Atendimento</option>
-                <option>Desconto</option>
-                <option>Sem Lançamento Cartão de Todos</option>
-                <option>Retorno Particular/Convênios</option>
               </select>
             </div>
 
@@ -1644,6 +1684,40 @@ const TIPOS_PROCEDIMENTO = [
   "Procedimento Otorrinolaringológico","Preventivo","Eletrocardiograma",
   "Taxa Parceiros","Testes Rápidos","Injetáveis"
 ];
+
+// Motivos de saída — única fonte de verdade. Usado em 3 lugares:
+// 1) <select id="s-motivo"> da aba Saída avulsa
+// 2) <select id="e-saida-motivo"> da saída embutida no formulário de Entrada
+// 3) <select id="orc-saida-motivo"> da saída embutida no formulário de Orçamento
+const MOTIVOS_SAIDA = [
+  "Pagamento Duplicado",
+  "Atraso de Atendimento",
+  "Gratuidade Cartão de Todos",
+  "Insatisfação no Atendimento",
+  "Desconto",
+  "Sem Lançamento Cartão de Todos",
+  "Retorno Particular/Convênios",
+];
+
+// Popula um <select> com options a partir de uma lista (mantém o placeholder existente)
+function popularSelectMotivos(idSelect) {
+  const sel = document.getElementById(idSelect);
+  if(!sel) return;
+  // Preserva o primeiro <option> (placeholder "Selecione..."), remove o resto, adiciona motivos
+  const placeholder = sel.querySelector("option[disabled]");
+  sel.innerHTML = "";
+  if(placeholder) sel.appendChild(placeholder);
+  MOTIVOS_SAIDA.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+}
+
+// Gera um id_par curto para vincular entrada+saída criadas juntas
+function gerarIdPar() {
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
 
 // Mapeamento de status de orçamento → label visível
 const ORC_STATUS_LABEL = {
@@ -2409,6 +2483,10 @@ function iniciarApp() {
   if(btnImp) btnImp.style.display = ehGestao ? "" : "none";
 
   preencherPres();
+  // Popula os 3 selects de motivo de saída a partir da constante MOTIVOS_SAIDA
+  popularSelectMotivos("s-motivo");
+  popularSelectMotivos("e-saida-motivo");
+  popularSelectMotivos("orc-saida-motivo");
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
@@ -2986,6 +3064,16 @@ function renderTabela() {
     const pn = l.prescritor ? l.prescritor.split(" ").slice(0,2).join(" ") : "—";
     const cpfMask = (l.paciente_cpf||"").replace(/(\d{3})\.(\d{3})\.(\d{3})-(\d{2})/, "$1.***.$3-**");
 
+    // Se a entrada tem id_par, busca a saída irmã para exibir o valor líquido
+    let liquidoHtml = "";
+    if(en && l.id_par) {
+      const irma = lancHoje.find(x => x.id !== l.id && x.id_par === l.id_par && x.tipo === "saida");
+      if(irma) {
+        const liquido = (l.valor||0) - (irma.valor||0);
+        liquidoHtml = `<div style="font-size:11px;color:var(--text2);margin-top:2px">Líquido após saída: <strong>${brl(liquido)}</strong></div>`;
+      }
+    }
+
     return `
       <tr>
         <td><span class="tipo-b ${en?"b-in":"b-out"}">${en?"✅ Entrada":"↩️ Saída"}</span></td>
@@ -2995,7 +3083,7 @@ function renderTabela() {
         <td>${l.produto||"—"}${l.tipo_procedimento?`<br><small style="color:var(--text2)">${l.tipo_procedimento}</small>`:""}</td>
         <td>${l.forma_pagamento||(l.motivo_saida?"Estorno":"—")}</td>
         <td title="${l.prescritor||""}">${pn}</td>
-        <td class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}</td>
+        <td class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}${liquidoHtml}</td>
         <td><button class="btn-danger-sm" onclick="pedirDel('${l.id}')">Excluir</button></td>
       </tr>
     `;
@@ -3062,6 +3150,22 @@ async function salvarEntrada() {
   const valor = parseBRL(vStr);
   if(valor<=0) { toast("Valor deve ser maior que zero.","err"); return; }
 
+  // ── Saída embutida (opcional) ──
+  // Se o checkbox estiver marcado, valida valor + motivo e prepara doc da saída
+  // vinculada à entrada por id_par.
+  const temSaida = document.getElementById("e-tem-saida")?.checked;
+  let saidaValor = 0, saidaMotivo = "", idPar = null;
+  if(temSaida) {
+    const sStr = document.getElementById("e-saida-valor").value.trim();
+    saidaMotivo = document.getElementById("e-saida-motivo").value;
+    if(!sStr)         { toast("Informe o valor da saída.","err"); return; }
+    if(!saidaMotivo)  { toast("Selecione o motivo da saída.","err"); return; }
+    saidaValor = parseBRL(sStr);
+    if(saidaValor <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
+    if(saidaValor > valor) toast("Atenção: saída maior que a entrada.","ok");
+    idPar = gerarIdPar();
+  }
+
   // [FIX 1] Desabilita botão durante o envio para evitar duplo clique
   const btn = document.querySelector("#form-entrada .btn-primary");
   btn.disabled = true;
@@ -3077,12 +3181,34 @@ async function salvarEntrada() {
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
+  if(idPar) doc.id_par = idPar;
 
   console.log("[Amor Saúde] Salvando entrada:", doc);
 
   try {
     const ref = await db.collection("lancamentos").add(doc);
     console.log("[Amor Saúde] Entrada salva com ID:", ref.id);
+
+    // Cria lançamento de saída vinculado pelo mesmo id_par
+    if(temSaida) {
+      const docSaida = {
+        usuario_id: usuario.uid || usuario.nome,
+        usuario_nome: usuario.nome, perfil: usuario.perfil,
+        tipo:"saida", paciente_nome:nome, paciente_cpf:cpf, valor: saidaValor,
+        produto: prod, tipo_procedimento: null, forma_pagamento: null,
+        prescritor: null, prescritor_especialidade: null,
+        motivo_saida: saidaMotivo,
+        mes_ano: getMesAno(),
+        data_hora: firebase.firestore.FieldValue.serverTimestamp(),
+        criado_em: firebase.firestore.FieldValue.serverTimestamp(),
+        id_par: idPar,
+      };
+      const refS = await db.collection("lancamentos").add(docSaida);
+      console.log("[Amor Saúde] Saída embutida salva com ID:", refS.id, "id_par:", idPar);
+      toast("Entrada e saída registradas!", "ok");
+    } else {
+      toast("Entrada salva com sucesso!");
+    }
 
     ["e-nome","e-cpf","e-valor"].forEach(id=>document.getElementById(id).value="");
     document.getElementById("e-produto").value="";
@@ -3091,8 +3217,12 @@ async function salvarEntrada() {
     document.getElementById("busca-pres").value="";
     document.getElementById("e-pres").selectedIndex=-1;
     document.getElementById("wrap-proced").style.display="none";
+    // Reset da seção de saída embutida
+    const cbS = document.getElementById("e-tem-saida");
+    if(cbS) { cbS.checked = false; toggleSaidaEmbutidaEntrada(); }
+    document.getElementById("e-saida-valor").value = "";
+    document.getElementById("e-saida-motivo").value = "";
     preencherPres();
-    toast("Entrada salva com sucesso!");
   } catch(e) {
     // [FIX 1] Exibe mensagem de erro detalhada do Firebase na tela
     console.error("[Amor Saúde] Erro ao salvar entrada:", e);
@@ -3101,6 +3231,20 @@ async function salvarEntrada() {
     btn.disabled = false;
     btn.textContent = "Salvar Entrada";
   }
+}
+
+// Toggle da seção "Saída embutida" no form de Entrada
+function toggleSaidaEmbutidaEntrada() {
+  const cb = document.getElementById("e-tem-saida");
+  const wrap = document.getElementById("e-saida-wrap");
+  if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
+}
+
+// Toggle da seção "Saída embutida" no form de Orçamento
+function toggleSaidaEmbutidaOrc() {
+  const cb = document.getElementById("orc-tem-saida");
+  const wrap = document.getElementById("orc-saida-wrap");
+  if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3257,6 +3401,17 @@ function renderHistorico(lista, dataSel) {
     const en = l.tipo==="entrada";
     const pn = l.prescritor ? l.prescritor.split(" ").slice(0,2).join(" ") : "—";
     const cpfMask = (l.paciente_cpf||"").replace(/(\d{3})\.(\d{3})\.(\d{3})-(\d{2})/, "$1.***.$3-**");
+
+    // Mesma lógica do renderTabela: se entrada tem id_par, busca a saída irmã
+    let liquidoHtml = "";
+    if(en && l.id_par) {
+      const irma = lista.find(x => x.id !== l.id && x.id_par === l.id_par && x.tipo === "saida");
+      if(irma) {
+        const liquido = (l.valor||0) - (irma.valor||0);
+        liquidoHtml = `<div style="font-size:11px;color:var(--text2);margin-top:2px">Líquido após saída: <strong>${brl(liquido)}</strong></div>`;
+      }
+    }
+
     return `
       <tr>
         <td><span class="tipo-b ${en?"b-in":"b-out"}">${en?"✅ Entrada":"↩️ Saída"}</span></td>
@@ -3266,7 +3421,7 @@ function renderHistorico(lista, dataSel) {
         <td>${l.produto||"—"}${l.tipo_procedimento?`<br><small style="color:var(--text2)">${l.tipo_procedimento}</small>`:""}</td>
         <td>${l.forma_pagamento||(l.motivo_saida?"Estorno":"—")}</td>
         <td title="${l.prescritor||""}">${pn}</td>
-        <td class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}</td>
+        <td class="${en?"vp":"vn"}">${en?"+":"-"}${brl(l.valor||0)}${liquidoHtml}</td>
         <td><button class="btn-danger-sm" onclick="pedirDel('${l.id}')">Excluir</button></td>
       </tr>
     `;
@@ -6809,6 +6964,10 @@ function resetFormOrcamento() {
   set("orc-lab", "");
   set("orc-pgto", "");
   set("orc-total", "0,00");
+  set("orc-saida-valor", "");
+  set("orc-saida-motivo", "");
+  const cbS = document.getElementById("orc-tem-saida");
+  if(cbS) { cbS.checked = false; toggleSaidaEmbutidaOrc(); }
   // Limpa lista de procedimentos
   const lista = document.getElementById("orc-proc-lista");
   if(lista) lista.innerHTML = "";
@@ -6881,17 +7040,33 @@ async function salvarOrcamento() {
   const ehCC = usuario.perfil === "callcenter" || usuario.perfil === "lider_callcenter";
   if(ehCC && !idCaso) { toast("ID do caso é obrigatório para Call Center.", "err"); return; }
 
+  // Saída embutida (opcional). Armazenada no documento; vira lançamento na Fase 2.
+  const temSaidaOrc = document.getElementById("orc-tem-saida")?.checked;
+  let saidaOrc = null;
+  if(temSaidaOrc) {
+    const sStr = document.getElementById("orc-saida-valor").value.trim();
+    const sMot = document.getElementById("orc-saida-motivo").value;
+    if(!sStr) { toast("Informe o valor da saída.","err"); return; }
+    if(!sMot) { toast("Selecione o motivo da saída.","err"); return; }
+    const sVal = parseBRL(sStr);
+    if(sVal <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
+    if(sVal > total) toast("Atenção: saída maior que o total do orçamento.","ok");
+    saidaOrc = { valor: sVal, motivo: sMot };
+  }
+
   const editId = document.getElementById("orc-edit-id")?.value || "";
   const ts = firebase.firestore.FieldValue.serverTimestamp();
 
   try {
     if(editId) {
-      // Edição: preserva criado_em / criado_por
+      // Edição: preserva criado_em / criado_por. saida = null quando desmarcada
+      // (Firestore aceita null; assim removemos saída antiga ao desmarcar a checkbox)
       await db.collection("orcamentos").doc(editId).update({
         paciente, id_caso: idCaso, medico,
         imagem, consultas, laboratorio: lab,
         procedimentos: procs, total,
         forma_pagamento: pgto,
+        saida: saidaOrc,
         atualizado_em: ts,
       });
       toast("Orçamento atualizado.", "ok");
@@ -6902,6 +7077,7 @@ async function salvarOrcamento() {
         imagem, consultas, laboratorio: lab,
         procedimentos: procs, total,
         forma_pagamento: pgto,
+        saida: saidaOrc,
         status: "acompanhar",
         criado_em: ts,
         criado_por: usuario.nome,
@@ -7052,6 +7228,14 @@ function abrirModalOrcDet(id) {
         ${procsHtml}
       </div>
     </div>
+    ${o.saida && o.saida.valor > 0 ? `
+      <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;color:#DC2626">
+        <strong>↩️ Saída:</strong> ${brl(o.saida.valor)} — Motivo: ${escHTML(o.saida.motivo||"—")}
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;font-style:italic">
+          Vira lançamento de saída quando o orçamento for marcado como Pago.
+        </div>
+      </div>
+    ` : ""}
     <div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text2)">
       Criado em ${fmt(dC)} por <strong>${escHTML(o.criado_por||"—")}</strong><br>
       Última atualização: ${fmt(dU)}
@@ -7088,6 +7272,19 @@ function editarOrcamentoFromModal() {
   set("orc-consultas", o.consultas ? o.consultas.toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
   set("orc-lab",       o.laboratorio ? o.laboratorio.toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
   set("orc-pgto", o.forma_pagamento || "");
+
+  // Saída embutida — preenche checkbox + campos quando o orçamento já tem saída
+  const cbS = document.getElementById("orc-tem-saida");
+  if(o.saida && o.saida.valor > 0) {
+    if(cbS) cbS.checked = true;
+    set("orc-saida-valor", o.saida.valor.toLocaleString("pt-BR",{minimumFractionDigits:2}));
+    set("orc-saida-motivo", o.saida.motivo || "");
+  } else {
+    if(cbS) cbS.checked = false;
+    set("orc-saida-valor", "");
+    set("orc-saida-motivo", "");
+  }
+  toggleSaidaEmbutidaOrc();
 
   // Reconstrói procedimentos
   const lista = document.getElementById("orc-proc-lista");
