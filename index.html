@@ -84,6 +84,7 @@
     .h-logo span { font-weight:400; color:var(--text2); font-size:14px; margin-left:8px; }
     .h-right { display:flex; align-items:center; gap:16px; }
     .badge-mes { background:var(--bg2); color:var(--primary); padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600; border:1px solid rgba(232,0,61,.2); }
+    @keyframes arPulse { 0%,100%{opacity:1} 50%{opacity:.35} }
     .h-user .nome { font-size:14px; font-weight:600; }
     .h-user .perf { font-size:12px; color:var(--text2); }
 
@@ -597,6 +598,11 @@
     <div class="h-logo">Amor Saúde <span>Joinville</span></div>
     <div class="h-right">
       <div class="badge-mes" id="badge-mes">—</div>
+      <div id="auto-refresh-ind" title="Atualização automática a cada 2 minutos"
+        style="display:none;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10B981;animation:arPulse 2s infinite"></span>
+        <span id="auto-refresh-ind-txt">—</span>
+      </div>
       <div class="h-user">
         <div class="nome" id="h-nome">—</div>
         <div class="perf" id="h-perf">—</div>
@@ -1571,6 +1577,9 @@ let unsubCoord  = null;      // listener coordenadora
 let equipeLancs = [];        // lançamentos do time carregados
 let unsubEquipe = null;      // listener equipe
 
+// Auto-refresh do dashboard (re-renderiza a tela ativa a cada 2 minutos)
+let autoRefreshInterval = null;
+
 // ═══════════════════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════════════════
@@ -1979,6 +1988,7 @@ async function esqueceuSenha() {
 
 // Reseta a UI para a tela de login e limpa estado global
 function _encerrarSessao() {
+  pararAutoRefresh();
   usuario = null; lancMes = []; lancHoje = [];
   document.getElementById("tela-app").classList.add("hidden");
   document.getElementById("tela-login").classList.remove("hidden");
@@ -1989,6 +1999,7 @@ function _encerrarSessao() {
 
 // Logout: diferencia sessão Firebase de login local
 function fazerLogout() {
+  pararAutoRefresh();
   if(unsubLanc)   { unsubLanc();   unsubLanc=null;   }
   if(unsubDash)   { unsubDash();   unsubDash=null;   }
   if(unsubCoord)  { unsubCoord();  unsubCoord=null;  }
@@ -2141,6 +2152,123 @@ function iniciarApp() {
   if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
   // Faturamento diário: carrega para gestora, subgestora e líderes
   if(temDashboard) carregarFaturamentoDiario();
+
+  // Auto-refresh: re-renderiza a tela ativa a cada 2 minutos para todos os perfis
+  iniciarAutoRefresh();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUTO-REFRESH (re-renderiza a tela ativa a cada 2 minutos)
+// ═══════════════════════════════════════════════════════════
+// Os listeners onSnapshot do Firestore mantêm os arrays em memória
+// (dashLancs, lancMes, equipeLancs, coordLancs, faturamentoDiarioAtual)
+// sempre atualizados. O auto-refresh só dispara o RE-RENDER da tela
+// para refletir mudanças do dia (ex.: novo lançamento, faturamento
+// importado por outra usuária) e recálculos sensíveis a tempo
+// (dias úteis restantes, meta diária, "atualizado há X").
+
+function iniciarAutoRefresh() {
+  // Idempotente: limpa o interval anterior antes de criar um novo
+  if(autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
+
+  // Mostra o indicador visual no header
+  const ind = document.getElementById("auto-refresh-ind");
+  if(ind) ind.style.display = "flex";
+  marcarAtualizadoAgora();
+
+  // Re-fetch único de feriados (não tem onSnapshot)
+  db.collection("feriados").get().then(snap => {
+    feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }).catch(e => console.warn("[feriados auto-refresh]", e));
+
+  autoRefreshInterval = setInterval(tickAutoRefresh, 120000);
+}
+
+function pararAutoRefresh() {
+  if(autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
+  const ind = document.getElementById("auto-refresh-ind");
+  if(ind) ind.style.display = "none";
+}
+
+function marcarAtualizadoAgora() {
+  const txt = document.getElementById("auto-refresh-ind-txt");
+  if(!txt) return;
+  const d = new Date();
+  txt.textContent = `Atualizado ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+// Identifica o perfil/aba ativa e dispara os renders corretos.
+// Cada chamada é envolvida em try/catch isolado para que falhas pontuais
+// não derrubem o interval — o próximo tick continua rodando normalmente.
+async function tickAutoRefresh() {
+  if(!usuario) return;
+  try {
+    const perfil = usuario.perfil;
+    const ehLider   = perfil === "lider";
+    const ehLiderCC = perfil === "lider_callcenter";
+    const ehRec     = perfil === "recepcionista";
+    const ehCC      = perfil === "callcenter";
+    const temDash   = VE_DASHBOARD.includes(perfil);
+    const ehCoord   = VE_COORD.includes(perfil);
+    const ehGestao  = SO_DASHBOARD.includes(perfil);
+
+    // Re-fetch leve de feriados (não há listener em tempo real)
+    try {
+      const snap = await db.collection("feriados").get();
+      feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(e) { console.warn("[autoRefresh] feriados:", e); }
+
+    // 1) Gestora/Subgestora — dashboard único
+    if(ehGestao && document.getElementById("dash-cards-equipe")) {
+      try { renderDashboard(); } catch(e) { console.warn("[autoRefresh] renderDashboard:", e); }
+    }
+
+    // 2) Líder de recepção: depende da aba ativa
+    if(ehLider) {
+      try {
+        if(abaLider === "dashboard") renderDashboard();
+        else if(abaLider === "equipe") renderCardMetasEquipe();
+        else if(abaLider === "lancamentos") { atualizarCards(); renderTabela(); }
+        else if(abaLider === "metas") atualizarCards();
+      } catch(e) { console.warn("[autoRefresh] lider:", e); }
+    }
+
+    // 3) Líder de call center: aba lançamentos ou aba coordenação
+    if(ehLiderCC) {
+      try {
+        if(abaLiderCC === "callcenter") renderCoord();
+        else { atualizarCards(); renderTabela(); }
+      } catch(e) { console.warn("[autoRefresh] liderCC:", e); }
+    }
+
+    // 4) Recepcionista: depende da aba ativa
+    if(ehRec) {
+      try {
+        if(abaRec === "lancamentos") { atualizarCards(); renderTabela(); }
+        else if(abaRec === "metas") atualizarCards();
+        else if(abaRec === "equipe") renderCardMetasEquipe();
+      } catch(e) { console.warn("[autoRefresh] rec:", e); }
+    }
+
+    // 5) Call center: depende da aba ativa
+    if(ehCC) {
+      try {
+        if(abaCC === "lancamentos") { atualizarCards(); renderTabela(); }
+        else if(abaCC === "metas") atualizarCards();
+        else if(abaCC === "equipe") renderCardMetasEquipe();
+      } catch(e) { console.warn("[autoRefresh] cc:", e); }
+    }
+
+    // 6) Coordenadora pura (sem aba)
+    if(ehCoord && !ehLiderCC && !ehGestao) {
+      try { renderCoord(); } catch(e) { console.warn("[autoRefresh] coord:", e); }
+    }
+
+    marcarAtualizadoAgora();
+  } catch(e) {
+    // Última rede de segurança — interval segue ativo
+    console.error("[autoRefresh] tick falhou:", e);
+  }
 }
 
 // Aplica visibilidade das seções conforme aba ativa da líder (4 abas)
