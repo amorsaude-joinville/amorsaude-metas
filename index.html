@@ -1568,13 +1568,21 @@ const auth = firebase.auth();
 //  DADOS DOS USUÁRIOS
 // ═══════════════════════════════════════════════════════════
 // Chave = email real do Firebase Auth; valor = { nome, perfil }
+// Perfis disponíveis:
+// - gestor:           acesso total (Laudenir)
+// - subgestora:       acesso quase total (Eduarda)
+// - lider:            gerencia recepção (Dara, Bianca) — também atende como recepcionista
+// - lider_callcenter: gerencia callcenter (Andrielli)
+// - coordenadora:     gerencia callcenter (Paola) — mesmas permissões de lider_callcenter
+// - recepcionista:    atende e lança (recepcionistas comuns)
+// - callcenter:       atende e lança (Erielly, Júlia)
 const USUARIOS = {
   "laudi.rmj@gmail.com":               { nome: "Laudenir",  perfil: "gestor"           },
   "eduardaaraujo1502@gmail.com":       { nome: "Eduarda",   perfil: "subgestora"       },
   "paola7ccristino@gmail.com":         { nome: "Paola",     perfil: "coordenadora"     },
   "darafidelesmarques@gmail.com":      { nome: "Dara",      perfil: "lider"            },
   "bianca.trazibulo@gmail.com":        { nome: "Bianca",    perfil: "lider"            },
-  "andriellisouza45@gmail.com":        { nome: "Andrielli", perfil: "coordenadora"     },
+  "andriellisouza45@gmail.com":        { nome: "Andrielli", perfil: "lider_callcenter" },
   "dawilla.stefany@hotmail.com":       { nome: "Dawilla",   perfil: "recepcionista"    },
   "susuh.medeiros28@gmail.com":        { nome: "Suélen",    perfil: "recepcionista"    },
   "graziiaraujo8@gmail.com":           { nome: "Graziele",  perfil: "recepcionista"    },
@@ -4992,7 +5000,7 @@ function renderDashPremiacao() {
             <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
             ${linhasCC.map(rowCC).join("")}
             <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
-            ${rowLid("Andrielli","coordenadora",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,fLiderProjLabel)}
+            ${rowLid("Andrielli","lider_callcenter",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,fLiderProjLabel)}
             <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
             ${rowLid("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,fCoordProjLabel)}
           </tbody>
