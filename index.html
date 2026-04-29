@@ -175,6 +175,39 @@
     .modal p { font-size:14px; color:var(--text2); margin-bottom:24px; }
     .modal-btns { display:flex; gap:12px; justify-content:flex-end; }
 
+    /* ── ORÇAMENTOS (kanban + form) ── */
+    .orc-form-wrap { background:#fff; border:1px solid var(--border); border-radius:var(--r); padding:0; margin-bottom:20px; overflow:hidden; }
+    .orc-form-toggle { width:100%; padding:14px 18px; background:linear-gradient(135deg,#fff 0%,var(--bg2) 100%); border:none; cursor:pointer; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:var(--primary); display:flex; align-items:center; justify-content:space-between; }
+    .orc-form-toggle:hover { background:var(--bg2); }
+    .orc-form-body { padding:20px; border-top:1px solid var(--border); display:none; }
+    .orc-form-body.show { display:block; }
+    .orc-proc-linha { display:grid; grid-template-columns:1fr 160px 40px; gap:8px; align-items:end; margin-bottom:8px; }
+    .orc-proc-linha .btn-rm { background:#FEE2E2; color:#DC2626; border:none; border-radius:var(--r2); cursor:pointer; padding:11px 0; font-size:14px; }
+    .orc-proc-linha .btn-rm:hover { background:#DC2626; color:#fff; }
+    .orc-filtros { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px; }
+    .orc-filtros .fg { margin:0; }
+    .orc-kanban { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .orc-col { background:#FAFAFA; border:1px solid var(--border); border-radius:var(--r); padding:12px; min-height:200px; }
+    .orc-col-head { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:6px 8px 12px; display:flex; align-items:center; justify-content:space-between; }
+    .orc-col-head .orc-count { background:#fff; color:var(--text2); padding:2px 8px; border-radius:10px; font-size:11px; }
+    .orc-col[data-status="lancar"]      .orc-col-head { color:#DC2626; }
+    .orc-col[data-status="link_enviado"].orc-col-head, .orc-col[data-status="link_enviado"] .orc-col-head { color:#2563EB; }
+    .orc-col[data-status="acompanhar"] .orc-col-head { color:#D97706; }
+    .orc-col[data-status="pago"]       .orc-col-head { color:#16A34A; }
+    .orc-card { background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
+    .orc-card:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(232,0,61,.10); }
+    .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .orc-card .orc-tot { font-size:15px; font-weight:700; color:var(--primary); margin-bottom:4px; }
+    .orc-card .orc-meta-info { font-size:11px; color:var(--text2); line-height:1.4; }
+    .orc-card .orc-card-acao { margin-top:8px; }
+    .orc-card .orc-card-acao select { width:100%; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px; font-family:'Inter',sans-serif; outline:none; cursor:pointer; }
+    .orc-empty { text-align:center; color:var(--text2); font-size:12px; padding:14px 4px; }
+    @media(max-width:768px) {
+      .orc-kanban { display:flex; overflow-x:auto; gap:12px; padding-bottom:8px; }
+      .orc-col { min-width:260px; flex:0 0 auto; }
+      .orc-proc-linha { grid-template-columns:1fr 110px 36px; }
+    }
+
     /* ── EMPTY / LOADING ── */
     .empty { text-align:center; padding:40px; color:var(--text2); font-size:14px; }
     .empty .ei { font-size:36px; margin-bottom:10px; }
@@ -415,7 +448,7 @@
     .colab-grupo-header { background:#F3F4F6; padding:8px 14px; border-radius:var(--r2); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); margin:14px 0 8px; }
 
     /* ── ABAS LIDER / REC / CC — sticky abaixo do header ── */
-    #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav {
+    #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav, #gestor-nav {
       display:none;
       position:sticky;
       top:64px;          /* altura exata do header */
@@ -428,7 +461,7 @@
       overflow-x:auto;   /* scroll horizontal em mobile */
       -webkit-overflow-scrolling:touch;
     }
-    #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show { display:flex; }
+    #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show, #gestor-nav.show { display:flex; }
     .lider-tab {
       padding:14px 28px; font-size:14px; font-weight:600; cursor:pointer;
       border:none; background:transparent; color:var(--text2);
@@ -612,26 +645,27 @@
   </div>
 
   <!-- Navegação por abas — líderes de recepção (4 abas) -->
-  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Equipe | Dashboard -->
+  <!-- Aba padrão: metas; ordem: Meta e Premiação | Orçamentos | Lançamentos | Equipe | Dashboard -->
   <div id="lider-nav">
     <button class="lider-tab active" id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="lider-tab-orc"    onclick="mudarAbaLider('orcamentos')">📋 Orçamentos</button>
     <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
     <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">📊 Equipe</button>
     <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">🏢 Dashboard</button>
   </div>
 
-  <!-- Navegação por abas — recepcionistas (3 abas) -->
-  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Equipe -->
+  <!-- Navegação por abas — recepcionistas (4 abas) -->
   <div id="rec-nav">
     <button class="lider-tab active" id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="rec-tab-orc"    onclick="mudarAbaRec('orcamentos')">📋 Orçamentos</button>
     <button class="lider-tab"        id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">➕ Lançamentos</button>
     <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">📊 Equipe</button>
   </div>
 
-  <!-- Navegação por abas — call center (3 abas) -->
-  <!-- Aba padrão: metas; ordem: Meta e Premiação | Lançamentos | Metas Equipe -->
+  <!-- Navegação por abas — call center (4 abas) -->
   <div id="cc-nav">
     <button class="lider-tab active" id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Meta e Premiação</button>
+    <button class="lider-tab"        id="cc-tab-orc"    onclick="mudarAbaCC('orcamentos')">📋 Orçamentos</button>
     <button class="lider-tab"        id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">➕ Lançamentos</button>
     <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">📊 Metas Equipe</button>
   </div>
@@ -639,7 +673,14 @@
   <!-- Navegação por abas — líder de call center (Andrielli) -->
   <div id="lider-cc-nav">
     <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="lider-cc-tab-orc"  onclick="mudarAbaLiderCC('orcamentos')">📋 Orçamentos</button>
     <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
+  </div>
+
+  <!-- Navegação por abas — gestora/subgestora (Dashboard | Orçamentos) -->
+  <div id="gestor-nav">
+    <button class="lider-tab active" id="gestor-tab-dash" onclick="mudarAbaGestor('dashboard')">🏢 Dashboard</button>
+    <button class="lider-tab"        id="gestor-tab-orc"  onclick="mudarAbaGestor('orcamentos')">📋 Orçamentos</button>
   </div>
 
   <div id="app">
@@ -648,6 +689,130 @@
     <div id="banner-marco" onclick="fecharBanner()">
       <span id="banner-txt"></span>
       <span class="bm-fechar">✕</span>
+    </div>
+
+    <!-- ══════════ ORÇAMENTOS (Fase 1) ══════════ -->
+    <div id="sec-orcamentos" style="display:none">
+
+      <!-- Caixa colapsável: Novo Orçamento -->
+      <div class="orc-form-wrap">
+        <button class="orc-form-toggle" type="button" onclick="toggleOrcForm()">
+          <span>➕ Novo Orçamento</span>
+          <span id="orc-form-arrow">▼</span>
+        </button>
+        <div class="orc-form-body" id="orc-form-body">
+          <div class="fgrid">
+            <div class="fg">
+              <label>Data do Orçamento</label>
+              <input type="text" id="orc-data-disp" readonly />
+            </div>
+            <div class="fg">
+              <label>Quem fez</label>
+              <input type="text" id="orc-quem" readonly />
+            </div>
+            <div class="fg">
+              <label>Nome do Paciente *</label>
+              <input type="text" id="orc-paciente" placeholder="Nome completo" />
+            </div>
+            <div class="fg" id="orc-id-caso-wrap">
+              <label>ID do Caso *</label>
+              <input type="text" id="orc-id-caso" placeholder="Ex: 12345" />
+            </div>
+            <div class="fg full">
+              <label>Médico Solicitante *</label>
+              <input type="text" id="orc-medico" list="orc-medicos-dl" placeholder="Selecione ou digite..." />
+              <datalist id="orc-medicos-dl"></datalist>
+            </div>
+            <div class="fg">
+              <label>Exames de Imagem (R$)</label>
+              <input type="text" id="orc-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
+            </div>
+            <div class="fg">
+              <label>Consultas (R$)</label>
+              <input type="text" id="orc-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
+            </div>
+            <div class="fg">
+              <label>Exames Laboratoriais (R$)</label>
+              <input type="text" id="orc-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
+            </div>
+            <div class="fg">
+              <label>Forma de Pagamento *</label>
+              <select id="orc-pgto">
+                <option value="" disabled selected>Selecione...</option>
+                <option value="caixa">Caixa</option>
+                <option value="credito">Crédito</option>
+              </select>
+            </div>
+            <div class="fg full">
+              <label>Procedimentos</label>
+              <div id="orc-proc-lista"></div>
+              <button type="button" class="btn btn-ghost" style="width:auto;margin-top:6px;font-size:13px;padding:8px 14px" onclick="addLinhaProcedimento()">➕ Adicionar procedimento</button>
+            </div>
+            <div class="fg full">
+              <label>Total (R$)</label>
+              <input type="text" id="orc-total" readonly style="font-weight:700;color:var(--primary);font-size:16px" value="0,00" />
+            </div>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" style="max-width:220px" onclick="salvarOrcamento()">Salvar Orçamento</button>
+            <button class="btn btn-ghost" style="max-width:160px" onclick="resetFormOrcamento()" id="btn-orc-cancelar">Limpar</button>
+          </div>
+          <input type="hidden" id="orc-edit-id" value="" />
+        </div>
+      </div>
+
+      <!-- Filtros do kanban -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="orc-filtros">
+          <div class="fg">
+            <label style="font-size:13px;font-weight:600">De</label>
+            <input type="date" id="orc-filtro-de" onchange="renderKanbanOrcamentos()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)" />
+          </div>
+          <div class="fg">
+            <label style="font-size:13px;font-weight:600">Até</label>
+            <input type="date" id="orc-filtro-ate" onchange="renderKanbanOrcamentos()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)" />
+          </div>
+          <div class="fg" style="flex:1;min-width:200px">
+            <label style="font-size:13px;font-weight:600">Buscar paciente</label>
+            <input type="text" id="orc-filtro-busca" placeholder="🔍 Buscar paciente..." oninput="renderKanbanOrcamentos()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text);width:100%" />
+          </div>
+          <div class="fg">
+            <label style="font-size:13px;font-weight:600">Status</label>
+            <select id="orc-filtro-status" onchange="renderKanbanOrcamentos()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)">
+              <option value="">Todos</option>
+              <option value="acompanhar">Acompanhar</option>
+              <option value="link_enviado">Link Enviado</option>
+              <option value="lancar">Lançar</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kanban 4 colunas -->
+      <div class="orc-kanban" id="orc-kanban">
+        <div class="orc-col" data-status="lancar">
+          <div class="orc-col-head">⏰ Lançar <span class="orc-count" id="orc-cnt-lancar">0</span></div>
+          <div id="orc-col-lancar"></div>
+        </div>
+        <div class="orc-col" data-status="link_enviado">
+          <div class="orc-col-head">📨 Link Enviado <span class="orc-count" id="orc-cnt-link_enviado">0</span></div>
+          <div id="orc-col-link_enviado"></div>
+        </div>
+        <div class="orc-col" data-status="acompanhar">
+          <div class="orc-col-head">🟡 Acompanhar <span class="orc-count" id="orc-cnt-acompanhar">0</span></div>
+          <div id="orc-col-acompanhar"></div>
+        </div>
+        <div class="orc-col" data-status="pago">
+          <div class="orc-col-head">✅ Pago <span class="orc-count" id="orc-cnt-pago">0</span></div>
+          <div id="orc-col-pago"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══════════ DASHBOARD CALL CENTER (coordenadora / lider_callcenter) ══════════ -->
@@ -1183,6 +1348,18 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Modal detalhes do orçamento -->
+<div class="overlay hidden" id="modal-orc-det">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto">
+    <h3 id="orc-det-titulo">Detalhes do Orçamento</h3>
+    <div id="orc-det-corpo" style="font-size:14px;color:var(--text);line-height:1.55"></div>
+    <div class="modal-btns" style="margin-top:18px;flex-wrap:wrap;gap:10px">
+      <button class="btn btn-ghost" onclick="fecharModalOrcDet()">Fechar</button>
+      <button class="btn btn-ghost" id="orc-det-btn-editar" onclick="editarOrcamentoFromModal()" style="display:none">✏️ Editar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal excluir -->
 <div class="overlay hidden" id="modal-del">
   <div class="modal">
@@ -1451,6 +1628,22 @@ const FAZ_LANC = ["recepcionista","callcenter","lider","lider_callcenter"];
 const VE_DASHBOARD = ["gestor","subgestora","lider"];
 // Perfis que SÓ vêem o dashboard geral (sem aba de lançamento)
 const SO_DASHBOARD = ["gestor","subgestora"];
+
+// Tipos de Procedimento — reutilizados no formulário de Orçamentos
+// (mesma lista do <select id="e-proced"> da aba Lançamentos)
+const TIPOS_PROCEDIMENTO = [
+  "DIU","Implanon","Procedimento Dermatológico","Infiltração","Sessão",
+  "Procedimento Otorrinolaringológico","Preventivo","Eletrocardiograma",
+  "Taxa Parceiros","Testes Rápidos","Injetáveis"
+];
+
+// Mapeamento de status de orçamento → label visível
+const ORC_STATUS_LABEL = {
+  acompanhar:   "🟡 Acompanhar",
+  link_enviado: "📨 Link Enviado",
+  lancar:       "⏰ Lançar",
+  pago:         "✅ Pago",
+};
 // Perfis com dashboard próprio de coordenação (painel Call Center)
 const VE_COORD = ["coordenadora","lider_callcenter"];
 
@@ -1579,6 +1772,13 @@ let unsubEquipe = null;      // listener equipe
 
 // Auto-refresh do dashboard (re-renderiza a tela ativa a cada 2 minutos)
 let autoRefreshInterval = null;
+
+// Orçamentos (Fase 1): aba ativa por perfil + cache + listener
+let abaGestor   = "dashboard";   // gestora/subgestora: "dashboard" | "orcamentos"
+let orcamentos     = [];         // cache local da coleção orcamentos
+let unsubOrcamentos = null;      // listener tempo real
+let orcEditId      = null;       // ID em edição (null = criação)
+let orcMedicosUsados = [];       // médicos vistos em lancamentos/orcamentos para datalist
 
 // ═══════════════════════════════════════════════════════════
 //  HELPERS
@@ -2000,12 +2200,13 @@ function _encerrarSessao() {
 // Logout: diferencia sessão Firebase de login local
 function fazerLogout() {
   pararAutoRefresh();
-  if(unsubLanc)   { unsubLanc();   unsubLanc=null;   }
-  if(unsubDash)   { unsubDash();   unsubDash=null;   }
-  if(unsubCoord)  { unsubCoord();  unsubCoord=null;  }
-  if(unsubEquipe) { unsubEquipe(); unsubEquipe=null; }
+  if(unsubLanc)        { unsubLanc();        unsubLanc=null;        }
+  if(unsubDash)        { unsubDash();        unsubDash=null;        }
+  if(unsubCoord)       { unsubCoord();       unsubCoord=null;       }
+  if(unsubEquipe)      { unsubEquipe();      unsubEquipe=null;      }
+  if(unsubOrcamentos)  { unsubOrcamentos();  unsubOrcamentos=null;  }
   dashLancs=[]; dashMetasMes=null; dashMesAno="";
-  coordLancs=[]; equipeLancs=[];
+  coordLancs=[]; equipeLancs=[]; orcamentos=[];
 
   if(usuario?.uid) {
     // Firebase Auth — signOut dispara onAuthStateChanged que chama _encerrarSessao
@@ -2061,39 +2262,45 @@ function iniciarApp() {
   const ehRec = perfil === "recepcionista";
   const ehCC  = perfil === "callcenter";
 
-  // Barra de abas — líder de recepção (Dara, Bianca): 4 abas
-  // Padrão: "metas" (Meta e Premiação Individual)
+  // Barra de abas — líder de recepção (Dara, Bianca): 5 abas (inclui Orçamentos)
   document.getElementById("lider-nav").classList.toggle("show", ehLider);
   if(ehLider) {
     const saved = localStorage.getItem("as_aba_lider");
-    abaLider = ["lancamentos","metas","equipe","dashboard"].includes(saved) ? saved : "metas";
+    abaLider = ["lancamentos","metas","equipe","dashboard","orcamentos"].includes(saved) ? saved : "metas";
     aplicarAbaLider();
   }
 
-  // Barra de abas — recepcionistas: 3 abas
-  // Padrão: "metas" (Meta e Premiação Individual)
+  // Barra de abas — recepcionistas: 4 abas (inclui Orçamentos)
   document.getElementById("rec-nav").classList.toggle("show", ehRec);
   if(ehRec) {
     const saved = localStorage.getItem("as_aba_rec");
-    abaRec = ["lancamentos","metas","equipe"].includes(saved) ? saved : "metas";
+    abaRec = ["lancamentos","metas","equipe","orcamentos"].includes(saved) ? saved : "metas";
     aplicarAbaRec();
   }
 
-  // Barra de abas — call center: 3 abas
-  // Padrão: "metas" (Meta e Premiação Individual)
+  // Barra de abas — call center: 4 abas (inclui Orçamentos)
   document.getElementById("cc-nav").classList.toggle("show", ehCC);
   if(ehCC) {
     const saved = localStorage.getItem("as_aba_cc");
-    abaCC = ["lancamentos","metas","equipe"].includes(saved) ? saved : "metas";
+    abaCC = ["lancamentos","metas","equipe","orcamentos"].includes(saved) ? saved : "metas";
     aplicarAbaCC();
   }
 
-  // Barra de abas — líder de call center (Andrielli)
+  // Barra de abas — líder de call center (Andrielli): 3 abas (inclui Orçamentos)
   document.getElementById("lider-cc-nav").classList.toggle("show", ehLiderCC);
   if(ehLiderCC) {
     const saved = localStorage.getItem("as_aba_lider_cc");
-    abaLiderCC = saved === "callcenter" ? "callcenter" : "lancamentos";
+    abaLiderCC = ["callcenter","lancamentos","orcamentos"].includes(saved) ? saved : "lancamentos";
     aplicarAbaLiderCC();
+  }
+
+  // Barra de abas — gestora/subgestora: Dashboard | Orçamentos
+  const ehGestoraOuSub = SO_DASHBOARD.includes(perfil);
+  document.getElementById("gestor-nav").classList.toggle("show", ehGestoraOuSub);
+  if(ehGestoraOuSub) {
+    const saved = localStorage.getItem("as_aba_gestor");
+    abaGestor = ["dashboard","orcamentos"].includes(saved) ? saved : "dashboard";
+    aplicarAbaGestor();
   }
 
   // Seção coordenadora — coordenadora fixa + líder CC quando em aba CC
@@ -2101,8 +2308,9 @@ function iniciarApp() {
     document.getElementById("sec-coord").style.display = ehCoord ? "" : "none";
   }
 
-  // Seções de dashboard geral (gestor/subgestora/lider na aba dashboard)
-  if(!ehLider) {
+  // Seções de dashboard geral (lider na aba dashboard).
+  // Gestora/Subgestora: visibilidade controlada por aplicarAbaGestor (não sobrescrever aqui).
+  if(!ehLider && !ehGestoraOuSub) {
     document.getElementById("sec-dashboard").style.display = temDashboard ? "" : "none";
   }
 
@@ -2152,6 +2360,9 @@ function iniciarApp() {
   if(verEquipe && !ehLider && !ehLiderCC) iniciarListenerEquipe();
   // Faturamento diário: carrega para gestora, subgestora e líderes
   if(temDashboard) carregarFaturamentoDiario();
+
+  // Orçamentos (Fase 1): listener real-time para todos os perfis
+  iniciarListenerOrcamentos();
 
   // Auto-refresh: re-renderiza a tela ativa a cada 2 minutos para todos os perfis
   iniciarAutoRefresh();
@@ -2218,9 +2429,12 @@ async function tickAutoRefresh() {
       feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch(e) { console.warn("[autoRefresh] feriados:", e); }
 
-    // 1) Gestora/Subgestora — dashboard único
-    if(ehGestao && document.getElementById("dash-cards-equipe")) {
-      try { renderDashboard(); } catch(e) { console.warn("[autoRefresh] renderDashboard:", e); }
+    // 1) Gestora/Subgestora — dashboard ou orçamentos
+    if(ehGestao) {
+      try {
+        if(abaGestor === "orcamentos") renderKanbanOrcamentos();
+        else if(document.getElementById("dash-cards-equipe")) renderDashboard();
+      } catch(e) { console.warn("[autoRefresh] gestor:", e); }
     }
 
     // 2) Líder de recepção: depende da aba ativa
@@ -2230,13 +2444,15 @@ async function tickAutoRefresh() {
         else if(abaLider === "equipe") renderCardMetasEquipe();
         else if(abaLider === "lancamentos") { atualizarCards(); renderTabela(); }
         else if(abaLider === "metas") atualizarCards();
+        else if(abaLider === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] lider:", e); }
     }
 
-    // 3) Líder de call center: aba lançamentos ou aba coordenação
+    // 3) Líder de call center: aba lançamentos, coordenação ou orçamentos
     if(ehLiderCC) {
       try {
         if(abaLiderCC === "callcenter") renderCoord();
+        else if(abaLiderCC === "orcamentos") renderKanbanOrcamentos();
         else { atualizarCards(); renderTabela(); }
       } catch(e) { console.warn("[autoRefresh] liderCC:", e); }
     }
@@ -2247,6 +2463,7 @@ async function tickAutoRefresh() {
         if(abaRec === "lancamentos") { atualizarCards(); renderTabela(); }
         else if(abaRec === "metas") atualizarCards();
         else if(abaRec === "equipe") renderCardMetasEquipe();
+        else if(abaRec === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] rec:", e); }
     }
 
@@ -2256,6 +2473,7 @@ async function tickAutoRefresh() {
         if(abaCC === "lancamentos") { atualizarCards(); renderTabela(); }
         else if(abaCC === "metas") atualizarCards();
         else if(abaCC === "equipe") renderCardMetasEquipe();
+        else if(abaCC === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] cc:", e); }
     }
 
@@ -2277,10 +2495,14 @@ function aplicarAbaLider() {
   const emMetas  = abaLider === "metas";
   const emEquipe = abaLider === "equipe";
   const emDash   = abaLider === "dashboard";
+  const emOrc    = abaLider === "orcamentos";
 
-  ["lanc","metas","equipe","dash"].forEach(t =>
-    document.getElementById(`lider-tab-${t}`).classList.toggle("active", abaLider === (t==="dash"?"dashboard":t==="lanc"?"lancamentos":t))
-  );
+  ["lanc","metas","equipe","dash","orc"].forEach(t => {
+    const el = document.getElementById(`lider-tab-${t}`);
+    if(!el) return;
+    const aba = t==="dash"?"dashboard":t==="lanc"?"lancamentos":t==="orc"?"orcamentos":t;
+    el.classList.toggle("active", abaLider === aba);
+  });
 
   document.getElementById("sec-dashboard").style.display   = emDash   ? "" : "none";
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
@@ -2289,7 +2511,10 @@ function aplicarAbaLider() {
   document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
   document.getElementById("sec-tabela").style.display      = emLanc   ? "" : "none";
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
+  document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
+  if(emOrc) prepararFormOrcamento();
+  if(emOrc) renderKanbanOrcamentos();
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
 }
 
@@ -2304,10 +2529,14 @@ function aplicarAbaRec() {
   const emLanc   = abaRec === "lancamentos";
   const emMetas  = abaRec === "metas";
   const emEquipe = abaRec === "equipe";
+  const emOrc    = abaRec === "orcamentos";
 
-  ["lanc","metas","equipe"].forEach(t =>
-    document.getElementById(`rec-tab-${t}`).classList.toggle("active", abaRec === (t==="lanc"?"lancamentos":t))
-  );
+  ["lanc","metas","equipe","orc"].forEach(t => {
+    const el = document.getElementById(`rec-tab-${t}`);
+    if(!el) return;
+    const aba = t==="lanc"?"lancamentos":t==="orc"?"orcamentos":t;
+    el.classList.toggle("active", abaRec === aba);
+  });
 
   document.getElementById("sec-lanc").style.display        = emLanc   ? "" : "none";
   document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
@@ -2315,6 +2544,9 @@ function aplicarAbaRec() {
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
   document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
+  document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
+
+  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
 }
 
 function mudarAbaRec(aba) {
@@ -2328,10 +2560,14 @@ function aplicarAbaCC() {
   const emLanc   = abaCC === "lancamentos";
   const emMetas  = abaCC === "metas";
   const emEquipe = abaCC === "equipe";
+  const emOrc    = abaCC === "orcamentos";
 
-  ["lanc","metas","equipe"].forEach(t =>
-    document.getElementById(`cc-tab-${t}`).classList.toggle("active", abaCC === (t==="lanc"?"lancamentos":t))
-  );
+  ["lanc","metas","equipe","orc"].forEach(t => {
+    const el = document.getElementById(`cc-tab-${t}`);
+    if(!el) return;
+    const aba = t==="lanc"?"lancamentos":t==="orc"?"orcamentos":t;
+    el.classList.toggle("active", abaCC === aba);
+  });
 
   document.getElementById("sec-lanc").style.display        = emLanc   ? "" : "none";
   document.getElementById("sec-resumo").style.display      = emLanc   ? "" : "none";
@@ -2339,6 +2575,9 @@ function aplicarAbaCC() {
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
   document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
+  document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
+
+  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
 }
 
 function mudarAbaCC(aba) {
@@ -2349,29 +2588,55 @@ function mudarAbaCC(aba) {
 
 // Aplica visibilidade das seções conforme aba ativa da líder de call center
 function aplicarAbaLiderCC() {
-  const emCC = abaLiderCC === "callcenter";
+  const emCC   = abaLiderCC === "callcenter";
+  const emOrc  = abaLiderCC === "orcamentos";
+  const emLanc = abaLiderCC === "lancamentos";
 
-  document.getElementById("lider-cc-tab-lanc").classList.toggle("active", !emCC);
+  document.getElementById("lider-cc-tab-lanc").classList.toggle("active", emLanc);
   document.getElementById("lider-cc-tab-cc").classList.toggle("active",   emCC);
+  const tabOrc = document.getElementById("lider-cc-tab-orc");
+  if(tabOrc) tabOrc.classList.toggle("active", emOrc);
 
   // Aba Lançamentos: mesma interface de callcenter
-  document.getElementById("sec-card-equipe").style.display = emCC ? "none" : "";
-  document.getElementById("sec-metas").style.display       = emCC ? "none" : "";
-  document.getElementById("sec-resumo").style.display      = emCC ? "none" : "";
-  document.getElementById("sec-lanc").style.display        = emCC ? "none" : "";
-  document.getElementById("sec-tabela").style.display      = emCC ? "none" : "";
-  document.getElementById("sec-historico").style.display   = emCC ? "none" : "";
+  document.getElementById("sec-card-equipe").style.display = emLanc ? "" : "none";
+  document.getElementById("sec-metas").style.display       = emLanc ? "" : "none";
+  document.getElementById("sec-resumo").style.display      = emLanc ? "" : "none";
+  document.getElementById("sec-lanc").style.display        = emLanc ? "" : "none";
+  document.getElementById("sec-tabela").style.display      = emLanc ? "" : "none";
+  document.getElementById("sec-historico").style.display   = emLanc ? "" : "none";
   // Aba Call Center: visão da coordenadora (dados de Erielly e Júlia)
-  document.getElementById("sec-coord").style.display       = emCC ? "" : "none";
+  document.getElementById("sec-coord").style.display       = emCC   ? "" : "none";
+  document.getElementById("sec-orcamentos").style.display  = emOrc  ? "" : "none";
 
+  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
   // Inicia listener equipe CC na primeira vez
-  if(!emCC && !unsubEquipe) iniciarListenerEquipe();
+  if(emLanc && !unsubEquipe) iniciarListenerEquipe();
 }
 
 function mudarAbaLiderCC(aba) {
   abaLiderCC = aba;
   localStorage.setItem("as_aba_lider_cc", aba);
   aplicarAbaLiderCC();
+}
+
+// Aplica visibilidade das seções conforme aba ativa da gestora/subgestora
+function aplicarAbaGestor() {
+  const emDash = abaGestor === "dashboard";
+  const emOrc  = abaGestor === "orcamentos";
+
+  document.getElementById("gestor-tab-dash").classList.toggle("active", emDash);
+  document.getElementById("gestor-tab-orc").classList.toggle("active",  emOrc);
+
+  document.getElementById("sec-dashboard").style.display  = emDash ? "" : "none";
+  document.getElementById("sec-orcamentos").style.display = emOrc  ? "" : "none";
+
+  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
+}
+
+function mudarAbaGestor(aba) {
+  abaGestor = aba;
+  localStorage.setItem("as_aba_gestor", aba);
+  aplicarAbaGestor();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6351,6 +6616,420 @@ function renderFaturamentoChart(dados) {
       }
     }
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ORÇAMENTOS — Fase 1
+// ═══════════════════════════════════════════════════════════
+
+// Listener tempo real da coleção orcamentos.
+// Mantém o array `orcamentos` em memória sempre fresco.
+function iniciarListenerOrcamentos() {
+  if(unsubOrcamentos) { unsubOrcamentos(); unsubOrcamentos = null; }
+  unsubOrcamentos = db.collection("orcamentos")
+    .orderBy("criado_em", "desc")
+    .onSnapshot(snap => {
+      orcamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Atualiza datalist de médicos com os já vistos em orçamentos
+      coletarMedicosUsados();
+      // Re-render se a aba estiver aberta
+      const sec = document.getElementById("sec-orcamentos");
+      if(sec && sec.style.display !== "none") renderKanbanOrcamentos();
+    }, e => console.warn("[orcamentos] listener erro:", e));
+}
+
+// Filtra a lista de orçamentos conforme as regras de visibilidade do perfil
+function filtrarOrcamentosPorPerfil(lista) {
+  if(!usuario) return [];
+  const perfil = usuario.perfil;
+  const nome   = usuario.nome;
+
+  if(SO_DASHBOARD.includes(perfil)) return lista; // gestora/subgestora vê tudo
+  if(perfil === "lider")            return lista.filter(o => o.criado_por_perfil === "recepcionista" || o.criado_por_perfil === "lider");
+  if(perfil === "lider_callcenter") return lista.filter(o => o.criado_por_perfil === "callcenter"     || o.criado_por_perfil === "lider_callcenter");
+  // recepcionista/callcenter: só os próprios
+  return lista.filter(o => o.criado_por === nome);
+}
+
+// Verifica se a usuária atual pode editar campos do orçamento (não inclui mudar status)
+function podeEditarOrcamento(o) {
+  if(!usuario || !o) return false;
+  const perfil = usuario.perfil;
+  if(SO_DASHBOARD.includes(perfil)) return false; // gestora/subgestora só vê
+  if(o.criado_por === usuario.nome) return true;
+  if(perfil === "lider"            && (o.criado_por_perfil === "recepcionista" || o.criado_por_perfil === "lider")) return true;
+  if(perfil === "lider_callcenter" && (o.criado_por_perfil === "callcenter"    || o.criado_por_perfil === "lider_callcenter")) return true;
+  return false;
+}
+
+// Junta médicos da PRESCRITORES + dos orçamentos já cadastrados (datalist autocompletar)
+function coletarMedicosUsados() {
+  const set = new Set();
+  PRESCRITORES.forEach(([n]) => set.add(n));
+  orcamentos.forEach(o => { if(o.medico) set.add(o.medico); });
+  orcMedicosUsados = [...set].sort((a,b) => a.localeCompare(b,"pt-BR"));
+  const dl = document.getElementById("orc-medicos-dl");
+  if(dl) dl.innerHTML = orcMedicosUsados.map(m => `<option value="${escHTML(m)}">`).join("");
+}
+
+// Helper: escapa HTML para evitar XSS quando inserindo em innerHTML
+function escHTML(s) {
+  return String(s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+// Prepara o formulário ao abrir a aba (preenche data atual, nome e id-caso conforme perfil)
+function prepararFormOrcamento() {
+  if(!usuario) return;
+
+  // Mostra/oculta campo "ID do Caso" conforme perfil
+  const wrapId = document.getElementById("orc-id-caso-wrap");
+  const ehCC = usuario.perfil === "callcenter" || usuario.perfil === "lider_callcenter";
+  if(wrapId) wrapId.style.display = ehCC ? "" : "none";
+
+  // Preenche datalist de médicos
+  coletarMedicosUsados();
+
+  // Preenche filtros de data com hoje (default)
+  const hojeStr = isoHoje();
+  const filDe = document.getElementById("orc-filtro-de");
+  const filAte = document.getElementById("orc-filtro-ate");
+  if(filDe  && !filDe.value)  filDe.value  = hojeStr;
+  if(filAte && !filAte.value) filAte.value = hojeStr;
+
+  // Preenche data e quem fez (somente se não estiver editando)
+  if(!orcEditId) resetFormOrcamento();
+}
+
+// Retorna a data de hoje no formato YYYY-MM-DD
+function isoHoje() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// Formata data ISO YYYY-MM-DD para DD/MM/YYYY
+function fmtDataBR(iso) {
+  if(!iso) return "—";
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+// Toggle do formulário (mostra/oculta)
+function toggleOrcForm() {
+  const body  = document.getElementById("orc-form-body");
+  const arrow = document.getElementById("orc-form-arrow");
+  if(!body) return;
+  body.classList.toggle("show");
+  if(arrow) arrow.textContent = body.classList.contains("show") ? "▲" : "▼";
+}
+
+// Limpa formulário (volta a estado de criação)
+function resetFormOrcamento() {
+  orcEditId = null;
+  const set = (id, v) => { const e = document.getElementById(id); if(e) e.value = v; };
+  set("orc-edit-id", "");
+  set("orc-data-disp", fmtDataBR(isoHoje()));
+  set("orc-quem", usuario?.nome || "");
+  set("orc-paciente", "");
+  set("orc-id-caso", "");
+  set("orc-medico", "");
+  set("orc-imagem", "");
+  set("orc-consultas", "");
+  set("orc-lab", "");
+  set("orc-pgto", "");
+  set("orc-total", "0,00");
+  // Limpa lista de procedimentos
+  const lista = document.getElementById("orc-proc-lista");
+  if(lista) lista.innerHTML = "";
+  recalcTotalOrcamento();
+}
+
+// Adiciona uma linha de procedimento ao formulário
+function addLinhaProcedimento(tipoSel, valor) {
+  const lista = document.getElementById("orc-proc-lista");
+  if(!lista) return;
+  const idx = lista.children.length;
+  const div = document.createElement("div");
+  div.className = "orc-proc-linha";
+  div.innerHTML = `
+    <select class="orc-proc-tipo" onchange="recalcTotalOrcamento()">
+      <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
+      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${escHTML(t)}</option>`).join("")}
+    </select>
+    <input type="text" class="orc-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalOrcamento()" />
+    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalOrcamento()" title="Remover">🗑</button>
+  `;
+  lista.appendChild(div);
+  recalcTotalOrcamento();
+}
+
+// Recalcula o total do orçamento somando imagem + consultas + lab + procedimentos
+function recalcTotalOrcamento() {
+  const img  = parseBRL(document.getElementById("orc-imagem")?.value);
+  const cons = parseBRL(document.getElementById("orc-consultas")?.value);
+  const lab  = parseBRL(document.getElementById("orc-lab")?.value);
+  let procs  = 0;
+  document.querySelectorAll("#orc-proc-lista .orc-proc-valor").forEach(i => { procs += parseBRL(i.value); });
+  const total = img + cons + lab + procs;
+  const inp = document.getElementById("orc-total");
+  if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  return total;
+}
+
+// Coleta procedimentos do formulário em formato [{tipo, valor}, ...]
+function coletarProcedimentosForm() {
+  const linhas = [];
+  document.querySelectorAll("#orc-proc-lista .orc-proc-linha").forEach(div => {
+    const tipo = div.querySelector(".orc-proc-tipo")?.value || "";
+    const valor = parseBRL(div.querySelector(".orc-proc-valor")?.value);
+    if(tipo && valor > 0) linhas.push({ tipo, valor });
+  });
+  return linhas;
+}
+
+// Salva orçamento (criação ou edição)
+async function salvarOrcamento() {
+  if(!usuario) { toast("Sessão expirada.", "err"); return; }
+
+  const paciente = (document.getElementById("orc-paciente")?.value || "").trim();
+  const idCaso   = (document.getElementById("orc-id-caso")?.value  || "").trim();
+  const medico   = (document.getElementById("orc-medico")?.value   || "").trim();
+  const pgto     = document.getElementById("orc-pgto")?.value || "";
+  const imagem   = parseBRL(document.getElementById("orc-imagem")?.value);
+  const consultas= parseBRL(document.getElementById("orc-consultas")?.value);
+  const lab      = parseBRL(document.getElementById("orc-lab")?.value);
+  const procs    = coletarProcedimentosForm();
+  const total    = recalcTotalOrcamento();
+
+  // Validações
+  if(!paciente) { toast("Informe o nome do paciente.", "err"); return; }
+  if(!medico)   { toast("Informe o médico solicitante.", "err"); return; }
+  if(!pgto)     { toast("Selecione a forma de pagamento.", "err"); return; }
+  if(total <= 0){ toast("Valor total deve ser maior que zero.", "err"); return; }
+
+  const ehCC = usuario.perfil === "callcenter" || usuario.perfil === "lider_callcenter";
+  if(ehCC && !idCaso) { toast("ID do caso é obrigatório para Call Center.", "err"); return; }
+
+  const editId = document.getElementById("orc-edit-id")?.value || "";
+  const ts = firebase.firestore.FieldValue.serverTimestamp();
+
+  try {
+    if(editId) {
+      // Edição: preserva criado_em / criado_por
+      await db.collection("orcamentos").doc(editId).update({
+        paciente, id_caso: idCaso, medico,
+        imagem, consultas, laboratorio: lab,
+        procedimentos: procs, total,
+        forma_pagamento: pgto,
+        atualizado_em: ts,
+      });
+      toast("Orçamento atualizado.", "ok");
+    } else {
+      // Criação
+      await db.collection("orcamentos").add({
+        paciente, id_caso: idCaso, medico,
+        imagem, consultas, laboratorio: lab,
+        procedimentos: procs, total,
+        forma_pagamento: pgto,
+        status: "acompanhar",
+        criado_em: ts,
+        criado_por: usuario.nome,
+        criado_por_perfil: usuario.perfil,
+        criado_por_uid: usuario.uid || null,
+        atualizado_em: ts,
+        lancamento_ids: [],
+      });
+      toast("Orçamento salvo.", "ok");
+    }
+    resetFormOrcamento();
+    // Re-colapsa o formulário após salvar
+    const body = document.getElementById("orc-form-body");
+    if(body && body.classList.contains("show")) toggleOrcForm();
+  } catch(e) {
+    console.error("[salvarOrcamento]", e);
+    toast("Erro ao salvar: " + (e.message || e.code || "tente novamente"), "err");
+  }
+}
+
+// Renderiza o kanban com base nos filtros e na visibilidade do perfil
+function renderKanbanOrcamentos() {
+  if(!document.getElementById("orc-kanban")) return;
+
+  const visiveis = filtrarOrcamentosPorPerfil(orcamentos);
+
+  // Filtros
+  const de    = document.getElementById("orc-filtro-de")?.value     || "";
+  const ate   = document.getElementById("orc-filtro-ate")?.value    || "";
+  const busca = (document.getElementById("orc-filtro-busca")?.value || "").toLowerCase();
+  const stat  = document.getElementById("orc-filtro-status")?.value || "";
+
+  function dataDoc(o) {
+    const d = o.criado_em?.toDate ? o.criado_em.toDate() : (o.criado_em ? new Date(o.criado_em) : null);
+    if(!d) return "";
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  const filtrados = visiveis.filter(o => {
+    const ds = dataDoc(o);
+    if(de  && ds && ds < de)  return false;
+    if(ate && ds && ds > ate) return false;
+    if(busca && !(o.paciente||"").toLowerCase().includes(busca)) return false;
+    return true;
+  });
+
+  // Ao escolher um status no filtro, ESCONDE as demais colunas (mantém kanban com 1 coluna em foco)
+  ["lancar","link_enviado","acompanhar","pago"].forEach(s => {
+    const col = document.querySelector(`.orc-col[data-status="${s}"]`);
+    if(col) col.style.display = (stat && stat !== s) ? "none" : "";
+  });
+
+  // Distribui em colunas
+  const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[] };
+  filtrados.forEach(o => {
+    const s = o.status || "acompanhar";
+    if(colunas[s]) colunas[s].push(o);
+  });
+
+  Object.keys(colunas).forEach(s => {
+    const wrap = document.getElementById(`orc-col-${s}`);
+    const cnt  = document.getElementById(`orc-cnt-${s}`);
+    if(cnt) cnt.textContent = colunas[s].length;
+    if(!wrap) return;
+    if(!colunas[s].length) {
+      wrap.innerHTML = `<div class="orc-empty">Nenhum orçamento</div>`;
+      return;
+    }
+    wrap.innerHTML = colunas[s].map(o => cardOrcamentoHTML(o)).join("");
+  });
+}
+
+// HTML de um card no kanban
+function cardOrcamentoHTML(o) {
+  const d = o.criado_em?.toDate ? o.criado_em.toDate() : null;
+  const dataCurta = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
+  const opts = ["acompanhar","link_enviado","lancar","pago"]
+    .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
+  return `
+    <div class="orc-card" onclick="abrirModalOrcDet('${o.id}')">
+      <div class="orc-pac">${escHTML(o.paciente||"—")}</div>
+      <div class="orc-tot">${brl(o.total||0)}</div>
+      <div class="orc-meta-info">
+        ${o.medico ? `🩺 ${escHTML(o.medico)}<br>` : ""}
+        🕒 ${dataCurta} · ${escHTML(o.criado_por||"—")}
+      </div>
+      <div class="orc-card-acao" onclick="event.stopPropagation()">
+        <select onchange="mudarStatusOrcamento('${o.id}', this.value)">${opts}</select>
+      </div>
+    </div>`;
+}
+
+// Atualiza status do orçamento no Firestore
+async function mudarStatusOrcamento(id, novoStatus) {
+  if(!["acompanhar","link_enviado","lancar","pago"].includes(novoStatus)) return;
+  try {
+    await db.collection("orcamentos").doc(id).update({
+      status: novoStatus,
+      atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    toast(`Status atualizado para ${ORC_STATUS_LABEL[novoStatus]}`, "ok");
+    renderKanbanOrcamentos();
+  } catch(e) {
+    console.error("[mudarStatusOrcamento]", e);
+    toast("Erro ao atualizar status: " + (e.message || e.code), "err");
+  }
+}
+
+// Modal de detalhes do orçamento
+let orcDetIdAtual = null;
+function abrirModalOrcDet(id) {
+  const o = orcamentos.find(x => x.id === id);
+  if(!o) { toast("Orçamento não encontrado.", "err"); return; }
+  orcDetIdAtual = id;
+
+  const dC = o.criado_em?.toDate ? o.criado_em.toDate() : null;
+  const dU = o.atualizado_em?.toDate ? o.atualizado_em.toDate() : null;
+  const fmt = d => d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
+
+  const procsHtml = (o.procedimentos||[]).length
+    ? `<ul style="padding-left:18px;margin:4px 0">${o.procedimentos.map(p => `<li>${escHTML(p.tipo)} — <strong>${brl(p.valor)}</strong></li>`).join("")}</ul>`
+    : `<div style="color:var(--text2);font-style:italic">Sem procedimentos</div>`;
+
+  const opts = ["acompanhar","link_enviado","lancar","pago"]
+    .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
+
+  const body = document.getElementById("orc-det-corpo");
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin-bottom:14px">
+      <div><strong>Paciente:</strong><br>${escHTML(o.paciente||"—")}</div>
+      <div><strong>Total:</strong><br><span style="color:var(--primary);font-weight:700">${brl(o.total||0)}</span></div>
+      <div><strong>Médico:</strong><br>${escHTML(o.medico||"—")}</div>
+      <div><strong>ID do Caso:</strong><br>${escHTML(o.id_caso||"—")}</div>
+      <div><strong>Pagamento:</strong><br>${o.forma_pagamento === "credito" ? "Crédito" : (o.forma_pagamento === "caixa" ? "Caixa" : "—")}</div>
+      <div>
+        <strong>Status:</strong><br>
+        <select onchange="mudarStatusOrcamento('${o.id}', this.value);abrirModalOrcDet('${o.id}')"
+          style="padding:5px 8px;border-radius:6px;border:1px solid var(--border);font-family:'Inter',sans-serif">${opts}</select>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">
+      <strong>Valores:</strong>
+      <div style="margin-top:4px;font-size:13px">
+        <div>🩻 Imagem: <strong>${brl(o.imagem||0)}</strong></div>
+        <div>👨‍⚕️ Consultas: <strong>${brl(o.consultas||0)}</strong></div>
+        <div>🧪 Laboratoriais: <strong>${brl(o.laboratorio||0)}</strong></div>
+        <div style="margin-top:4px">💉 Procedimentos:</div>
+        ${procsHtml}
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text2)">
+      Criado em ${fmt(dC)} por <strong>${escHTML(o.criado_por||"—")}</strong><br>
+      Última atualização: ${fmt(dU)}
+    </div>
+  `;
+
+  // Botão Editar visível só pra quem pode editar
+  const btnEd = document.getElementById("orc-det-btn-editar");
+  if(btnEd) btnEd.style.display = podeEditarOrcamento(o) ? "" : "none";
+
+  document.getElementById("modal-orc-det").classList.remove("hidden");
+}
+
+function fecharModalOrcDet() {
+  document.getElementById("modal-orc-det").classList.add("hidden");
+  orcDetIdAtual = null;
+}
+
+// Carrega o orçamento no formulário pra edição
+function editarOrcamentoFromModal() {
+  const o = orcamentos.find(x => x.id === orcDetIdAtual);
+  if(!o) return;
+  fecharModalOrcDet();
+
+  orcEditId = o.id;
+  const set = (id, v) => { const e = document.getElementById(id); if(e) e.value = v; };
+  set("orc-edit-id", o.id);
+  set("orc-data-disp", fmtDataBR(isoHoje()));
+  set("orc-quem", o.criado_por || usuario?.nome || "");
+  set("orc-paciente", o.paciente || "");
+  set("orc-id-caso", o.id_caso || "");
+  set("orc-medico", o.medico || "");
+  set("orc-imagem",    o.imagem    ? o.imagem.toLocaleString("pt-BR",{minimumFractionDigits:2})    : "");
+  set("orc-consultas", o.consultas ? o.consultas.toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
+  set("orc-lab",       o.laboratorio ? o.laboratorio.toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
+  set("orc-pgto", o.forma_pagamento || "");
+
+  // Reconstrói procedimentos
+  const lista = document.getElementById("orc-proc-lista");
+  if(lista) lista.innerHTML = "";
+  (o.procedimentos || []).forEach(p => {
+    addLinhaProcedimento(p.tipo, p.valor.toLocaleString("pt-BR",{minimumFractionDigits:2}));
+  });
+  recalcTotalOrcamento();
+
+  // Abre formulário se estiver fechado
+  const body = document.getElementById("orc-form-body");
+  if(body && !body.classList.contains("show")) toggleOrcForm();
+  // Scroll até o formulário
+  document.getElementById("sec-orcamentos")?.scrollIntoView({ behavior:"smooth", block:"start" });
 }
 </script>
 </body>

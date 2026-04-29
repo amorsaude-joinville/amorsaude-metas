@@ -65,5 +65,18 @@ service cloud.firestore {
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
     }
+
+    // Orçamentos (Fase 1): todos os perfis autenticados leem (filtro de visibilidade
+    // é aplicado no cliente). Criação só com criado_por_uid == auth.uid.
+    // Edição/exclusão pelo dono ou pela liderança (lider, lider_callcenter, gestor, subgestora).
+    // Status pode ser alterado por qualquer usuária autenticada (regra simplificada para Fase 1).
+    match /orcamentos/{docId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null &&
+        request.resource.data.criado_por_uid == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+        (resource.data.criado_por_uid == request.auth.uid ||
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider', 'lider_callcenter']);
+    }
   }
 }
