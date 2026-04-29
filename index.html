@@ -1233,16 +1233,21 @@
               <input type="text" id="e-total" readonly style="font-weight:700;color:var(--primary);font-size:18px" value="0,00" />
             </div>
 
-            <!-- Forma de pagamento (1ª) -->
-            <div class="fg">
+            <!-- Forma de pagamento (1ª) — sem campo de valor quando só há 1 forma.
+                 O campo Valor da 1ª forma só aparece quando há pagamento dividido. -->
+            <div class="fg full">
               <label>Forma de Pagamento *</label>
-              <select id="e-fp1">
+              <select id="e-fp1" style="max-width:280px">
                 <option value="" disabled selected>Selecione...</option>
               </select>
+              <div style="font-size:11px;color:var(--text2);margin-top:4px" id="e-fp1-hint">
+                ⓘ Valor desta forma = Total inteiro do orçamento
+              </div>
             </div>
-            <div class="fg">
-              <label>Valor (R$)</label>
-              <input type="text" id="e-fp1-val" placeholder="auto" oninput="mascaraValor(this);validarSomaPagamentos()" />
+            <!-- Campo de valor da 1ª forma só aparece quando há 2ª forma -->
+            <div class="fg" id="e-fp1-val-wrap" style="display:none">
+              <label>Valor 1ª forma (R$) *</label>
+              <input type="text" id="e-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
             </div>
 
             <!-- Botão pra adicionar 2ª forma de pagamento -->
@@ -1255,13 +1260,13 @@
             <div class="fg full" id="e-fp2-wrap" style="display:none">
               <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
                 <div class="fg">
-                  <label>2ª Forma de Pagamento</label>
+                  <label>2ª Forma de Pagamento *</label>
                   <select id="e-fp2">
                     <option value="" disabled selected>Selecione...</option>
                   </select>
                 </div>
                 <div class="fg">
-                  <label>Valor (R$)</label>
+                  <label>Valor 2ª forma (R$) *</label>
                   <input type="text" id="e-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
                 </div>
                 <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
@@ -3271,19 +3276,28 @@ function addLinhaProcEntrada(tipoSel, valor) {
   recalcTotalEntrada();
 }
 
-// Mostra a 2ª forma de pagamento
+// Mostra a 2ª forma de pagamento + campo de valor da 1ª forma
+// (no modo dividido, o usuário precisa explicitar o valor de cada parte)
 function adicionarSegundaForma() {
   document.getElementById("e-fp2-wrap").style.display = "";
   document.getElementById("e-fp-add-wrap").style.display = "none";
+  document.getElementById("e-fp1-val-wrap").style.display = "";
+  // Esconde o hint "valor = total" porque agora vai dividir
+  const hint = document.getElementById("e-fp1-hint");
+  if(hint) hint.style.display = "none";
   validarSomaPagamentos();
 }
 
-// Esconde e zera a 2ª forma de pagamento
+// Esconde e zera a 2ª forma de pagamento + campo de valor da 1ª (volta ao modo simples)
 function removerSegundaForma() {
   document.getElementById("e-fp2-wrap").style.display = "none";
   document.getElementById("e-fp-add-wrap").style.display = "";
+  document.getElementById("e-fp1-val-wrap").style.display = "none";
   document.getElementById("e-fp2").value = "";
   document.getElementById("e-fp2-val").value = "";
+  document.getElementById("e-fp1-val").value = "";
+  const hint = document.getElementById("e-fp1-hint");
+  if(hint) hint.style.display = "";
   validarSomaPagamentos();
 }
 
@@ -3358,11 +3372,13 @@ async function salvarEntrada() {
   const total = imagem + consultas + laboratorio + procedimentos.reduce((s,p)=>s+p.valor,0);
 
   // Pagamentos
-  const fp1     = document.getElementById("e-fp1").value;
-  const fp1val  = parseBRL(document.getElementById("e-fp1-val").value);
-  const wrap2   = document.getElementById("e-fp2-wrap");
-  const tem2    = wrap2 && wrap2.style.display !== "none";
+  const fp1   = document.getElementById("e-fp1").value;
+  const wrap2 = document.getElementById("e-fp2-wrap");
+  const tem2  = wrap2 && wrap2.style.display !== "none";
   const fp2     = tem2 ? document.getElementById("e-fp2").value : "";
+  // Valores das formas só são lidos quando há pagamento dividido.
+  // Quando há só 1 forma, o valor é SEMPRE o total (sem campo de input pro user).
+  const fp1val  = tem2 ? parseBRL(document.getElementById("e-fp1-val").value) : 0;
   const fp2val  = tem2 ? parseBRL(document.getElementById("e-fp2-val").value) : 0;
 
   // Status
@@ -3374,19 +3390,21 @@ async function salvarEntrada() {
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
   if(!fp1)   { toast("Selecione a forma de pagamento.","err"); return; }
 
-  // Soma de pagamentos. Se só tem 1 forma e valor vazio → assume total inteiro.
-  let valor1Final = fp1val;
-  if(!tem2 && fp1val === 0) valor1Final = total;
-
-  if(tem2) {
+  // Caso 1 (forma única): valor_1 = total. Caso 2 (dividido): valor_1 e valor_2 do form, soma == total.
+  let valor1Final, valor2Final = null;
+  if(!tem2) {
+    valor1Final = total;
+  } else {
     if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
-    if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
     if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
+    if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
     const soma = Math.round((fp1val + fp2val) * 100) / 100;
     if(Math.abs(soma - total) > 0.01) {
       toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err");
       return;
     }
+    valor1Final = fp1val;
+    valor2Final = fp2val;
   }
 
   // ── Saída embutida (opcional) ──
@@ -3424,7 +3442,7 @@ async function salvarEntrada() {
     forma_pagamento_1: fp1,
     valor_1: valor1Final,
     forma_pagamento_2: tem2 ? fp2 : null,
-    valor_2: tem2 ? fp2val : null,
+    valor_2: valor2Final,
     // Status do kanban / faturamento
     status,
     mes_ano: getMesAno(),
