@@ -649,7 +649,7 @@
   <div id="lider-nav">
     <button class="lider-tab active" id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Meta e Premiação</button>
     <button class="lider-tab"        id="lider-tab-orc"    onclick="mudarAbaLider('orcamentos')">📋 Orçamentos</button>
-    <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">📊 Equipe</button>
     <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">🏢 Dashboard</button>
   </div>
@@ -658,7 +658,7 @@
   <div id="rec-nav">
     <button class="lider-tab active" id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Meta e Premiação</button>
     <button class="lider-tab"        id="rec-tab-orc"    onclick="mudarAbaRec('orcamentos')">📋 Orçamentos</button>
-    <button class="lider-tab"        id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">📊 Equipe</button>
   </div>
 
@@ -666,13 +666,13 @@
   <div id="cc-nav">
     <button class="lider-tab active" id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Meta e Premiação</button>
     <button class="lider-tab"        id="cc-tab-orc"    onclick="mudarAbaCC('orcamentos')">📋 Orçamentos</button>
-    <button class="lider-tab"        id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab"        id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">📊 Metas Equipe</button>
   </div>
 
   <!-- Navegação por abas — líder de call center (Andrielli) -->
   <div id="lider-cc-nav">
-    <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">➕ Lançamentos</button>
+    <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="lider-cc-tab-orc"  onclick="mudarAbaLiderCC('orcamentos')">📋 Orçamentos</button>
     <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
   </div>
@@ -1172,17 +1172,18 @@
       </div>
     </div>
 
-    <!-- ── LANÇAMENTO ── -->
+    <!-- ── ORÇAMENTO (modelo unificado pós-Fase B) ── -->
+    <!-- ID `sec-lanc` mantido pra não quebrar referências em aplicarAbaXxx() -->
     <div id="sec-lanc">
       <div class="card" style="margin-bottom:24px">
-        <div class="card-title">Novo Lançamento</div>
+        <div class="card-title">📝 Novo Orçamento</div>
 
         <div class="tabs">
-          <button class="tab tab-entrada active" onclick="mudarAba('entrada')">✅ Entrada (Venda)</button>
-          <button class="tab tab-saida" onclick="mudarAba('saida')">↩️ Saída (Estorno)</button>
+          <button class="tab tab-entrada active" onclick="mudarAba('entrada')">📝 Orçamento</button>
+          <button class="tab tab-saida" onclick="mudarAba('saida')">↩️ Saída avulsa</button>
         </div>
 
-        <!-- ENTRADA -->
+        <!-- ENTRADA / ORÇAMENTO (substitui formulário legacy) -->
         <div id="form-entrada">
           <div class="fgrid">
 
@@ -1192,69 +1193,90 @@
             </div>
 
             <div class="fg">
-              <label>CPF *</label>
-              <input type="text" id="e-cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)" />
-            </div>
-
-            <div class="fg">
-              <label>Valor (R$) *</label>
-              <input type="text" id="e-valor" placeholder="0,00" oninput="mascaraValor(this)" />
-            </div>
-
-            <div class="fg">
-              <label>Produto *</label>
-              <select id="e-produto" onchange="atualizarFormEntrada()">
-                <option value="" disabled selected>Selecione...</option>
-                <option>Exames Laboratoriais</option>
-                <option>Procedimento</option>
-                <option>Exames de Imagem</option>
-                <option>Consultas</option>
-              </select>
-            </div>
-
-            <div class="fg full" id="wrap-proced" style="display:none">
-              <label>Tipo de Procedimento *</label>
-              <select id="e-proced" onchange="atualizarFormEntrada()">
-                <option value="" disabled selected>Selecione...</option>
-                <option>DIU</option>
-                <option>Implanon</option>
-                <option>Procedimento Dermatológico</option>
-                <option>Infiltração</option>
-                <option>Sessão</option>
-                <option>Procedimento Otorrinolaringológico</option>
-                <option>Preventivo</option>
-                <option>Eletrocardiograma</option>
-                <option>Taxa Parceiros</option>
-                <option>Testes Rápidos</option>
-                <option>Injetáveis</option>
-              </select>
-            </div>
-
-            <div class="fg">
-              <label>Forma de Pagamento *</label>
-              <select id="e-pgto">
-                <option value="" disabled selected>Selecione...</option>
-                <option>Dinheiro</option>
-                <option>Débito</option>
-                <option>Pix</option>
-                <option>Crédito</option>
-                <option>Boleto</option>
-              </select>
+              <label>CPF</label>
+              <input type="text" id="e-cpf" placeholder="000.000.000-00 (opcional)" maxlength="14" oninput="mascaraCPF(this)" />
             </div>
 
             <div class="fg full">
-              <label id="label-pres">Prescritor *</label>
+              <label id="label-pres">Médico Solicitante *</label>
               <div class="pres-wrap">
                 <input type="text" id="busca-pres" placeholder="🔍 Digite para filtrar por nome..." oninput="filtrarPres()" />
                 <select id="e-pres" size="5" style="width:100%"></select>
               </div>
             </div>
 
-            <!-- Saída embutida (opcional) — gera lançamento de saída vinculado por id_par -->
+            <!-- 3 categorias com valores numéricos -->
+            <div class="fg">
+              <label>🩻 Imagem (R$)</label>
+              <input type="text" id="e-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+            </div>
+            <div class="fg">
+              <label>👨‍⚕️ Consultas (R$)</label>
+              <input type="text" id="e-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+            </div>
+            <div class="fg">
+              <label>🧪 Laboratoriais (R$)</label>
+              <input type="text" id="e-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+            </div>
+
+            <!-- Procedimentos (lista dinâmica) -->
+            <div class="fg full">
+              <label>💉 Procedimentos</label>
+              <div id="e-proc-lista"></div>
+              <button type="button" class="btn btn-ghost" style="width:auto;margin-top:6px;font-size:13px;padding:8px 14px"
+                onclick="addLinhaProcEntrada()">➕ Adicionar procedimento</button>
+            </div>
+
+            <!-- Total auto-calculado -->
+            <div class="fg full">
+              <label>Total (R$)</label>
+              <input type="text" id="e-total" readonly style="font-weight:700;color:var(--primary);font-size:18px" value="0,00" />
+            </div>
+
+            <!-- Forma de pagamento (1ª) -->
+            <div class="fg">
+              <label>Forma de Pagamento *</label>
+              <select id="e-fp1">
+                <option value="" disabled selected>Selecione...</option>
+              </select>
+            </div>
+            <div class="fg">
+              <label>Valor (R$)</label>
+              <input type="text" id="e-fp1-val" placeholder="auto" oninput="mascaraValor(this);validarSomaPagamentos()" />
+            </div>
+
+            <!-- Botão pra adicionar 2ª forma de pagamento -->
+            <div class="fg full" id="e-fp-add-wrap">
+              <button type="button" class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px"
+                onclick="adicionarSegundaForma()">➕ Adicionar 2ª forma de pagamento</button>
+            </div>
+
+            <!-- 2ª forma de pagamento (oculta por default) -->
+            <div class="fg full" id="e-fp2-wrap" style="display:none">
+              <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
+                <div class="fg">
+                  <label>2ª Forma de Pagamento</label>
+                  <select id="e-fp2">
+                    <option value="" disabled selected>Selecione...</option>
+                  </select>
+                </div>
+                <div class="fg">
+                  <label>Valor (R$)</label>
+                  <input type="text" id="e-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
+                </div>
+                <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
+                  <div id="e-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
+                  <button type="button" class="btn btn-ghost" style="width:auto;font-size:12px;padding:6px 10px;color:#DC2626"
+                    onclick="removerSegundaForma()">🗑 Remover 2ª forma</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Saída embutida (ao lado da forma de pagamento, mais visível) -->
             <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
                 <input type="checkbox" id="e-tem-saida" onchange="toggleSaidaEmbutidaEntrada()" />
-                ↩️ Tem saída/desconto associado?
+                ↩️ Tem desconto/saída associado?
               </label>
               <div id="e-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
                 <div class="fgrid">
@@ -1269,12 +1291,27 @@
                     </select>
                   </div>
                 </div>
+                <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic" id="e-saida-aviso">
+                  ⓘ Se status = Pago: cria saída imediatamente (com id_par). Se outro: armazena como pendente, materializa quando virar Pago.
+                </div>
+              </div>
+            </div>
+
+            <!-- Status escolhido na hora (default Pago) -->
+            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label style="font-weight:600;margin-bottom:8px;display:block">Status *</label>
+              <div style="display:flex;flex-wrap:wrap;gap:14px">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="pago" checked /> ✅ Pago</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="lancar" /> ⏰ Lançar</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="link_enviado" /> 📨 Link Enviado</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="acompanhar" /> 🟡 Acompanhar</label>
               </div>
             </div>
 
           </div>
           <div style="margin-top:12px">
-            <button class="btn btn-primary" style="max-width:200px" onclick="salvarEntrada()">Salvar Entrada</button>
+            <button class="btn btn-primary" style="max-width:220px" onclick="salvarEntrada()">Salvar Orçamento</button>
+            <input type="hidden" id="e-edit-id" value="" />
           </div>
         </div>
 
@@ -1784,15 +1821,24 @@ const MOTIVOS_SAIDA = [
   "Retorno Particular/Convênios",
 ];
 
-// Popula um <select> com options a partir de uma lista (mantém o placeholder existente)
+// Popula um <select> de motivos de saída (preserva placeholder)
 function popularSelectMotivos(idSelect) {
+  popularSelect(idSelect, MOTIVOS_SAIDA);
+}
+
+// Popula um <select> de formas de pagamento (preserva placeholder)
+function popularSelectFormaPagamento(idSelect) {
+  popularSelect(idSelect, FORMAS_PAGAMENTO);
+}
+
+// Helper genérico: popula select preservando o option[disabled] (placeholder)
+function popularSelect(idSelect, valores) {
   const sel = document.getElementById(idSelect);
   if(!sel) return;
-  // Preserva o primeiro <option> (placeholder "Selecione..."), remove o resto, adiciona motivos
   const placeholder = sel.querySelector("option[disabled]");
   sel.innerHTML = "";
   if(placeholder) sel.appendChild(placeholder);
-  MOTIVOS_SAIDA.forEach(m => {
+  valores.forEach(m => {
     const o = document.createElement("option");
     o.value = m; o.textContent = m;
     sel.appendChild(o);
@@ -2572,6 +2618,9 @@ function iniciarApp() {
   popularSelectMotivos("s-motivo");
   popularSelectMotivos("e-saida-motivo");
   popularSelectMotivos("orc-saida-motivo");
+  // Formas de pagamento detalhadas (Fase B do modelo unificado)
+  popularSelectFormaPagamento("e-fp1");
+  popularSelectFormaPagamento("e-fp2");
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
@@ -3185,103 +3234,236 @@ function mudarAba(aba) {
   document.querySelector(`.tab-${aba}`).classList.add("active");
 }
 
-// Retorna true se o prescritor é obrigatório dado o produto/procedimento atual
-function presObrig() {
-  const prod   = document.getElementById("e-produto").value;
-  const proced = document.getElementById("e-proced").value;
-  if(prod === "Consultas") return false;
-  if(prod === "Procedimento") {
-    const opcionais = ["Sessão","Taxa Parceiros","Testes Rápidos"];
-    return !opcionais.includes(proced);
-  }
-  // Exames Laboratoriais, Exames de Imagem → obrigatório
-  return true;
+// ═══════════════════════════════════════════════════════════
+//  FORM ORÇAMENTO (modelo unificado — substitui form legacy)
+// ═══════════════════════════════════════════════════════════
+
+// Recalcula o total do formulário (Imagem + Consultas + Lab + soma de procedimentos)
+// e auto-preenche o valor da 1ª forma de pagamento se estiver vazio (UX).
+function recalcTotalEntrada() {
+  const img  = parseBRL(document.getElementById("e-imagem")?.value);
+  const cons = parseBRL(document.getElementById("e-consultas")?.value);
+  const lab  = parseBRL(document.getElementById("e-lab")?.value);
+  let procs = 0;
+  document.querySelectorAll("#e-proc-lista .e-proc-valor").forEach(i => { procs += parseBRL(i.value); });
+  const total = img + cons + lab + procs;
+  const inp = document.getElementById("e-total");
+  if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  validarSomaPagamentos();
+  return total;
 }
 
-function atualizarFormEntrada() {
-  const prod = document.getElementById("e-produto").value;
+// Adiciona uma linha de procedimento com tipo (select) + valor + remover
+function addLinhaProcEntrada(tipoSel, valor) {
+  const lista = document.getElementById("e-proc-lista");
+  if(!lista) return;
+  const div = document.createElement("div");
+  div.className = "orc-proc-linha"; // reutiliza estilo do kanban
+  div.innerHTML = `
+    <select class="e-proc-tipo" onchange="recalcTotalEntrada()">
+      <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
+      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${t}</option>`).join("")}
+    </select>
+    <input type="text" class="e-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEntrada()" />
+    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEntrada()" title="Remover">🗑</button>
+  `;
+  lista.appendChild(div);
+  recalcTotalEntrada();
+}
 
-  // mostra/oculta tipo de procedimento
-  document.getElementById("wrap-proced").style.display = prod==="Procedimento" ? "" : "none";
-  if(prod !== "Procedimento") document.getElementById("e-proced").value = "";
+// Mostra a 2ª forma de pagamento
+function adicionarSegundaForma() {
+  document.getElementById("e-fp2-wrap").style.display = "";
+  document.getElementById("e-fp-add-wrap").style.display = "none";
+  validarSomaPagamentos();
+}
 
-  // atualiza label do prescritor
-  document.getElementById("label-pres").textContent =
-    presObrig() ? "Prescritor *" : "Prescritor (opcional)";
+// Esconde e zera a 2ª forma de pagamento
+function removerSegundaForma() {
+  document.getElementById("e-fp2-wrap").style.display = "none";
+  document.getElementById("e-fp-add-wrap").style.display = "";
+  document.getElementById("e-fp2").value = "";
+  document.getElementById("e-fp2-val").value = "";
+  validarSomaPagamentos();
+}
+
+// Valida soma das formas de pagamento contra o Total e mostra aviso
+function validarSomaPagamentos() {
+  const total = parseBRL(document.getElementById("e-total")?.value);
+  const v1 = parseBRL(document.getElementById("e-fp1-val")?.value);
+  const wrap2 = document.getElementById("e-fp2-wrap");
+  const tem2 = wrap2 && wrap2.style.display !== "none";
+  const v2 = tem2 ? parseBRL(document.getElementById("e-fp2-val")?.value) : 0;
+  const aviso = document.getElementById("e-fp-aviso");
+  if(!aviso) return;
+  if(!tem2) { aviso.textContent = ""; return; }
+  const soma = v1 + v2;
+  const dif  = Math.round((total - soma) * 100) / 100;
+  if(Math.abs(dif) < 0.01) {
+    aviso.style.color = "var(--success)";
+    aviso.textContent = "✅ Soma confere com o total";
+  } else if(dif > 0) {
+    aviso.style.color = "#DC2626";
+    aviso.textContent = `⚠️ Faltam ${brl(dif)} para fechar o total`;
+  } else {
+    aviso.style.color = "#DC2626";
+    aviso.textContent = `⚠️ Excedeu em ${brl(-dif)}`;
+  }
+}
+
+// Reseta o formulário (volta a estado de criação)
+function resetFormEntrada() {
+  const set = (id, v) => { const e = document.getElementById(id); if(e) e.value = v; };
+  set("e-edit-id","");
+  set("e-nome",""); set("e-cpf","");
+  set("e-imagem",""); set("e-consultas",""); set("e-lab","");
+  document.getElementById("e-proc-lista").innerHTML = "";
+  set("e-total","0,00");
+  set("e-fp1",""); set("e-fp1-val","");
+  removerSegundaForma();
+  set("busca-pres","");
+  preencherPres();
+  document.getElementById("e-pres").selectedIndex = -1;
+  // Reset saída embutida
+  const cbS = document.getElementById("e-tem-saida");
+  if(cbS) { cbS.checked = false; toggleSaidaEmbutidaEntrada(); }
+  set("e-saida-valor",""); set("e-saida-motivo","");
+  // Status default = Pago
+  const radPago = document.querySelector('input[name="e-status"][value="pago"]');
+  if(radPago) radPago.checked = true;
 }
 
 // ═══════════════════════════════════════════════════════════
-//  SALVAR ENTRADA
+//  SALVAR ORÇAMENTO/LANÇAMENTO (substitui salvarEntrada legacy)
 // ═══════════════════════════════════════════════════════════
 async function salvarEntrada() {
-  const nome   = document.getElementById("e-nome").value.trim();
-  const cpf    = document.getElementById("e-cpf").value.trim();
-  const vStr   = document.getElementById("e-valor").value.trim();
-  const prod   = document.getElementById("e-produto").value;
-  const proced = document.getElementById("e-proced").value;
-  const pgto   = document.getElementById("e-pgto").value;
+  if(!usuario) { toast("Sessão expirada.", "err"); return; }
+
+  const nome = document.getElementById("e-nome").value.trim();
+  const cpf  = document.getElementById("e-cpf").value.trim();
   const presSel = document.getElementById("e-pres");
-  const pres   = presSel.value;
+  const pres = presSel.value;
   const presEsp = pres ? (presSel.options[presSel.selectedIndex]?.dataset?.esp||"") : "";
 
-  if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
-  if(cpf.length<14) { toast("CPF inválido.","err"); return; }
-  if(!vStr)  { toast("Informe o valor.","err"); return; }
-  if(!prod)  { toast("Selecione o produto.","err"); return; }
-  if(prod==="Procedimento"&&!proced) { toast("Selecione o tipo de procedimento.","err"); return; }
-  if(!pgto)  { toast("Selecione a forma de pagamento.","err"); return; }
-  if(presObrig() && !pres) { toast("Selecione o prescritor.","err"); return; }
+  // Categorias
+  const imagem      = parseBRL(document.getElementById("e-imagem").value);
+  const consultas   = parseBRL(document.getElementById("e-consultas").value);
+  const laboratorio = parseBRL(document.getElementById("e-lab").value);
+  const procedimentos = [];
+  document.querySelectorAll("#e-proc-lista .orc-proc-linha").forEach(div => {
+    const tipo = div.querySelector(".e-proc-tipo")?.value || "";
+    const valor = parseBRL(div.querySelector(".e-proc-valor")?.value);
+    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+  });
+  const total = imagem + consultas + laboratorio + procedimentos.reduce((s,p)=>s+p.valor,0);
 
-  const valor = parseBRL(vStr);
-  if(valor<=0) { toast("Valor deve ser maior que zero.","err"); return; }
+  // Pagamentos
+  const fp1     = document.getElementById("e-fp1").value;
+  const fp1val  = parseBRL(document.getElementById("e-fp1-val").value);
+  const wrap2   = document.getElementById("e-fp2-wrap");
+  const tem2    = wrap2 && wrap2.style.display !== "none";
+  const fp2     = tem2 ? document.getElementById("e-fp2").value : "";
+  const fp2val  = tem2 ? parseBRL(document.getElementById("e-fp2-val").value) : 0;
+
+  // Status
+  const status = document.querySelector('input[name="e-status"]:checked')?.value || "pago";
+
+  // ── Validações ──
+  if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
+  if(!pres)  { toast("Selecione o médico solicitante.","err"); return; }
+  if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
+  if(!fp1)   { toast("Selecione a forma de pagamento.","err"); return; }
+
+  // Soma de pagamentos. Se só tem 1 forma e valor vazio → assume total inteiro.
+  let valor1Final = fp1val;
+  if(!tem2 && fp1val === 0) valor1Final = total;
+
+  if(tem2) {
+    if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
+    if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
+    if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
+    const soma = Math.round((fp1val + fp2val) * 100) / 100;
+    if(Math.abs(soma - total) > 0.01) {
+      toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err");
+      return;
+    }
+  }
 
   // ── Saída embutida (opcional) ──
-  // Se o checkbox estiver marcado, valida valor + motivo e prepara doc da saída
-  // vinculada à entrada por id_par.
   const temSaida = document.getElementById("e-tem-saida")?.checked;
   let saidaValor = 0, saidaMotivo = "", idPar = null;
   if(temSaida) {
     const sStr = document.getElementById("e-saida-valor").value.trim();
     saidaMotivo = document.getElementById("e-saida-motivo").value;
-    if(!sStr)         { toast("Informe o valor da saída.","err"); return; }
-    if(!saidaMotivo)  { toast("Selecione o motivo da saída.","err"); return; }
+    if(!sStr)        { toast("Informe o valor da saída.","err"); return; }
+    if(!saidaMotivo) { toast("Selecione o motivo da saída.","err"); return; }
     saidaValor = parseBRL(sStr);
     if(saidaValor <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
-    if(saidaValor > valor) toast("Atenção: saída maior que a entrada.","ok");
-    idPar = gerarIdPar();
+    if(saidaValor > total) toast("Atenção: saída maior que o total.","ok");
   }
 
-  // [FIX 1] Desabilita botão durante o envio para evitar duplo clique
+  // Botão
   const btn = document.querySelector("#form-entrada .btn-primary");
   btn.disabled = true;
   btn.textContent = "Salvando...";
 
+  // Documento principal (schema novo unificado)
   const doc = {
-    usuario_id: usuario.uid || usuario.nome, // UID do Firebase Auth (ou nome como fallback)
-    usuario_nome: usuario.nome, perfil: usuario.perfil,
-    tipo:"entrada", paciente_nome:nome, paciente_cpf:cpf, valor,
-    produto:prod, tipo_procedimento: prod==="Procedimento"?proced:null,
-    forma_pagamento:pgto, prescritor:pres, prescritor_especialidade:presEsp,
-    motivo_saida:null, mes_ano: getMesAno(),
+    usuario_id: usuario.uid || usuario.nome,
+    usuario_nome: usuario.nome,
+    perfil: usuario.perfil,
+    tipo: "entrada",
+    paciente_nome: nome,
+    paciente_cpf: cpf,
+    prescritor: pres,
+    prescritor_especialidade: presEsp,
+    // Categorias
+    imagem, consultas, laboratorio, procedimentos,
+    total,
+    // Formas de pagamento (1 ou 2)
+    forma_pagamento_1: fp1,
+    valor_1: valor1Final,
+    forma_pagamento_2: tem2 ? fp2 : null,
+    valor_2: tem2 ? fp2val : null,
+    // Status do kanban / faturamento
+    status,
+    mes_ano: getMesAno(),
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
-  if(idPar) doc.id_par = idPar;
 
-  console.log("[Amor Saúde] Salvando entrada:", doc);
+  // D4: Pago + saída embutida → cria 2 docs com id_par. Saída materializada agora.
+  // D5: Status≠Pago + saída embutida → guarda saida_pendente no próprio doc.
+  if(temSaida) {
+    if(status === "pago") {
+      idPar = gerarIdPar();
+      doc.id_par = idPar;
+    } else {
+      doc.saida_pendente = { valor: saidaValor, motivo: saidaMotivo };
+    }
+  }
+
+  console.log("[Amor Saúde] Salvando orçamento (novo schema):", doc);
 
   try {
     const ref = await db.collection("lancamentos").add(doc);
-    console.log("[Amor Saúde] Entrada salva com ID:", ref.id);
+    console.log("[Amor Saúde] Orçamento salvo com ID:", ref.id);
 
-    // Cria lançamento de saída vinculado pelo mesmo id_par
-    if(temSaida) {
+    // Cria saída-doc-separada quando status === "pago" e há saída embutida
+    if(temSaida && status === "pago") {
       const docSaida = {
         usuario_id: usuario.uid || usuario.nome,
-        usuario_nome: usuario.nome, perfil: usuario.perfil,
-        tipo:"saida", paciente_nome:nome, paciente_cpf:cpf, valor: saidaValor,
-        produto: prod, tipo_procedimento: null, forma_pagamento: null,
-        prescritor: null, prescritor_especialidade: null,
+        usuario_nome: usuario.nome,
+        perfil: usuario.perfil,
+        tipo: "saida",
+        paciente_nome: nome,
+        paciente_cpf: cpf,
+        valor: saidaValor,
+        produto: null,
+        tipo_procedimento: null,
+        forma_pagamento: null,
+        prescritor: null,
+        prescritor_especialidade: null,
         motivo_saida: saidaMotivo,
         mes_ano: getMesAno(),
         data_hora: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3289,32 +3471,19 @@ async function salvarEntrada() {
         id_par: idPar,
       };
       const refS = await db.collection("lancamentos").add(docSaida);
-      console.log("[Amor Saúde] Saída embutida salva com ID:", refS.id, "id_par:", idPar);
-      toast("Entrada e saída registradas!", "ok");
+      console.log("[Amor Saúde] Saída embutida salva (id_par):", refS.id, idPar);
+      toast(`Orçamento + saída registrados (${ORC_STATUS_LABEL[status]||status}).`, "ok");
     } else {
-      toast("Entrada salva com sucesso!");
+      toast(`Orçamento salvo (${ORC_STATUS_LABEL[status]||status}).`, "ok");
     }
 
-    ["e-nome","e-cpf","e-valor"].forEach(id=>document.getElementById(id).value="");
-    document.getElementById("e-produto").value="";
-    document.getElementById("e-proced").value="";
-    document.getElementById("e-pgto").value="";
-    document.getElementById("busca-pres").value="";
-    document.getElementById("e-pres").selectedIndex=-1;
-    document.getElementById("wrap-proced").style.display="none";
-    // Reset da seção de saída embutida
-    const cbS = document.getElementById("e-tem-saida");
-    if(cbS) { cbS.checked = false; toggleSaidaEmbutidaEntrada(); }
-    document.getElementById("e-saida-valor").value = "";
-    document.getElementById("e-saida-motivo").value = "";
-    preencherPres();
+    resetFormEntrada();
   } catch(e) {
-    // [FIX 1] Exibe mensagem de erro detalhada do Firebase na tela
-    console.error("[Amor Saúde] Erro ao salvar entrada:", e);
-    toast(`Erro: ${e.message || "Verifique a conexão com o Firebase."}`, "err");
+    console.error("[salvarEntrada novo]", e);
+    toast(`Erro ao salvar: ${e.message || e.code || "tente novamente"}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "Salvar Entrada";
+    btn.textContent = "Salvar Orçamento";
   }
 }
 
