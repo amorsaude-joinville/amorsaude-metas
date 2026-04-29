@@ -2241,9 +2241,73 @@ auth.onAuthStateChanged(async fbUser => {
 });
 
 // ═══════════════════════════════════════════════════════════
+//  COLEÇÃO usuarios (espelha o mapa USUARIOS para uso pelas regras Firestore)
+// ═══════════════════════════════════════════════════════════
+// As regras do firestore.rules consultam `usuarios/{auth.uid}.perfil` para
+// autorizar operações sensíveis. Esta função garante que existe um doc com
+// os dados da usuária logada e mantém perfil/nome em sincronia caso mudem
+// na constante USUARIOS hardcoded. Falhas são logadas mas NÃO bloqueiam o
+// login — a UI continua funcional mesmo se a escrita não der.
+async function garantirDocUsuario() {
+  try {
+    const user = auth.currentUser;
+    if(!user) return;                  // sem sessão Firebase Auth (login local), nada a fazer
+    if(!user.email) return;            // sem email no token, não há como mapear
+
+    const dados = USUARIOS[user.email];
+    if(!dados) {
+      console.warn("[garantirDocUsuario] Email não está em USUARIOS:", user.email);
+      return;
+    }
+
+    const ref  = db.collection("usuarios").doc(user.uid);
+    const snap = await ref.get();
+    const ts   = firebase.firestore.FieldValue.serverTimestamp();
+
+    if(!snap.exists) {
+      await ref.set({
+        email:         user.email,
+        nome:          dados.nome,
+        perfil:        dados.perfil,
+        criado_em:     ts,
+        atualizado_em: ts,
+      });
+      console.log("[garantirDocUsuario] doc criado:", user.email, "→", dados.perfil);
+    } else {
+      const atual = snap.data() || {};
+      if(atual.perfil !== dados.perfil || atual.nome !== dados.nome) {
+        await ref.update({
+          nome:          dados.nome,
+          perfil:        dados.perfil,
+          atualizado_em: ts,
+        });
+        console.log("[garantirDocUsuario] doc atualizado:", user.email, "→", dados.perfil);
+      }
+    }
+  } catch(e) {
+    // Não bloquear o login: regras podem ainda não estar publicadas, ou rede caiu.
+    console.warn("[garantirDocUsuario] falha (não bloqueante):", e.code || e.message || e);
+  }
+}
+
+// Helper de console para debug — disponível como window.verificarDocUsuario()
+window.verificarDocUsuario = async function() {
+  const user = auth.currentUser;
+  if(!user) { console.log("Não autenticado"); return; }
+  const doc = await db.collection("usuarios").doc(user.uid).get();
+  console.log("UID:",   user.uid);
+  console.log("Email:", user.email);
+  console.log("Doc existe?", doc.exists);
+  if(doc.exists) console.log("Dados:", doc.data());
+};
+
+// ═══════════════════════════════════════════════════════════
 //  INICIAR APP
 // ═══════════════════════════════════════════════════════════
 function iniciarApp() {
+  // Garante doc da coleção `usuarios` em background (não bloqueia o login)
+  garantirDocUsuario();
+
   const { nome, perfil } = usuario;
 
   document.getElementById("h-nome").textContent    = nome;
