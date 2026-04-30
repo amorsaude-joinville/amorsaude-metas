@@ -2233,6 +2233,41 @@ function getTotaisPorDia(dataStr) {
   const zerado = { caixa:0, credito:0, boleto:0, laboratorio:0, imagem:0, procedimentos:0, injetaveis:0 };
   if(!dataStr) return { ...zerado, fonte:"sem-dados" };
 
+  // ── Fase F: marco temporal ──
+  // A partir de mai/2026 (≥ MARCO_NOVO_MODELO), prefere lancamentos pagos do dia.
+  // Se não houver nenhum lançamento pago no dia, cai pro caminho fatDiario abaixo
+  // (que pode estar vazio se não houver importação) ou retorna zeros via fallback.
+  const mesDoDia = dataStr.slice(0, 7);
+  if(mesDoDia >= MARCO_NOVO_MODELO) {
+    const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
+    const lancsDoDia = fonte.filter(l => {
+      if(!l.data_hora || l.tipo !== "entrada" || l.status !== "pago") return false;
+      const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      return ds === dataStr;
+    });
+    const saidasDoDia = fonte.filter(l => {
+      if(!l.data_hora || l.tipo !== "saida" || !l.id_par) return false;
+      const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      return ds === dataStr;
+    });
+    if(lancsDoDia.length >= MIN_DOCS_LANCAMENTOS_FALLBACK) {
+      const t = calcTotaisDetalhados([...lancsDoDia, ...saidasDoDia]);
+      return {
+        caixa:         Number(t.caixa)      || 0,
+        credito:       Number(t.credito)    || 0,
+        boleto:        Number(t.boleto)     || 0,
+        laboratorio:   Number(t.lab)        || 0,
+        imagem:        Number(t.img)        || 0,
+        procedimentos: Number(t.proc)       || 0,
+        injetaveis:    Number(t.injetaveis) || 0,
+        fonte: "lancamentos",
+      };
+    }
+    // Sem lançamentos pagos suficientes: cai pro caminho fatDiario abaixo (fallback)
+  }
+
   // 1) Procura doc consolidado em faturamentoDiario
   const doc = faturamentoDiarioAtual.find(d => d.data === dataStr);
   if(doc) {
