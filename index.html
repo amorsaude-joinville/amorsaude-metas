@@ -3425,6 +3425,17 @@ async function salvarEntrada() {
   btn.disabled = true;
   btn.textContent = "Salvando...";
 
+  // Pré-computa caixa/credito/boleto a partir das formas de pagamento.
+  // Regra D7: Boleto entra em CAIXA E também no campo `boleto` separado.
+  // Esses campos ficam redundantes com a derivação on-the-fly de
+  // calcTotaisDetalhados, mas são úteis para queries Firestore futuras,
+  // debugging direto no Console e compatibilidade com renders legacy.
+  const pagsParaMapear = [{ forma: fp1, valor: valor1Final }];
+  if(tem2 && fp2 && valor2Final) pagsParaMapear.push({ forma: fp2, valor: valor2Final });
+  const { caixa: caixaCalc, credito: creditoCalc } = mapearFormasPagamentoParaCaixaCredito(pagsParaMapear);
+  let boletoCalc = 0;
+  pagsParaMapear.forEach(p => { if(p.forma === "Boleto") boletoCalc += p.valor || 0; });
+
   // Documento principal (schema novo unificado)
   const doc = {
     usuario_id: usuario.uid || usuario.nome,
@@ -3438,6 +3449,12 @@ async function salvarEntrada() {
     // Categorias
     imagem, consultas, laboratorio, procedimentos,
     total,
+    // Compat com renders legacy que lêem l.valor (renderTabela/renderHistorico)
+    valor: total,
+    // Pré-computados pra dashboards e debugging direto no Firestore
+    caixa:   caixaCalc,
+    credito: creditoCalc,
+    boleto:  boletoCalc,
     // Formas de pagamento (1 ou 2)
     forma_pagamento_1: fp1,
     valor_1: valor1Final,
