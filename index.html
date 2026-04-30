@@ -4999,13 +4999,16 @@ function iniciarDashboard() {
   const inp = document.getElementById("dash-mes");
   if(inp) inp.value = dashMesAno;
 
-  // Restaura modo salvo no localStorage sem chamar renderDashboard (ainda sem dados)
-  aplicarBotoesModo(dashModo);
-  renderControlesModo(dashModo);
-
-  // Se o modo persistido é Comparativo, esconde Mês/Ano + botões logo na abertura
-  const filtrosWrap = document.getElementById("dash-filtros-wrap");
-  if(filtrosWrap) filtrosWrap.style.display = (dashModo === "comparativo") ? "none" : "";
+  // Restaura o modo salvo no localStorage usando o mesmo handler dos botões.
+  // Isso garante que TODOS os elementos da UI fiquem coerentes com o modo:
+  //  - botão destacado (aplicarBotoesModo)
+  //  - controle de data/semana criado (renderControlesModo)
+  //  - Mês/Ano + botões superiores escondidos se Comparativo
+  //  - dash-painel-normal vs dash-painel-comp alternados (fix do bug pré-existente)
+  //  - Período A/B + sub-controles inicializados se Comparativo
+  // O renderDashboard() interno renderiza com array vazio; logo depois o
+  // carregarDashListener abaixo dispara onSnapshot que re-renderiza com dados.
+  mudarModoDash(dashModo);
 
   carregarDashListener();
 }
