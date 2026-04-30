@@ -958,7 +958,8 @@
         <!-- Controles dinâmicos: data (modo dia) ou semana (modo semana) -->
         <div class="dash-modo-controles" id="dash-modo-controles" style="display:none"></div>
 
-        <div class="dash-filtros">
+        <!-- Mês/Ano + botões: escondidos no modo Comparativo (que tem Período A/B próprio) -->
+        <div class="dash-filtros" id="dash-filtros-wrap">
           <div class="fg">
             <label>Mês / Ano</label>
             <input type="month" id="dash-mes" onchange="mudarFiltroDash()" style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text);transition:border-color .2s" />
@@ -5002,6 +5003,10 @@ function iniciarDashboard() {
   aplicarBotoesModo(dashModo);
   renderControlesModo(dashModo);
 
+  // Se o modo persistido é Comparativo, esconde Mês/Ano + botões logo na abertura
+  const filtrosWrap = document.getElementById("dash-filtros-wrap");
+  if(filtrosWrap) filtrosWrap.style.display = (dashModo === "comparativo") ? "none" : "";
+
   carregarDashListener();
 }
 
@@ -5140,6 +5145,11 @@ function mudarModoDash(modo) {
   const normal = document.getElementById("dash-painel-normal");
   const comp   = document.getElementById("dash-painel-comp");
   const modoCtrl = document.getElementById("dash-modo-controles");
+  const filtros = document.getElementById("dash-filtros-wrap");
+
+  // Mês/Ano + botões (Metas/Importar/Feriados) só fazem sentido fora do
+  // Comparativo, que tem seus próprios seletores de Período A/B logo abaixo.
+  if(filtros) filtros.style.display = (modo === "comparativo") ? "none" : "";
 
   if(modo === "comparativo") {
     if(normal) normal.style.display = "none";
