@@ -648,7 +648,7 @@
   <!-- Aba padrão: metas; ordem: Meta e Premiação | Orçamentos | Lançamentos | Equipe | Dashboard -->
   <div id="lider-nav">
     <button class="lider-tab active" id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Meta e Premiação</button>
-    <button class="lider-tab"        id="lider-tab-orc"    onclick="mudarAbaLider('orcamentos')">📋 Orçamentos</button>
+    <button class="lider-tab"        id="lider-tab-orc"    onclick="mudarAbaLider('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">📊 Equipe</button>
     <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">🏢 Dashboard</button>
@@ -657,7 +657,7 @@
   <!-- Navegação por abas — recepcionistas (4 abas) -->
   <div id="rec-nav">
     <button class="lider-tab active" id="rec-tab-metas"  onclick="mudarAbaRec('metas')">🎯 Meta e Premiação</button>
-    <button class="lider-tab"        id="rec-tab-orc"    onclick="mudarAbaRec('orcamentos')">📋 Orçamentos</button>
+    <button class="lider-tab"        id="rec-tab-orc"    onclick="mudarAbaRec('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="rec-tab-lanc"   onclick="mudarAbaRec('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="rec-tab-equipe" onclick="mudarAbaRec('equipe')">📊 Equipe</button>
   </div>
@@ -665,7 +665,7 @@
   <!-- Navegação por abas — call center (4 abas) -->
   <div id="cc-nav">
     <button class="lider-tab active" id="cc-tab-metas"  onclick="mudarAbaCC('metas')">🎯 Meta e Premiação</button>
-    <button class="lider-tab"        id="cc-tab-orc"    onclick="mudarAbaCC('orcamentos')">📋 Orçamentos</button>
+    <button class="lider-tab"        id="cc-tab-orc"    onclick="mudarAbaCC('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="cc-tab-lanc"   onclick="mudarAbaCC('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">📊 Metas Equipe</button>
   </div>
@@ -673,14 +673,14 @@
   <!-- Navegação por abas — líder de call center (Andrielli) -->
   <div id="lider-cc-nav">
     <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">📝 Orçamento</button>
-    <button class="lider-tab"        id="lider-cc-tab-orc"  onclick="mudarAbaLiderCC('orcamentos')">📋 Orçamentos</button>
+    <button class="lider-tab"        id="lider-cc-tab-orc"  onclick="mudarAbaLiderCC('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
   </div>
 
   <!-- Navegação por abas — gestora/subgestora (Dashboard | Orçamentos) -->
   <div id="gestor-nav">
     <button class="lider-tab active" id="gestor-tab-dash" onclick="mudarAbaGestor('dashboard')">🏢 Dashboard</button>
-    <button class="lider-tab"        id="gestor-tab-orc"  onclick="mudarAbaGestor('orcamentos')">📋 Orçamentos</button>
+    <button class="lider-tab"        id="gestor-tab-orc"  onclick="mudarAbaGestor('orcamentos')">📋 Acompanhamento</button>
   </div>
 
   <div id="app">
@@ -694,8 +694,9 @@
     <!-- ══════════ ORÇAMENTOS (Fase 1) ══════════ -->
     <div id="sec-orcamentos" style="display:none">
 
-      <!-- Caixa colapsável: Novo Orçamento -->
-      <div class="orc-form-wrap">
+      <!-- Form Fase 1 desativado pela Fase D — cadastro agora é via aba "📝 Orçamento".
+           Mantido no DOM (oculto) por ora; será removido na Fase G. -->
+      <div class="orc-form-wrap" style="display:none">
         <button class="orc-form-toggle" type="button" onclick="toggleOrcForm()">
           <span>➕ Novo Orçamento</span>
           <span id="orc-form-arrow">▼</span>
