@@ -2225,6 +2225,57 @@ function getTotaisDoMes(mesAnoStr) {
   return { ...totais, fonte };
 }
 
+// Sintetiza pseudo-docs no formato faturamentoDiario a partir de lancamentos
+// pagos do mês. Cada doc representa um dia (chave = "YYYY-MM-DD" da data_hora).
+// Permite que renderCompDiasUteis/renderCompDiaSemana funcionem pra meses
+// pós-marco sem mudar o formato esperado dos comparativos.
+function sintetizarFatDiarioDeLancamentos(mesAnoStr) {
+  const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
+  const pagos     = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "entrada" && l.status === "pago");
+  const saidasPar = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "saida"   && l.id_par);
+  const todos = [...pagos, ...saidasPar];
+
+  function isoDoc(l) {
+    if(!l.data_hora) return "";
+    const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  const porDia = {};
+  todos.forEach(l => {
+    const dataStr = isoDoc(l);
+    if(!dataStr) return;
+    if(!porDia[dataStr]) porDia[dataStr] = [];
+    porDia[dataStr].push(l);
+  });
+
+  return Object.entries(porDia).map(([data, lista]) => {
+    const t = calcTotaisDetalhados(lista);
+    return {
+      mes_ano:             mesAnoStr,
+      data,
+      feriado:             false,
+      caixa:               Number(t.caixa)      || 0,
+      credito:             Number(t.credito)    || 0,
+      boleto:              Number(t.boleto)     || 0,
+      exameslaboratoriais: Number(t.lab)        || 0,
+      imagem:              Number(t.img)        || 0,
+      procedimentos:       Number(t.proc)       || 0,
+      injetaveis:          Number(t.injetaveis) || 0,
+    };
+  });
+}
+
+// Wrapper pro Comparativo: retorna {docs, fonte} no formato fatDiário,
+// vindo de fatDiário direto OU sintetizado a partir de lancamentos pagos.
+function getDocsParaComparativo(mesAnoStr) {
+  const fonte = escolherFonteDashboard(mesAnoStr);
+  if(fonte === "lancamentos") {
+    return { docs: sintetizarFatDiarioDeLancamentos(mesAnoStr), fonte };
+  }
+  return { docs: faturamentoDiarioAtual.filter(d => d.mes_ano === mesAnoStr), fonte };
+}
+
 // Totais de UM dia específico (filtro "Por Dia" do dashboard).
 // Regra: tenta primeiro faturamentoDiario (doc com data === dataStr).
 // Se não encontrar, soma os lançamentos de dashLancs cuja data_hora bate com dataStr.
@@ -6350,9 +6401,11 @@ async function executarComparativo() {
   res.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando dados...</div>';
 
   try {
-    // Usa o cache em memória de faturamentoDiarioAtual (já carregado via onSnapshot)
-    const docsA = faturamentoDiarioAtual.filter(d => d.mes_ano === mesA);
-    const docsB = faturamentoDiarioAtual.filter(d => d.mes_ano === mesB);
+    // Fase F: marco temporal — meses ≥ MARCO usam lancamentos pagos sintetizados;
+    // anteriores leem fatDiário direto. Resto do fluxo (renderCompXxx) intocado.
+    const { docs: docsA, fonte: fonteA } = getDocsParaComparativo(mesA);
+    const { docs: docsB, fonte: fonteB } = getDocsParaComparativo(mesB);
+    console.log(`[Comparativo] ${mesA}: fonte=${fonteA} (${docsA.length} docs) · ${mesB}: fonte=${fonteB} (${docsB.length} docs)`);
 
     if(!docsA.length && !docsB.length) {
       res.innerHTML = `<div class="empty"><div class="ei">📭</div>Nenhum dado de faturamento encontrado para os períodos selecionados.</div>`;
