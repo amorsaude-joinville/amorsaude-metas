@@ -1433,6 +1433,102 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Modal de Pagamento (Fase D3.2) — abre quando status muda pra "Pago" via kanban.
+     Mostra dados do doc (read-only) e pede só Forma de Pagamento + saída opcional.
+     Cancelar não muda status; Salvar atualiza doc com status="pago" + dados. -->
+<div class="overlay hidden" id="modal-pag">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto">
+    <h3>💳 Registrar pagamento</h3>
+    <p id="modal-pag-info" style="margin-bottom:12px"></p>
+
+    <!-- Dados do lançamento (read-only) -->
+    <div id="modal-pag-resumo" style="background:var(--bg2);border-radius:var(--r2);padding:12px;margin-bottom:14px;font-size:13px"></div>
+
+    <!-- Status fixo -->
+    <div style="margin-bottom:12px;font-size:13px">
+      <strong>Status:</strong> <span style="background:#16A34A;color:#fff;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600">✅ Pago</span>
+      <span style="color:var(--text2);font-size:11px;margin-left:6px">(fixo neste fluxo — cancele para manter o status anterior)</span>
+    </div>
+
+    <!-- Forma de pagamento (1ª, sempre obrigatória) -->
+    <div class="fg full">
+      <label>Forma de Pagamento *</label>
+      <select id="pag-fp1" style="max-width:280px">
+        <option value="" disabled selected>Selecione...</option>
+      </select>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px" id="pag-fp1-hint">
+        ⓘ Valor desta forma = Total do orçamento (R$ <span id="pag-total-hint">0,00</span>)
+      </div>
+    </div>
+
+    <!-- Campo de valor da 1ª só aparece se há 2ª forma -->
+    <div class="fg" id="pag-fp1-val-wrap" style="display:none">
+      <label>Valor 1ª forma (R$) *</label>
+      <input type="text" id="pag-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosModal()" />
+    </div>
+
+    <!-- Botão pra adicionar 2ª forma -->
+    <div class="fg full" id="pag-fp-add-wrap">
+      <button type="button" class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px"
+        onclick="adicionarSegundaFormaModal()">➕ Adicionar 2ª forma de pagamento</button>
+    </div>
+
+    <!-- 2ª forma (oculta por default) -->
+    <div class="fg full" id="pag-fp2-wrap" style="display:none">
+      <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
+        <div class="fg">
+          <label>2ª Forma de Pagamento *</label>
+          <select id="pag-fp2"><option value="" disabled selected>Selecione...</option></select>
+        </div>
+        <div class="fg">
+          <label>Valor 2ª forma (R$) *</label>
+          <input type="text" id="pag-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosModal()" />
+        </div>
+        <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
+          <div id="pag-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
+          <button type="button" class="btn btn-ghost" style="width:auto;font-size:12px;padding:6px 10px;color:#DC2626"
+            onclick="removerSegundaFormaModal()">🗑 Remover 2ª forma</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saída embutida (pré-preenchida com saida_pendente do doc se houver) -->
+    <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="pag-tem-saida" onchange="toggleSaidaModalPag()" />
+        ↩️ Tem desconto/saída associado?
+      </label>
+      <div id="pag-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
+        <div class="fgrid">
+          <div class="fg">
+            <label>Valor da Saída (R$) *</label>
+            <input type="text" id="pag-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
+          </div>
+          <div class="fg">
+            <label>Motivo *</label>
+            <select id="pag-saida-motivo">
+              <option value="" disabled selected>Selecione...</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic">
+          ⓘ A saída cria um lançamento separado vinculado por id_par.
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado interno: doc id e status anterior (pra rollback) -->
+    <input type="hidden" id="pag-doc-id" value="" />
+    <input type="hidden" id="pag-status-anterior" value="" />
+    <input type="hidden" id="pag-total-num" value="0" />
+
+    <div class="modal-btns" style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="fecharModalPagamento()">❌ Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPagamentoModal()">💾 Salvar Pagamento</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal detalhes do orçamento -->
 <div class="overlay hidden" id="modal-orc-det">
   <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto">
@@ -2844,9 +2940,12 @@ function iniciarApp() {
   popularSelectMotivos("s-motivo");
   popularSelectMotivos("e-saida-motivo");
   popularSelectMotivos("orc-saida-motivo");
+  popularSelectMotivos("pag-saida-motivo");
   // Formas de pagamento detalhadas (Fase B do modelo unificado)
   popularSelectFormaPagamento("e-fp1");
   popularSelectFormaPagamento("e-fp2");
+  popularSelectFormaPagamento("pag-fp1");
+  popularSelectFormaPagamento("pag-fp2");
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
@@ -7846,24 +7945,293 @@ function cardOrcamentoHTML(o) {
     </div>`;
 }
 
-// Atualiza status do lancamento no Firestore.
-// Fase D (D2): aponta pra coleção lancamentos. Materialização de saida_pendente
-// e edge case "Pago → Acompanhar" entram no D3.
-// TODO D3: quando virar status="pago" e o doc tiver forma_pagamento_1==="" (cadastrado
-// originalmente como Acompanhar/Lançar/Link Enviado), abrir prompt/modal pedindo
-// forma de pagamento + valor(es) e atualizar caixa/credito/valor_1/forma_pagamento_1.
+// Roteador de mudança de status (Fase D3.2).
+// - Virando "pago" (vindo de qualquer não-pago): abre modal de pagamento.
+//   Cancelar mantém status anterior; salvar atualiza doc + materializa saída se houver.
+// - Mudança entre não-pagos (acompanhar↔link_enviado↔lancar): confirm() simples + update.
+// - Status idêntico: no-op.
+// TODO D3.3: edge case "Pago → não-pago" (rebote) — deletar saída-doc-irmã, zerar pagamento.
 async function mudarStatusOrcamento(id, novoStatus) {
   if(!["acompanhar","link_enviado","lancar","pago"].includes(novoStatus)) return;
+  if(!usuario) { toast("Sessão expirada.","err"); return; }
+
+  // Pega o doc do cache (acompLancs) — se não tiver, busca no Firestore
+  let doc = acompLancs.find(x => x.id === id);
+  if(!doc) {
+    try {
+      const snap = await db.collection("lancamentos").doc(id).get();
+      if(!snap.exists) { toast("Lançamento não encontrado.","err"); return; }
+      doc = { id: snap.id, ...snap.data() };
+    } catch(e) { console.error("[mudarStatusOrcamento] busca:", e); toast("Erro ao buscar lançamento.","err"); return; }
+  }
+
+  const statusAtual = doc.status || "acompanhar";
+  if(novoStatus === statusAtual) return;
+
+  // Caso 1: virando PAGO → abre modal de pagamento (não atualiza nada ainda)
+  if(novoStatus === "pago") {
+    const ehGestor = SO_DASHBOARD.includes(usuario.perfil);
+    if(ehGestor) {
+      toast("Apenas recepcionista/callcenter/líder pode finalizar como Pago.","err");
+      // Reverte visualmente o dropdown (re-render via snapshot quando vier)
+      renderKanbanOrcamentos();
+      return;
+    }
+    abrirModalPagamento(doc, statusAtual);
+    return;
+  }
+
+  // Caso 2: mudança entre não-pagos → confirm() simples + update direto
+  const ok = confirm(`Mudar status para "${ORC_STATUS_LABEL[novoStatus] || novoStatus}"?`);
+  if(!ok) {
+    // Reverte o dropdown visualmente (snapshot vai redesenhar)
+    renderKanbanOrcamentos();
+    return;
+  }
   try {
     await db.collection("lancamentos").doc(id).update({
       status: novoStatus,
       atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
     });
     toast(`Status atualizado para ${ORC_STATUS_LABEL[novoStatus]}`, "ok");
-    // Re-render acontece via onSnapshot; chamada manual desnecessária
   } catch(e) {
     console.error("[mudarStatusOrcamento]", e);
     toast("Erro ao atualizar status: " + (e.message || e.code), "err");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL DE PAGAMENTO (Fase D3.2)
+// ═══════════════════════════════════════════════════════════
+
+// Abre modal pré-preenchido com dados do doc. Usuário só edita Forma de Pagamento + saída.
+function abrirModalPagamento(doc, statusAnterior) {
+  const total = Number(doc.total) || Number(doc.valor) || 0;
+  const set = (id,v) => { const e = document.getElementById(id); if(e) e.value = v; };
+
+  // Estado interno
+  set("pag-doc-id",          doc.id);
+  set("pag-status-anterior", statusAnterior);
+  set("pag-total-num",       String(total));
+
+  // Resumo read-only
+  const proc = (Array.isArray(doc.procedimentos) ? doc.procedimentos : [])
+    .filter(p => Number(p?.valor) > 0)
+    .map(p => `<li>${escHTML(p.tipo||"Procedimento")} — <strong>${brl(Number(p.valor)||0)}</strong></li>`).join("");
+  document.getElementById("modal-pag-info").innerHTML =
+    `Paciente: <strong>${escHTML(doc.paciente_nome||"—")}</strong> · Médico: <strong>${escHTML(doc.prescritor||"—")}</strong>`;
+  document.getElementById("modal-pag-resumo").innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px">
+      <div><strong>Total:</strong> <span style="color:var(--primary);font-weight:700">${brl(total)}</span></div>
+      <div><strong>Status atual:</strong> ${ORC_STATUS_LABEL[statusAnterior] || statusAnterior}</div>
+      <div>🩻 Imagem: <strong>${brl(Number(doc.imagem)||0)}</strong></div>
+      <div>👨‍⚕️ Consultas: <strong>${brl(Number(doc.consultas)||0)}</strong></div>
+      <div>🧪 Laboratoriais: <strong>${brl(Number(doc.laboratorio)||0)}</strong></div>
+      <div>💉 Procedimentos: <strong>${brl((doc.procedimentos||[]).reduce((s,p)=>s+(Number(p?.valor)||0),0))}</strong></div>
+    </div>
+    ${proc ? `<div style="margin-top:8px;font-size:12px"><strong>Procedimentos:</strong><ul style="padding-left:18px;margin:4px 0">${proc}</ul></div>` : ""}
+  `;
+
+  // Hint do total
+  const hint = document.getElementById("pag-total-hint");
+  if(hint) hint.textContent = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
+
+  // Reset campos editáveis
+  set("pag-fp1","");
+  set("pag-fp1-val","");
+  set("pag-fp2","");
+  set("pag-fp2-val","");
+  removerSegundaFormaModal();
+
+  // Saída pendente (se o doc tem) → pré-marca checkbox e preenche
+  const cb = document.getElementById("pag-tem-saida");
+  const sp = doc.saida_pendente;
+  if(cb && sp && Number(sp.valor) > 0) {
+    cb.checked = true;
+    set("pag-saida-valor", Number(sp.valor).toLocaleString("pt-BR",{minimumFractionDigits:2}));
+    set("pag-saida-motivo", sp.motivo || "");
+  } else if(cb) {
+    cb.checked = false;
+    set("pag-saida-valor","");
+    set("pag-saida-motivo","");
+  }
+  toggleSaidaModalPag();
+
+  document.getElementById("modal-pag").classList.remove("hidden");
+}
+
+function fecharModalPagamento() {
+  document.getElementById("modal-pag").classList.add("hidden");
+  // Re-renderiza kanban pra reverter o dropdown visualmente (status no banco não mudou)
+  renderKanbanOrcamentos();
+}
+
+// Toggles do modal (espelho dos do form principal)
+function adicionarSegundaFormaModal() {
+  document.getElementById("pag-fp2-wrap").style.display = "";
+  document.getElementById("pag-fp-add-wrap").style.display = "none";
+  document.getElementById("pag-fp1-val-wrap").style.display = "";
+  const hint = document.getElementById("pag-fp1-hint");
+  if(hint) hint.style.display = "none";
+  validarSomaPagamentosModal();
+}
+function removerSegundaFormaModal() {
+  document.getElementById("pag-fp2-wrap").style.display = "none";
+  document.getElementById("pag-fp-add-wrap").style.display = "";
+  document.getElementById("pag-fp1-val-wrap").style.display = "none";
+  document.getElementById("pag-fp2").value = "";
+  document.getElementById("pag-fp2-val").value = "";
+  document.getElementById("pag-fp1-val").value = "";
+  const hint = document.getElementById("pag-fp1-hint");
+  if(hint) hint.style.display = "";
+  validarSomaPagamentosModal();
+}
+function validarSomaPagamentosModal() {
+  const total = Number(document.getElementById("pag-total-num")?.value) || 0;
+  const v1 = parseBRL(document.getElementById("pag-fp1-val")?.value);
+  const wrap2 = document.getElementById("pag-fp2-wrap");
+  const tem2 = wrap2 && wrap2.style.display !== "none";
+  const v2 = tem2 ? parseBRL(document.getElementById("pag-fp2-val")?.value) : 0;
+  const aviso = document.getElementById("pag-fp-aviso");
+  if(!aviso) return;
+  if(!tem2) { aviso.textContent = ""; return; }
+  const soma = v1 + v2;
+  const dif  = Math.round((total - soma) * 100) / 100;
+  if(Math.abs(dif) < 0.01) {
+    aviso.style.color = "var(--success)";
+    aviso.textContent = "✅ Soma confere com o total";
+  } else if(dif > 0) {
+    aviso.style.color = "#DC2626";
+    aviso.textContent = `⚠️ Faltam ${brl(dif)} para fechar o total`;
+  } else {
+    aviso.style.color = "#DC2626";
+    aviso.textContent = `⚠️ Excedeu em ${brl(-dif)}`;
+  }
+}
+function toggleSaidaModalPag() {
+  const cb = document.getElementById("pag-tem-saida");
+  const wrap = document.getElementById("pag-saida-wrap");
+  if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
+}
+
+// Salva o pagamento: faz update no doc original + materializa saída (se houver) com id_par.
+async function salvarPagamentoModal() {
+  const docId = document.getElementById("pag-doc-id").value;
+  if(!docId) { toast("Doc inválido.","err"); return; }
+
+  const total = Number(document.getElementById("pag-total-num").value) || 0;
+  const fp1   = document.getElementById("pag-fp1").value;
+  const wrap2 = document.getElementById("pag-fp2-wrap");
+  const tem2  = wrap2 && wrap2.style.display !== "none";
+  const fp2   = tem2 ? document.getElementById("pag-fp2").value : "";
+  const fp1val = tem2 ? parseBRL(document.getElementById("pag-fp1-val").value) : 0;
+  const fp2val = tem2 ? parseBRL(document.getElementById("pag-fp2-val").value) : 0;
+
+  // Validação de pagamento (status="pago" sempre nesse fluxo)
+  if(!fp1) { toast("Selecione uma forma de pagamento.","err"); return; }
+  if(!FORMAS_PAGAMENTO.some(f => f.value === fp1)) {
+    toast("Forma de pagamento inválida.","err"); return;
+  }
+
+  let valor1Final = 0, valor2Final = 0, fp1Final = "", fp2Final = "";
+  if(!tem2) {
+    valor1Final = total; fp1Final = fp1;
+  } else {
+    if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
+    if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
+    if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
+    const soma = Math.round((fp1val + fp2val) * 100) / 100;
+    if(Math.abs(soma - total) > 0.01) {
+      toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err");
+      return;
+    }
+    valor1Final = fp1val; valor2Final = fp2val;
+    fp1Final = fp1; fp2Final = fp2;
+  }
+
+  // Saída embutida (opcional)
+  const temSaida = document.getElementById("pag-tem-saida")?.checked;
+  let saidaValor = 0, saidaMotivo = "";
+  if(temSaida) {
+    const sStr = document.getElementById("pag-saida-valor").value.trim();
+    saidaMotivo = document.getElementById("pag-saida-motivo").value;
+    if(!sStr)        { toast("Informe o valor da saída.","err"); return; }
+    if(!saidaMotivo) { toast("Selecione o motivo da saída.","err"); return; }
+    saidaValor = parseBRL(sStr);
+    if(saidaValor <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
+    if(saidaValor > total) toast("Atenção: saída maior que o total.","ok");
+  }
+
+  // Pré-computa caixa/credito (regra D7: Boleto vai pra caixa, campo boleto sempre 0)
+  const m1 = mapearFormaPagamento(fp1Final, valor1Final);
+  const m2 = fp2Final ? mapearFormaPagamento(fp2Final, valor2Final) : { caixa:0, credito:0 };
+  const caixaCalc   = m1.caixa   + m2.caixa;
+  const creditoCalc = m1.credito + m2.credito;
+
+  // Botão
+  const btn = document.querySelector("#modal-pag .btn-primary");
+  if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+
+  try {
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    const updates = {
+      status: "pago",
+      valor: total,
+      caixa:   Number(caixaCalc)   || 0,
+      credito: Number(creditoCalc) || 0,
+      boleto:  0,
+      forma_pagamento_1: fp1Final || "",
+      valor_1:           Number(valor1Final) || 0,
+      forma_pagamento_2: fp2Final || "",
+      valor_2:           Number(valor2Final) || 0,
+      atualizado_em: ts,
+      // Auditoria mínima
+      editado_em:        ts,
+      editado_por:       usuario.nome || "",
+      editado_por_uid:   usuario.uid  || null,
+      editado_por_perfil: usuario.perfil || "",
+    };
+
+    if(temSaida) {
+      // Materializa saída-doc separada vinculada por id_par
+      const idPar = gerarIdPar();
+      updates.id_par = idPar;
+      updates.saida_pendente = firebase.firestore.FieldValue.delete();
+
+      // Pega dados do doc pra construir saída-doc
+      const snap = await db.collection("lancamentos").doc(docId).get();
+      const d = snap.exists ? snap.data() : {};
+      await db.collection("lancamentos").add({
+        usuario_id: d.usuario_id || (usuario.uid || usuario.nome),
+        usuario_nome: d.usuario_nome || usuario.nome || "",
+        perfil: d.perfil || usuario.perfil || "",
+        tipo: "saida",
+        paciente_nome: d.paciente_nome || "",
+        paciente_cpf:  d.paciente_cpf  || "",
+        valor: Number(saidaValor) || 0,
+        produto: null, tipo_procedimento: null, forma_pagamento: null,
+        prescritor: null, prescritor_especialidade: null,
+        motivo_saida: saidaMotivo || "",
+        mes_ano:   d.mes_ano || getMesAno(),
+        data_hora: ts,
+        criado_em: ts,
+        id_par: idPar,
+      });
+    } else {
+      // Sem saída no modal: remove saida_pendente (se havia) — recepcionista desistiu
+      updates.saida_pendente = firebase.firestore.FieldValue.delete();
+    }
+
+    await db.collection("lancamentos").doc(docId).update(updates);
+    toast("Pagamento registrado!","ok");
+    document.getElementById("modal-pag").classList.add("hidden");
+    // Não chamar renderKanbanOrcamentos — o snapshot listener vai detectar
+    // que o status mudou pra "pago" e remover do array acompLancs sozinho
+  } catch(e) {
+    console.error("[salvarPagamentoModal]", e);
+    toast("Erro ao salvar pagamento: " + (e.message || e.code),"err");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = "💾 Salvar Pagamento"; }
   }
 }
 
