@@ -1239,51 +1239,59 @@
               <input type="text" id="e-total" readonly style="font-weight:700;color:var(--primary);font-size:18px" value="0,00" />
             </div>
 
-            <!-- Forma de pagamento (1ª) — sem campo de valor quando só há 1 forma.
-                 O campo Valor da 1ª forma só aparece quando há pagamento dividido. -->
-            <div class="fg full">
-              <label>Forma de Pagamento *</label>
-              <select id="e-fp1" style="max-width:280px">
-                <option value="" disabled selected>Selecione...</option>
-              </select>
-              <div style="font-size:11px;color:var(--text2);margin-top:4px" id="e-fp1-hint">
-                ⓘ Valor desta forma = Total inteiro do orçamento
-              </div>
-            </div>
-            <!-- Campo de valor da 1ª forma só aparece quando há 2ª forma -->
-            <div class="fg" id="e-fp1-val-wrap" style="display:none">
-              <label>Valor 1ª forma (R$) *</label>
-              <input type="text" id="e-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
-            </div>
-
-            <!-- Botão pra adicionar 2ª forma de pagamento -->
-            <div class="fg full" id="e-fp-add-wrap">
-              <button type="button" class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px"
-                onclick="adicionarSegundaForma()">➕ Adicionar 2ª forma de pagamento</button>
-            </div>
-
-            <!-- 2ª forma de pagamento (oculta por default) -->
-            <div class="fg full" id="e-fp2-wrap" style="display:none">
-              <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
-                <div class="fg">
-                  <label>2ª Forma de Pagamento *</label>
-                  <select id="e-fp2">
-                    <option value="" disabled selected>Selecione...</option>
-                  </select>
-                </div>
-                <div class="fg">
-                  <label>Valor 2ª forma (R$) *</label>
-                  <input type="text" id="e-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
-                </div>
-                <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
-                  <div id="e-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
-                  <button type="button" class="btn btn-ghost" style="width:auto;font-size:12px;padding:6px 10px;color:#DC2626"
-                    onclick="removerSegundaForma()">🗑 Remover 2ª forma</button>
-                </div>
+            <!-- Status (vem ANTES da forma de pagamento — controla visibilidade dela) -->
+            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label style="font-weight:600;margin-bottom:8px;display:block">Status *</label>
+              <div style="display:flex;flex-wrap:wrap;gap:14px">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="pago"         checked onchange="togglePagamentoPorStatus()" /> ✅ Pago</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="lancar"              onchange="togglePagamentoPorStatus()" /> ⏰ Lançar</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="link_enviado"        onchange="togglePagamentoPorStatus()" /> 📨 Link Enviado</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="acompanhar"          onchange="togglePagamentoPorStatus()" /> 🟡 Acompanhar</label>
               </div>
             </div>
 
-            <!-- Saída embutida (ao lado da forma de pagamento, mais visível) -->
+            <!-- Bloco de PAGAMENTO — só aparece quando Status="Pago".
+                 Se status≠pago, paciente ainda não pagou; campos vão zerados ao gravar. -->
+            <div id="e-pagamento-wrap" class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <div style="font-size:12px;color:var(--text2);margin-bottom:8px">💳 Como o paciente pagou?</div>
+
+              <div class="fg full">
+                <label>Forma de Pagamento *</label>
+                <select id="e-fp1" style="max-width:280px">
+                  <option value="" disabled selected>Selecione...</option>
+                </select>
+                <div style="font-size:11px;color:var(--text2);margin-top:4px" id="e-fp1-hint">
+                  ⓘ Valor desta forma = Total inteiro do orçamento
+                </div>
+              </div>
+              <div class="fg" id="e-fp1-val-wrap" style="display:none">
+                <label>Valor 1ª forma (R$) *</label>
+                <input type="text" id="e-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
+              </div>
+              <div class="fg full" id="e-fp-add-wrap">
+                <button type="button" class="btn btn-ghost" style="width:auto;font-size:13px;padding:8px 14px"
+                  onclick="adicionarSegundaForma()">➕ Adicionar 2ª forma de pagamento</button>
+              </div>
+              <div class="fg full" id="e-fp2-wrap" style="display:none">
+                <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
+                  <div class="fg">
+                    <label>2ª Forma de Pagamento *</label>
+                    <select id="e-fp2"><option value="" disabled selected>Selecione...</option></select>
+                  </div>
+                  <div class="fg">
+                    <label>Valor 2ª forma (R$) *</label>
+                    <input type="text" id="e-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
+                  </div>
+                  <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
+                    <div id="e-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
+                    <button type="button" class="btn btn-ghost" style="width:auto;font-size:12px;padding:6px 10px;color:#DC2626"
+                      onclick="removerSegundaForma()">🗑 Remover 2ª forma</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Saída embutida -->
             <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
                 <input type="checkbox" id="e-tem-saida" onchange="toggleSaidaEmbutidaEntrada()" />
@@ -1305,17 +1313,6 @@
                 <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic" id="e-saida-aviso">
                   ⓘ Se status = Pago: cria saída imediatamente (com id_par). Se outro: armazena como pendente, materializa quando virar Pago.
                 </div>
-              </div>
-            </div>
-
-            <!-- Status escolhido na hora (default Pago) -->
-            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
-              <label style="font-weight:600;margin-bottom:8px;display:block">Status *</label>
-              <div style="display:flex;flex-wrap:wrap;gap:14px">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="pago" checked /> ✅ Pago</label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="lancar" /> ⏰ Lançar</label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="link_enviado" /> 📨 Link Enviado</label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500"><input type="radio" name="e-status" value="acompanhar" /> 🟡 Acompanhar</label>
               </div>
             </div>
 
@@ -3526,6 +3523,24 @@ function removerSegundaForma() {
   validarSomaPagamentos();
 }
 
+// Mostra/esconde o bloco de Forma de Pagamento conforme o Status escolhido.
+// Status="pago" → bloco visível e obrigatório.
+// Status≠"pago" → bloco escondido, campos limpos, gravação com pagamento zerado.
+function togglePagamentoPorStatus() {
+  const status = document.querySelector('input[name="e-status"]:checked')?.value || "pago";
+  const wrap = document.getElementById("e-pagamento-wrap");
+  if(!wrap) return;
+  if(status === "pago") {
+    wrap.style.display = "";
+  } else {
+    wrap.style.display = "none";
+    // Limpa estado pra evitar persistir valores ao alternar status
+    const fp1 = document.getElementById("e-fp1");        if(fp1) fp1.value = "";
+    const fp1v = document.getElementById("e-fp1-val");   if(fp1v) fp1v.value = "";
+    removerSegundaForma(); // zera 2ª forma se estava aberta
+  }
+}
+
 // Valida soma das formas de pagamento contra o Total e mostra aviso
 function validarSomaPagamentos() {
   const total = parseBRL(document.getElementById("e-total")?.value);
@@ -3567,9 +3582,10 @@ function resetFormEntrada() {
   const cbS = document.getElementById("e-tem-saida");
   if(cbS) { cbS.checked = false; toggleSaidaEmbutidaEntrada(); }
   set("e-saida-valor",""); set("e-saida-motivo","");
-  // Status default = Pago
+  // Status default = Pago (e bloco de pagamento visível)
   const radPago = document.querySelector('input[name="e-status"][value="pago"]');
   if(radPago) radPago.checked = true;
+  togglePagamentoPorStatus();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3613,27 +3629,37 @@ async function salvarEntrada() {
   if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
   if(!pres)  { toast("Selecione o médico solicitante.","err"); return; }
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
-  if(!fp1)   { toast("Selecione uma forma de pagamento.","err"); return; }
-  if(status === "pago" && !FORMAS_PAGAMENTO.some(f => f.value === fp1)) {
-    toast("Forma de pagamento inválida — selecione uma da lista.","err"); return;
-  }
 
-  // Caso 1 (forma única): valor_1 = total. Caso 2 (dividido): valor_1 e valor_2 do form, soma == total.
-  let valor1Final, valor2Final = null;
-  if(!tem2) {
-    valor1Final = total;
-  } else {
-    if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
-    if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
-    if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
-    const soma = Math.round((fp1val + fp2val) * 100) / 100;
-    if(Math.abs(soma - total) > 0.01) {
-      toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err");
-      return;
+  // Forma de pagamento: obrigatória SOMENTE se status === "pago".
+  // Para status≠"pago" (Acompanhar/Lançar/Link Enviado), o paciente ainda
+  // não pagou — campos de pagamento vão zerados/vazios e serão preenchidos
+  // quando o status mudar pra "Pago" via kanban (D3 implementará prompt).
+  let valor1Final = 0, valor2Final = 0;
+  let fp1Final = "", fp2Final = "";
+  if(status === "pago") {
+    if(!fp1) { toast("Selecione uma forma de pagamento.","err"); return; }
+    if(!FORMAS_PAGAMENTO.some(f => f.value === fp1)) {
+      toast("Forma de pagamento inválida — selecione uma da lista.","err"); return;
     }
-    valor1Final = fp1val;
-    valor2Final = fp2val;
+    if(!tem2) {
+      valor1Final = total;
+      fp1Final   = fp1;
+    } else {
+      if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
+      if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
+      if(fp2val <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
+      const soma = Math.round((fp1val + fp2val) * 100) / 100;
+      if(Math.abs(soma - total) > 0.01) {
+        toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err");
+        return;
+      }
+      valor1Final = fp1val;
+      valor2Final = fp2val;
+      fp1Final    = fp1;
+      fp2Final    = fp2;
+    }
   }
+  // Se status ≠ "pago": fp1Final="", valor1Final=0, fp2Final="", valor2Final=0 (já inicializados)
 
   // ── Saída embutida (opcional) ──
   const temSaida = document.getElementById("e-tem-saida")?.checked;
@@ -3653,13 +3679,17 @@ async function salvarEntrada() {
   btn.disabled = true;
   btn.textContent = "Salvando...";
 
-  // Pré-computa caixa/credito/boleto a partir das formas de pagamento.
-  // Regra revisada (Abr/2026): Boleto vai para CAIXA. Campo boleto sempre 0.
-  const m1 = mapearFormaPagamento(fp1, valor1Final);
-  const m2 = (tem2 && fp2) ? mapearFormaPagamento(fp2, valor2Final) : { caixa:0, credito:0, boleto:0 };
-  const caixaCalc   = m1.caixa   + m2.caixa;
-  const creditoCalc = m1.credito + m2.credito;
-  const boletoCalc  = 0; // sempre 0 (regra revisada)
+  // Pré-computa caixa/credito/boleto. Em status≠"pago" tudo zera (paciente
+  // ainda não pagou). Quando virar "Pago" no kanban (D3), o sistema vai pedir
+  // a forma de pagamento e recalcular esses campos.
+  let caixaCalc = 0, creditoCalc = 0;
+  if(status === "pago") {
+    const m1 = mapearFormaPagamento(fp1Final, valor1Final);
+    const m2 = fp2Final ? mapearFormaPagamento(fp2Final, valor2Final) : { caixa:0, credito:0 };
+    caixaCalc   = m1.caixa   + m2.caixa;
+    creditoCalc = m1.credito + m2.credito;
+  }
+  const boletoCalc = 0; // regra revisada (Abr/2026): sempre 0
 
   // Documento principal — TODOS os campos com fallback explícito.
   // Nunca permitir undefined no doc gravado (prevenção de bug que ocorreu).
@@ -3678,17 +3708,17 @@ async function salvarEntrada() {
     laboratorio: Number(laboratorio) || 0,
     procedimentos: procedimentos,
     total: Number(total) || 0,
-    // Compat: campo `valor` mantido pra renders legacy
-    valor: Number(total) || 0,
-    // Pré-computados pra dashboards e debugging direto no Firestore
+    // Campo `valor` = total se pago, 0 se não-pago (paciente ainda não pagou)
+    valor: status === "pago" ? (Number(total) || 0) : 0,
+    // Pré-computados pra dashboards (zerados se status ≠ pago)
     caixa:   Number(caixaCalc)   || 0,
     credito: Number(creditoCalc) || 0,
     boleto:  Number(boletoCalc)  || 0,
-    // Formas de pagamento (1 ou 2)
-    forma_pagamento_1: fp1 || "",
+    // Formas de pagamento (1 ou 2). Vazias se status ≠ pago.
+    forma_pagamento_1: fp1Final || "",
     valor_1:           Number(valor1Final) || 0,
-    forma_pagamento_2: tem2 ? (fp2 || "") : "",
-    valor_2:           tem2 ? (Number(valor2Final) || 0) : 0,
+    forma_pagamento_2: fp2Final || "",
+    valor_2:           Number(valor2Final) || 0,
     // Status do kanban / faturamento
     status: status || "pago",
     mes_ano: getMesAno(),
@@ -7797,6 +7827,9 @@ function cardOrcamentoHTML(o) {
 // Atualiza status do lancamento no Firestore.
 // Fase D (D2): aponta pra coleção lancamentos. Materialização de saida_pendente
 // e edge case "Pago → Acompanhar" entram no D3.
+// TODO D3: quando virar status="pago" e o doc tiver forma_pagamento_1==="" (cadastrado
+// originalmente como Acompanhar/Lançar/Link Enviado), abrir prompt/modal pedindo
+// forma de pagamento + valor(es) e atualizar caixa/credito/valor_1/forma_pagamento_1.
 async function mudarStatusOrcamento(id, novoStatus) {
   if(!["acompanhar","link_enviado","lancar","pago"].includes(novoStatus)) return;
   try {
