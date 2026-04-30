@@ -1733,8 +1733,30 @@ const MIN_DOCS_LANCAMENTOS_FALLBACK = 5;
 // Status do kanban "Acompanhamento" (status que NÃO vão pro faturamento ainda)
 const STATUS_KANBAN = ["acompanhar","link_enviado","lancar"];
 
-// Formas de pagamento detalhadas (substituem o esquema legacy "Caixa"/"Crédito")
-const FORMAS_PAGAMENTO = ["Dinheiro","Débito","PIX","Boleto","Crédito"];
+// Formas de pagamento detalhadas (value lowercase sem acento; label visível com acento)
+// REGRA DE NEGÓCIO (Abr/2026): Boleto vai para CAIXA. Campo boleto sempre 0
+// (mantido só para compatibilidade com dados históricos importados).
+const FORMAS_PAGAMENTO = [
+  { value: "dinheiro", label: "Dinheiro" },
+  { value: "debito",   label: "Débito"   },
+  { value: "pix",      label: "PIX"      },
+  { value: "boleto",   label: "Boleto"   },
+  { value: "credito",  label: "Crédito"  },
+];
+
+// Mapeia 1 par {forma, valor} para {caixa, credito, boleto}.
+// Aceita value lowercase (novo: "dinheiro") e legacy capitalizado ("Dinheiro").
+function mapearFormaPagamento(forma, valor) {
+  const v = Number(valor) || 0;
+  // Normaliza: lowercase e remove acentos. "Dinheiro" → "dinheiro", "Débito" → "debito"
+  const f = (forma || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const ehCredito = f === "credito";
+  return {
+    caixa:   ehCredito ? 0 : v,   // dinheiro, debito, pix, boleto → caixa
+    credito: ehCredito ? v : 0,
+    boleto:  0,                    // sempre 0 (regra revisada Abr/2026)
+  };
+}
 
 // Perfis autorizados a editar lançamentos (regra D-Edição da Fase E)
 const PODE_EDITAR_LANC = ["gestor","subgestora","coordenadora","lider","lider_callcenter"];
@@ -1754,16 +1776,14 @@ function ehDocNovoSchema(l) {
 }
 
 // Recebe uma lista de pagamentos [{forma, valor}] (1 ou 2 itens) e retorna
-// {caixa, credito} aplicando a regra D7: Boleto entra no caixa também.
-// Convenção pt-BR: aceita "Pix" e "PIX" como sinônimos.
+// Soma 1-2 pagamentos em {caixa, credito} via mapearFormaPagamento.
+// Aceita value lowercase (novo) e legacy capitalizado.
 function mapearFormasPagamentoParaCaixaCredito(pagamentos) {
   let caixa = 0, credito = 0;
   (pagamentos || []).forEach(p => {
-    const v = +p?.valor || 0;
-    const f = (p?.forma || "").trim();
-    if(!v || !f) return;
-    if(f === "Crédito")                     credito += v;
-    else if(["Dinheiro","Débito","PIX","Pix","Boleto"].includes(f)) caixa += v;
+    const m = mapearFormaPagamento(p?.forma, p?.valor);
+    caixa   += m.caixa;
+    credito += m.credito;
   });
   return { caixa, credito };
 }
@@ -1782,10 +1802,8 @@ function extrairCategoriasDoDocNovo(l) {
   out.caixa   = caixa;
   out.credito = credito;
 
-  // Boleto separado (D7): soma valor da(s) parte(s) cuja forma === "Boleto"
-  pagamentos.forEach(p => {
-    if((p.forma||"").trim() === "Boleto") out.boleto += +p.valor || 0;
-  });
+  // Regra revisada (Abr/2026): campo boleto sempre 0. Boleto vai para caixa.
+  out.boleto = 0;
 
   // Categorias por produto (campos numéricos diretos do schema novo)
   out.lab       = +l.laboratorio || 0;
@@ -1836,16 +1854,18 @@ function popularSelectFormaPagamento(idSelect) {
   popularSelect(idSelect, FORMAS_PAGAMENTO);
 }
 
-// Helper genérico: popula select preservando o option[disabled] (placeholder)
+// Helper genérico: popula select preservando o option[disabled] (placeholder).
+// Aceita lista de strings (legacy) OU lista de {value, label} (novo).
 function popularSelect(idSelect, valores) {
   const sel = document.getElementById(idSelect);
   if(!sel) return;
   const placeholder = sel.querySelector("option[disabled]");
   sel.innerHTML = "";
   if(placeholder) sel.appendChild(placeholder);
-  valores.forEach(m => {
+  valores.forEach(item => {
     const o = document.createElement("option");
-    o.value = m; o.textContent = m;
+    if(typeof item === "string") { o.value = item;       o.textContent = item; }
+    else                          { o.value = item.value; o.textContent = item.label; }
     sel.appendChild(o);
   });
 }
@@ -3388,7 +3408,10 @@ async function salvarEntrada() {
   if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
   if(!pres)  { toast("Selecione o médico solicitante.","err"); return; }
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
-  if(!fp1)   { toast("Selecione a forma de pagamento.","err"); return; }
+  if(!fp1)   { toast("Selecione uma forma de pagamento.","err"); return; }
+  if(status === "pago" && !FORMAS_PAGAMENTO.some(f => f.value === fp1)) {
+    toast("Forma de pagamento inválida — selecione uma da lista.","err"); return;
+  }
 
   // Caso 1 (forma única): valor_1 = total. Caso 2 (dividido): valor_1 e valor_2 do form, soma == total.
   let valor1Final, valor2Final = null;
@@ -3426,42 +3449,43 @@ async function salvarEntrada() {
   btn.textContent = "Salvando...";
 
   // Pré-computa caixa/credito/boleto a partir das formas de pagamento.
-  // Regra D7: Boleto entra em CAIXA E também no campo `boleto` separado.
-  // Esses campos ficam redundantes com a derivação on-the-fly de
-  // calcTotaisDetalhados, mas são úteis para queries Firestore futuras,
-  // debugging direto no Console e compatibilidade com renders legacy.
-  const pagsParaMapear = [{ forma: fp1, valor: valor1Final }];
-  if(tem2 && fp2 && valor2Final) pagsParaMapear.push({ forma: fp2, valor: valor2Final });
-  const { caixa: caixaCalc, credito: creditoCalc } = mapearFormasPagamentoParaCaixaCredito(pagsParaMapear);
-  let boletoCalc = 0;
-  pagsParaMapear.forEach(p => { if(p.forma === "Boleto") boletoCalc += p.valor || 0; });
+  // Regra revisada (Abr/2026): Boleto vai para CAIXA. Campo boleto sempre 0.
+  const m1 = mapearFormaPagamento(fp1, valor1Final);
+  const m2 = (tem2 && fp2) ? mapearFormaPagamento(fp2, valor2Final) : { caixa:0, credito:0, boleto:0 };
+  const caixaCalc   = m1.caixa   + m2.caixa;
+  const creditoCalc = m1.credito + m2.credito;
+  const boletoCalc  = 0; // sempre 0 (regra revisada)
 
-  // Documento principal (schema novo unificado)
+  // Documento principal — TODOS os campos com fallback explícito.
+  // Nunca permitir undefined no doc gravado (prevenção de bug que ocorreu).
   const doc = {
-    usuario_id: usuario.uid || usuario.nome,
-    usuario_nome: usuario.nome,
-    perfil: usuario.perfil,
+    usuario_id:   usuario.uid || usuario.nome,
+    usuario_nome: usuario.nome || "",
+    perfil:       usuario.perfil || "",
     tipo: "entrada",
-    paciente_nome: nome,
-    paciente_cpf: cpf,
-    prescritor: pres,
-    prescritor_especialidade: presEsp,
+    paciente_nome: nome || "",
+    paciente_cpf:  cpf  || "",
+    prescritor:    pres || "",
+    prescritor_especialidade: presEsp || "",
     // Categorias
-    imagem, consultas, laboratorio, procedimentos,
-    total,
-    // Compat com renders legacy que lêem l.valor (renderTabela/renderHistorico)
-    valor: total,
+    imagem:      Number(imagem)      || 0,
+    consultas:   Number(consultas)   || 0,
+    laboratorio: Number(laboratorio) || 0,
+    procedimentos: procedimentos,
+    total: Number(total) || 0,
+    // Compat: campo `valor` mantido pra renders legacy
+    valor: Number(total) || 0,
     // Pré-computados pra dashboards e debugging direto no Firestore
-    caixa:   caixaCalc,
-    credito: creditoCalc,
-    boleto:  boletoCalc,
+    caixa:   Number(caixaCalc)   || 0,
+    credito: Number(creditoCalc) || 0,
+    boleto:  Number(boletoCalc)  || 0,
     // Formas de pagamento (1 ou 2)
-    forma_pagamento_1: fp1,
-    valor_1: valor1Final,
-    forma_pagamento_2: tem2 ? fp2 : null,
-    valor_2: valor2Final,
+    forma_pagamento_1: fp1 || "",
+    valor_1:           Number(valor1Final) || 0,
+    forma_pagamento_2: tem2 ? (fp2 || "") : "",
+    valor_2:           tem2 ? (Number(valor2Final) || 0) : 0,
     // Status do kanban / faturamento
-    status,
+    status: status || "pago",
     mes_ano: getMesAno(),
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
