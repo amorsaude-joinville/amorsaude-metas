@@ -813,7 +813,6 @@
               <option value="acompanhar">Acompanhar</option>
               <option value="link_enviado">Link Enviado</option>
               <option value="lancar">Lançar</option>
-              <option value="pago">Pago</option>
             </select>
           </div>
         </div>
@@ -833,7 +832,9 @@
           <div class="orc-col-head">🟡 Acompanhar <span class="orc-count" id="orc-cnt-acompanhar">0</span></div>
           <div id="orc-col-acompanhar"></div>
         </div>
-        <div class="orc-col" data-status="pago">
+        <!-- Coluna "Pago" desativada pela Fase D — pagos vão direto pro Resumo/Dashboard.
+             Mantida no DOM (oculta) por ora; será removida na Fase G. -->
+        <div class="orc-col" data-status="pago" style="display:none">
           <div class="orc-col-head">✅ Pago <span class="orc-count" id="orc-cnt-pago">0</span></div>
           <div id="orc-col-pago"></div>
         </div>
@@ -2067,8 +2068,8 @@ let autoRefreshInterval = null;
 
 // Orçamentos (Fase 1): aba ativa por perfil + cache + listener
 let abaGestor   = "dashboard";   // gestora/subgestora: "dashboard" | "orcamentos"
-let orcamentos     = [];         // cache local da coleção orcamentos
-let unsubOrcamentos = null;      // listener tempo real
+let acompLancs     = [];         // cache de lancamentos com status no kanban (Fase D)
+let unsubOrcamentos = null;      // listener tempo real (nome preservado)
 let orcEditId      = null;       // ID em edição (null = criação)
 let orcMedicosUsados = [];       // médicos vistos em lancamentos/orcamentos para datalist
 
@@ -2632,7 +2633,7 @@ function fazerLogout() {
   if(unsubEquipe)      { unsubEquipe();      unsubEquipe=null;      }
   if(unsubOrcamentos)  { unsubOrcamentos();  unsubOrcamentos=null;  }
   dashLancs=[]; dashMetasMes=null; dashMesAno="";
-  coordLancs=[]; equipeLancs=[]; orcamentos=[];
+  coordLancs=[]; equipeLancs=[]; acompLancs=[];
 
   if(usuario?.uid) {
     // Firebase Auth — signOut dispara onAuthStateChanged que chama _encerrarSessao
@@ -7449,16 +7450,18 @@ function renderFaturamentoChart(dados) {
 // Mantém o array `orcamentos` em memória sempre fresco.
 function iniciarListenerOrcamentos() {
   if(unsubOrcamentos) { unsubOrcamentos(); unsubOrcamentos = null; }
-  unsubOrcamentos = db.collection("orcamentos")
-    .orderBy("criado_em", "desc")
+  // Fase D: kanban "Acompanhamento" agora lê de lancamentos com status no
+  // kanban (acompanhar / link_enviado / lancar) do mês corrente.
+  // Requer índice composto Firestore (mes_ano + status); link de criação
+  // aparece no console do Firestore se o índice faltar.
+  unsubOrcamentos = db.collection("lancamentos")
+    .where("mes_ano", "==", getMesAno())
+    .where("status",  "in", STATUS_KANBAN)
     .onSnapshot(snap => {
-      orcamentos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Atualiza datalist de médicos com os já vistos em orçamentos
-      coletarMedicosUsados();
-      // Re-render se a aba estiver aberta
+      acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const sec = document.getElementById("sec-orcamentos");
       if(sec && sec.style.display !== "none") renderKanbanOrcamentos();
-    }, e => console.warn("[orcamentos] listener erro:", e));
+    }, e => console.warn("[acompanhamento] listener erro:", e));
 }
 
 // Filtra a lista de orçamentos conforme as regras de visibilidade do perfil
@@ -7468,28 +7471,33 @@ function filtrarOrcamentosPorPerfil(lista) {
   const nome   = usuario.nome;
 
   if(SO_DASHBOARD.includes(perfil)) return lista; // gestora/subgestora vê tudo
-  if(perfil === "lider")            return lista.filter(o => o.criado_por_perfil === "recepcionista" || o.criado_por_perfil === "lider");
-  if(perfil === "lider_callcenter") return lista.filter(o => o.criado_por_perfil === "callcenter"     || o.criado_por_perfil === "lider_callcenter");
+  // Schema novo (Fase B): doc grava `usuario_nome` e `perfil`.
+  if(perfil === "lider")            return lista.filter(o => o.perfil === "recepcionista" || o.perfil === "lider");
+  if(perfil === "lider_callcenter") return lista.filter(o => o.perfil === "callcenter"    || o.perfil === "lider_callcenter");
   // recepcionista/callcenter: só os próprios
-  return lista.filter(o => o.criado_por === nome);
+  return lista.filter(o => o.usuario_nome === nome);
 }
 
 // Verifica se a usuária atual pode editar campos do orçamento (não inclui mudar status)
 function podeEditarOrcamento(o) {
   if(!usuario || !o) return false;
   const perfil = usuario.perfil;
+  // Fase E vai usar PODE_EDITAR_LANC. Por ora, mantém regra Fase 1 adaptada
+  // ao schema novo (campos usuario_nome e perfil).
   if(SO_DASHBOARD.includes(perfil)) return false; // gestora/subgestora só vê
-  if(o.criado_por === usuario.nome) return true;
-  if(perfil === "lider"            && (o.criado_por_perfil === "recepcionista" || o.criado_por_perfil === "lider")) return true;
-  if(perfil === "lider_callcenter" && (o.criado_por_perfil === "callcenter"    || o.criado_por_perfil === "lider_callcenter")) return true;
+  if(o.usuario_nome === usuario.nome) return true;
+  if(perfil === "lider"            && (o.perfil === "recepcionista" || o.perfil === "lider")) return true;
+  if(perfil === "lider_callcenter" && (o.perfil === "callcenter"    || o.perfil === "lider_callcenter")) return true;
   return false;
 }
 
-// Junta médicos da PRESCRITORES + dos orçamentos já cadastrados (datalist autocompletar)
+// Junta médicos da PRESCRITORES + dos lançamentos já cadastrados (datalist autocompletar)
+// Função dormante após Fase D (form Fase 1 escondido). Mantida pra evitar ReferenceError
+// caso ainda seja chamada de algum caminho — será removida na Fase G.
 function coletarMedicosUsados() {
   const set = new Set();
   PRESCRITORES.forEach(([n]) => set.add(n));
-  orcamentos.forEach(o => { if(o.medico) set.add(o.medico); });
+  acompLancs.forEach(o => { if(o.medico || o.prescritor) set.add(o.medico || o.prescritor); });
   orcMedicosUsados = [...set].sort((a,b) => a.localeCompare(b,"pt-BR"));
   const dl = document.getElementById("orc-medicos-dl");
   if(dl) dl.innerHTML = orcMedicosUsados.map(m => `<option value="${escHTML(m)}">`).join("");
@@ -7698,7 +7706,14 @@ async function salvarOrcamento() {
 function renderKanbanOrcamentos() {
   if(!document.getElementById("orc-kanban")) return;
 
-  const visiveis = filtrarOrcamentosPorPerfil(orcamentos);
+  // Ordena por criado_em desc (mais recentes em cima) — feito no cliente
+  // pra evitar índice composto extra no Firestore.
+  const ordenada = [...acompLancs].sort((a,b) => {
+    const da = a.criado_em?.toMillis ? a.criado_em.toMillis() : 0;
+    const db = b.criado_em?.toMillis ? b.criado_em.toMillis() : 0;
+    return db - da;
+  });
+  const visiveis = filtrarOrcamentosPorPerfil(ordenada);
 
   // Filtros
   const de    = document.getElementById("orc-filtro-de")?.value     || "";
@@ -7707,7 +7722,9 @@ function renderKanbanOrcamentos() {
   const stat  = document.getElementById("orc-filtro-status")?.value || "";
 
   function dataDoc(o) {
-    const d = o.criado_em?.toDate ? o.criado_em.toDate() : (o.criado_em ? new Date(o.criado_em) : null);
+    // Schema novo prefere data_hora (timestamp do atendimento); fallback criado_em
+    const ts = o.data_hora || o.criado_em;
+    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
     if(!d) return "";
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
@@ -7716,18 +7733,20 @@ function renderKanbanOrcamentos() {
     const ds = dataDoc(o);
     if(de  && ds && ds < de)  return false;
     if(ate && ds && ds > ate) return false;
-    if(busca && !(o.paciente||"").toLowerCase().includes(busca)) return false;
+    // Schema novo: paciente_nome (Fase 1 era `paciente`)
+    if(busca && !(o.paciente_nome || o.paciente || "").toLowerCase().includes(busca)) return false;
     return true;
   });
 
-  // Ao escolher um status no filtro, ESCONDE as demais colunas (mantém kanban com 1 coluna em foco)
-  ["lancar","link_enviado","acompanhar","pago"].forEach(s => {
+  // Ao escolher um status, ESCONDE as outras colunas (kanban com 1 coluna em foco).
+  // "pago" sempre escondida (Fase D — pagos não aparecem no kanban).
+  ["lancar","link_enviado","acompanhar"].forEach(s => {
     const col = document.querySelector(`.orc-col[data-status="${s}"]`);
     if(col) col.style.display = (stat && stat !== s) ? "none" : "";
   });
 
-  // Distribui em colunas
-  const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[] };
+  // Distribui em colunas (sem "pago" — esses já saíram via filtro do listener)
+  const colunas = { lancar:[], link_enviado:[], acompanhar:[] };
   filtrados.forEach(o => {
     const s = o.status || "acompanhar";
     if(colunas[s]) colunas[s].push(o);
@@ -7739,7 +7758,7 @@ function renderKanbanOrcamentos() {
     if(cnt) cnt.textContent = colunas[s].length;
     if(!wrap) return;
     if(!colunas[s].length) {
-      wrap.innerHTML = `<div class="orc-empty">Nenhum orçamento</div>`;
+      wrap.innerHTML = `<div class="orc-empty">Nenhum lançamento</div>`;
       return;
     }
     wrap.innerHTML = colunas[s].map(o => cardOrcamentoHTML(o)).join("");
@@ -7748,17 +7767,26 @@ function renderKanbanOrcamentos() {
 
 // HTML de um card no kanban
 function cardOrcamentoHTML(o) {
-  const d = o.criado_em?.toDate ? o.criado_em.toDate() : null;
+  // Prefere data_hora (atendimento); fallback criado_em (gravação)
+  const ts = o.data_hora || o.criado_em;
+  const d  = ts?.toDate ? ts.toDate() : null;
   const dataCurta = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
+  // Status disponíveis no dropdown: 3 do kanban + "pago" (que tira do kanban).
   const opts = ["acompanhar","link_enviado","lancar","pago"]
     .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
+  // Schema novo: paciente_nome / prescritor / usuario_nome.
+  // Fallbacks para compat caso algum doc velho de orcamentos apareça.
+  const paciente = o.paciente_nome || o.paciente   || "—";
+  const medico   = o.prescritor    || o.medico     || "";
+  const quemFez  = o.usuario_nome  || o.criado_por || "—";
+  const total    = Number(o.total) || Number(o.valor) || 0;
   return `
     <div class="orc-card" onclick="abrirModalOrcDet('${o.id}')">
-      <div class="orc-pac">${escHTML(o.paciente||"—")}</div>
-      <div class="orc-tot">${brl(o.total||0)}</div>
+      <div class="orc-pac">${escHTML(paciente)}</div>
+      <div class="orc-tot">${brl(total)}</div>
       <div class="orc-meta-info">
-        ${o.medico ? `🩺 ${escHTML(o.medico)}<br>` : ""}
-        🕒 ${dataCurta} · ${escHTML(o.criado_por||"—")}
+        ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
+        🕒 ${dataCurta} · ${escHTML(quemFez)}
       </div>
       <div class="orc-card-acao" onclick="event.stopPropagation()">
         <select onchange="mudarStatusOrcamento('${o.id}', this.value)">${opts}</select>
@@ -7766,16 +7794,18 @@ function cardOrcamentoHTML(o) {
     </div>`;
 }
 
-// Atualiza status do orçamento no Firestore
+// Atualiza status do lancamento no Firestore.
+// Fase D (D2): aponta pra coleção lancamentos. Materialização de saida_pendente
+// e edge case "Pago → Acompanhar" entram no D3.
 async function mudarStatusOrcamento(id, novoStatus) {
   if(!["acompanhar","link_enviado","lancar","pago"].includes(novoStatus)) return;
   try {
-    await db.collection("orcamentos").doc(id).update({
+    await db.collection("lancamentos").doc(id).update({
       status: novoStatus,
       atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
     });
     toast(`Status atualizado para ${ORC_STATUS_LABEL[novoStatus]}`, "ok");
-    renderKanbanOrcamentos();
+    // Re-render acontece via onSnapshot; chamada manual desnecessária
   } catch(e) {
     console.error("[mudarStatusOrcamento]", e);
     toast("Erro ao atualizar status: " + (e.message || e.code), "err");
@@ -7785,11 +7815,12 @@ async function mudarStatusOrcamento(id, novoStatus) {
 // Modal de detalhes do orçamento
 let orcDetIdAtual = null;
 function abrirModalOrcDet(id) {
-  const o = orcamentos.find(x => x.id === id);
-  if(!o) { toast("Orçamento não encontrado.", "err"); return; }
+  const o = acompLancs.find(x => x.id === id);
+  if(!o) { toast("Lançamento não encontrado.", "err"); return; }
   orcDetIdAtual = id;
 
-  const dC = o.criado_em?.toDate ? o.criado_em.toDate() : null;
+  // dC: data do atendimento (data_hora) ou da gravação (criado_em). dU: atualizado.
+  const dC = (o.data_hora || o.criado_em)?.toDate ? (o.data_hora || o.criado_em).toDate() : null;
   const dU = o.atualizado_em?.toDate ? o.atualizado_em.toDate() : null;
   const fmt = d => d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
 
@@ -7800,14 +7831,34 @@ function abrirModalOrcDet(id) {
   const opts = ["acompanhar","link_enviado","lancar","pago"]
     .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
 
+  // Pagamento: schema novo tem 1-2 formas (forma_pagamento_1/valor_1 + opcional 2).
+  // Reusa infoFormaPagamento (Fase C) pra label visível (Dinheiro / PIX / etc.).
+  let pagamentoHtml = "—";
+  if(o.forma_pagamento_1) {
+    const a = infoFormaPagamento(o.forma_pagamento_1);
+    if(o.forma_pagamento_2) {
+      const b = infoFormaPagamento(o.forma_pagamento_2);
+      pagamentoHtml = `${a.label} ${brl(Number(o.valor_1)||0)} + ${b.label} ${brl(Number(o.valor_2)||0)}`;
+    } else {
+      pagamentoHtml = a.label;
+    }
+  } else if(o.forma_pagamento) {
+    pagamentoHtml = o.forma_pagamento === "credito" ? "Crédito" : (o.forma_pagamento === "caixa" ? "Caixa" : escHTML(o.forma_pagamento));
+  }
+
+  const paciente = o.paciente_nome || o.paciente   || "—";
+  const medico   = o.prescritor    || o.medico     || "—";
+  const quemFez  = o.usuario_nome  || o.criado_por || "—";
+  const idCaso   = o.id_caso || "—"; // schema novo não grava id_caso
+
   const body = document.getElementById("orc-det-corpo");
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin-bottom:14px">
-      <div><strong>Paciente:</strong><br>${escHTML(o.paciente||"—")}</div>
-      <div><strong>Total:</strong><br><span style="color:var(--primary);font-weight:700">${brl(o.total||0)}</span></div>
-      <div><strong>Médico:</strong><br>${escHTML(o.medico||"—")}</div>
-      <div><strong>ID do Caso:</strong><br>${escHTML(o.id_caso||"—")}</div>
-      <div><strong>Pagamento:</strong><br>${o.forma_pagamento === "credito" ? "Crédito" : (o.forma_pagamento === "caixa" ? "Caixa" : "—")}</div>
+      <div><strong>Paciente:</strong><br>${escHTML(paciente)}</div>
+      <div><strong>Total:</strong><br><span style="color:var(--primary);font-weight:700">${brl(Number(o.total)||Number(o.valor)||0)}</span></div>
+      <div><strong>Médico:</strong><br>${escHTML(medico)}</div>
+      <div><strong>ID do Caso:</strong><br>${escHTML(idCaso)}</div>
+      <div><strong>Pagamento:</strong><br>${pagamentoHtml}</div>
       <div>
         <strong>Status:</strong><br>
         <select onchange="mudarStatusOrcamento('${o.id}', this.value);abrirModalOrcDet('${o.id}')"
@@ -7824,16 +7875,16 @@ function abrirModalOrcDet(id) {
         ${procsHtml}
       </div>
     </div>
-    ${o.saida && o.saida.valor > 0 ? `
+    ${(o.saida_pendente && o.saida_pendente.valor > 0) || (o.saida && o.saida.valor > 0) ? `
       <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;color:#DC2626">
-        <strong>↩️ Saída:</strong> ${brl(o.saida.valor)} — Motivo: ${escHTML(o.saida.motivo||"—")}
+        <strong>↩️ Saída pendente:</strong> ${brl((o.saida_pendente||o.saida).valor)} — Motivo: ${escHTML((o.saida_pendente||o.saida).motivo||"—")}
         <div style="font-size:11px;color:var(--text2);margin-top:2px;font-style:italic">
-          Vira lançamento de saída quando o orçamento for marcado como Pago.
+          Vira lançamento de saída automaticamente quando o status virar "Pago".
         </div>
       </div>
     ` : ""}
     <div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text2)">
-      Criado em ${fmt(dC)} por <strong>${escHTML(o.criado_por||"—")}</strong><br>
+      Criado em ${fmt(dC)} por <strong>${escHTML(quemFez)}</strong><br>
       Última atualização: ${fmt(dU)}
     </div>
   `;
@@ -7852,7 +7903,7 @@ function fecharModalOrcDet() {
 
 // Carrega o orçamento no formulário pra edição
 function editarOrcamentoFromModal() {
-  const o = orcamentos.find(x => x.id === orcDetIdAtual);
+  const o = acompLancs.find(x => x.id === orcDetIdAtual);
   if(!o) return;
   fecharModalOrcDet();
 
