@@ -7968,15 +7968,10 @@ async function mudarStatusOrcamento(id, novoStatus) {
   const statusAtual = doc.status || "acompanhar";
   if(novoStatus === statusAtual) return;
 
-  // Caso 1: virando PAGO → abre modal de pagamento (não atualiza nada ainda)
+  // Caso 1: virando PAGO → abre modal de pagamento (não atualiza nada ainda).
+  // Qualquer perfil logado pode finalizar — o que protege a integridade é a
+  // validação do form (forma + valor obrigatórios), não quem clica.
   if(novoStatus === "pago") {
-    const ehGestor = SO_DASHBOARD.includes(usuario.perfil);
-    if(ehGestor) {
-      toast("Apenas recepcionista/callcenter/líder pode finalizar como Pago.","err");
-      // Reverte visualmente o dropdown (re-render via snapshot quando vier)
-      renderKanbanOrcamentos();
-      return;
-    }
     abrirModalPagamento(doc, statusAtual);
     return;
   }
