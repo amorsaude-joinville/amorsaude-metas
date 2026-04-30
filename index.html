@@ -974,6 +974,9 @@
       <!-- Painel normal (dia / semana / mês) -->
       <div id="dash-painel-normal">
 
+      <!-- Indicador discreto da fonte ativa (Fase F) -->
+      <div id="dash-fonte-mensal" style="text-align:right;font-size:11px;color:var(--text2);margin-bottom:6px;height:14px"></div>
+
       <!-- Cards resumo equipe -->
       <div class="dash-equipe-grid" id="dash-cards-equipe"></div>
 
@@ -1726,9 +1729,16 @@ const SO_DASHBOARD = ["gestor","subgestora"];
 // meses A PARTIR dela usam o novo schema em lancamentos (status==="pago").
 const MARCO_NOVO_MODELO = "2026-05";
 
-// Heurística do Risco 5: se um mês a partir do marco tiver MENOS docs
-// "pago" que isso, dashboard cai pra fatDiario como fallback (transição suave)
-const MIN_DOCS_LANCAMENTOS_FALLBACK = 5;
+// Quantos lançamentos pagos um mês precisa ter pra ser considerado "fonte de
+// verdade" no dashboard. Se tiver MENOS que isso E houver fatDiário pro mês,
+// usa fatDiário como fallback (transição/proteção).
+//
+// REGRA ATUAL (Mai/2026 em diante): MIN = 1.
+// A partir do marco, NÃO importamos faturamentoDiario — equipe lança tudo via
+// formulário. Qualquer lançamento real já conta como fonte nova. O fallback
+// só protege "mês recém-iniciado sem nenhum atendimento ainda" (ex: 01/05 às 8h).
+// Se a regra mudar (ex: voltar a importar fatDiário pra alguns meses), aumentar.
+const MIN_DOCS_LANCAMENTOS_FALLBACK = 1;
 
 // Status do kanban "Acompanhamento" (status que NÃO vão pro faturamento ainda)
 const STATUS_KANBAN = ["acompanhar","link_enviado","lancar"];
@@ -2165,6 +2175,54 @@ function getTotaisFaturamentoDiario(mesAnoStr) {
     procedimentos: docs.reduce((s, d) => s + (d.procedimentos         || 0), 0),
     injetaveis:    docs.reduce((s, d) => s + (d.injetaveis            || 0), 0),
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Fase F — Marco temporal: dashboard escolhe entre fatDiario e lancamentos
+// ─────────────────────────────────────────────────────────────
+// (MIN_DOCS_LANCAMENTOS_FALLBACK declarada no bloco de constantes da Fase A,
+// próximo a MARCO_NOVO_MODELO. Valor atual: 1. Razão: ver comentário lá.)
+
+// Decide a fonte de dados pro dashboard de um mês.
+// Antes do marco: sempre fatDiario. A partir do marco: lancamentos pagos,
+// com fallback heurístico se houver poucos docs pagos E houver fatDiario.
+function escolherFonteDashboard(mesAnoStr) {
+  if(mesAnoStr < MARCO_NOVO_MODELO) return "fatDiario";
+  const lancsPagos = (typeof dashLancs !== "undefined" ? dashLancs : [])
+    .filter(l => l.mes_ano === mesAnoStr && l.tipo === "entrada" && l.status === "pago");
+  if(lancsPagos.length < MIN_DOCS_LANCAMENTOS_FALLBACK) {
+    const docsFat = faturamentoDiarioAtual.filter(d => d.mes_ano === mesAnoStr);
+    if(docsFat.length > 0) return "fatDiario";
+  }
+  return "lancamentos";
+}
+
+// Agrega lancamentos pagos do mês (+ saídas vinculadas via id_par) nas mesmas
+// categorias do dashboard. Reusa calcTotaisDetalhados (Fase A — já trata schema novo).
+function getTotaisLancamentosPagosMes(mesAnoStr) {
+  const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
+  const pagos     = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "entrada" && l.status === "pago");
+  const saidasPar = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "saida"   && l.id_par);
+  const t = calcTotaisDetalhados([...pagos, ...saidasPar]);
+  return {
+    caixa:         Number(t.caixa)      || 0,
+    credito:       Number(t.credito)    || 0,
+    boleto:        Number(t.boleto)     || 0,
+    laboratorio:   Number(t.lab)        || 0,
+    imagem:        Number(t.img)        || 0,
+    procedimentos: Number(t.proc)       || 0,
+    injetaveis:    Number(t.injetaveis) || 0,
+  };
+}
+
+// Wrapper unificado pro dashboard mensal.
+// Devolve totais + qual fonte foi usada (pra indicador visual).
+function getTotaisDoMes(mesAnoStr) {
+  const fonte = escolherFonteDashboard(mesAnoStr);
+  const totais = (fonte === "lancamentos")
+    ? getTotaisLancamentosPagosMes(mesAnoStr)
+    : getTotaisFaturamentoDiario(mesAnoStr);
+  return { ...totais, fonte };
 }
 
 // Totais de UM dia específico (filtro "Por Dia" do dashboard).
@@ -5304,7 +5362,17 @@ function renderDashEquipe(lista) {
     renderDashEquipeDia(dataStr);
     return;
   }
-  const tot = getTotaisFaturamentoDiario(dashMesAno);
+  // TODO Fase H: corrigir Por Semana mostrar total semanal real, não mensal
+  const tot = getTotaisDoMes(dashMesAno);
+
+  // Indicador discreto da fonte ativa (canto direito acima dos cards)
+  const indEl = document.getElementById("dash-fonte-mensal");
+  if(indEl) {
+    indEl.innerHTML = (tot.fonte === "lancamentos")
+      ? `📊 Fonte: lançamentos`
+      : `📊 Fonte: faturamento importado`;
+  }
+
   const m   = dashMetasMes || {};
   const metaC  = m.meta_caixa_equipe    || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
   const metaCr = m.meta_credito_equipe  || METAS_EQUIPE_PADRAO.meta_credito_equipe;
