@@ -8454,13 +8454,18 @@ function calcularKanbanStats(docs, periodo) {
   const pendentes = filtrados.filter(l => STATUS_KANBAN.includes(l.status));
   const pagos     = filtrados.filter(l => l.status === "pago");
 
-  const sum = arr => arr.reduce((s,l) => s + (Number(l.total) || Number(l.valor) || 0), 0);
+  // Pendentes: bruto (saida_pendente é informativa, desconto não foi aplicado).
+  const sumBruto = arr => arr.reduce((s,l) => s + (Number(l.total) || Number(l.valor) || 0), 0);
+  // Pagos: líquido (D3.7 fix #2 — consistente com card kanban via calcularLiquidoDoc).
+  // Reaproveita o helper do D3.4 que busca saída-irmã via id_par no array `docs`.
+  const sumLiquido = arr => arr.reduce((s,l) => s + calcularLiquidoDoc(l, docs), 0);
+
   const cPend  = pendentes.length;
   const cPagos = pagos.length;
   const taxa = (cPend + cPagos) > 0 ? (cPagos / (cPend + cPagos)) * 100 : 0;
   return {
-    pendentes: { count: cPend,  total: sum(pendentes) },
-    pagos:     { count: cPagos, total: sum(pagos) },
+    pendentes: { count: cPend,  total: sumBruto(pendentes)  },
+    pagos:     { count: cPagos, total: sumLiquido(pagos)    },
     taxa,
   };
 }
