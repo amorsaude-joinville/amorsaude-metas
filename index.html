@@ -1313,15 +1313,34 @@
               </label>
               <div id="e-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
                 <div class="fgrid">
-                  <div class="fg">
-                    <label>Valor da Saída (R$) *</label>
-                    <input type="text" id="e-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
+                  <!-- Tipo de desconto: % (default) ou R$ -->
+                  <div class="fg full" style="margin-bottom:0">
+                    <label style="font-size:13px;font-weight:600">Tipo de desconto</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:14px;font-weight:500">
+                      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="e-saida-tipo" value="percentual" checked onchange="toggleTipoDescontoEntrada()" /> Percentual (%)</label>
+                      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="e-saida-tipo" value="valor"               onchange="toggleTipoDescontoEntrada()" /> Valor fixo (R$)</label>
+                    </div>
+                  </div>
+                  <!-- Modo Percentual -->
+                  <div class="fg" id="e-saida-pct-wrap">
+                    <label>% de desconto *</label>
+                    <input type="number" id="e-saida-pct" min="0" max="10" step="0.5" placeholder="0" oninput="recalcDescontoEntrada()" />
+                    <small id="e-saida-pct-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo 10%</small>
+                  </div>
+                  <!-- Modo Valor R$ -->
+                  <div class="fg" id="e-saida-rs-wrap" style="display:none">
+                    <label>Valor R$ *</label>
+                    <input type="text" id="e-saida-valor" placeholder="0,00" oninput="mascaraValor(this);recalcDescontoEntrada()" />
+                    <small id="e-saida-rs-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo R$ <span id="e-saida-rs-max">0,00</span> (10%)</small>
                   </div>
                   <div class="fg">
                     <label>Motivo *</label>
                     <select id="e-saida-motivo">
                       <option value="" disabled selected>Selecione...</option>
                     </select>
+                  </div>
+                  <div class="fg full" style="font-size:12px;color:var(--text2);margin:0">
+                    Desconto calculado: <strong id="e-saida-desc-calc" style="color:#B91C1C">R$ 0,00</strong>
                   </div>
                 </div>
                 <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic" id="e-saida-aviso">
@@ -1514,15 +1533,31 @@
       </label>
       <div id="pag-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
         <div class="fgrid">
-          <div class="fg">
-            <label>Valor da Saída (R$) *</label>
-            <input type="text" id="pag-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
+          <div class="fg full" style="margin-bottom:0">
+            <label style="font-size:13px;font-weight:600">Tipo de desconto</label>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;font-weight:500">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="pag-saida-tipo" value="percentual" checked onchange="toggleTipoDescontoModal()" /> Percentual (%)</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="pag-saida-tipo" value="valor"               onchange="toggleTipoDescontoModal()" /> Valor fixo (R$)</label>
+            </div>
+          </div>
+          <div class="fg" id="pag-saida-pct-wrap">
+            <label>% de desconto *</label>
+            <input type="number" id="pag-saida-pct" min="0" max="10" step="0.5" placeholder="0" oninput="recalcDescontoModal()" />
+            <small id="pag-saida-pct-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo 10%</small>
+          </div>
+          <div class="fg" id="pag-saida-rs-wrap" style="display:none">
+            <label>Valor R$ *</label>
+            <input type="text" id="pag-saida-valor" placeholder="0,00" oninput="mascaraValor(this);recalcDescontoModal()" />
+            <small id="pag-saida-rs-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo R$ <span id="pag-saida-rs-max">0,00</span> (10%)</small>
           </div>
           <div class="fg">
             <label>Motivo *</label>
             <select id="pag-saida-motivo">
               <option value="" disabled selected>Selecione...</option>
             </select>
+          </div>
+          <div class="fg full" style="font-size:12px;color:var(--text2);margin:0">
+            Desconto calculado: <strong id="pag-saida-desc-calc" style="color:#B91C1C">R$ 0,00</strong>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic">
@@ -3792,17 +3827,34 @@ async function salvarEntrada() {
   }
   // Se status ≠ "pago": fp1Final="", valor1Final=0, fp2Final="", valor2Final=0 (já inicializados)
 
-  // ── Saída embutida (opcional) ──
+  // ── Saída embutida (opcional) — Fase D3.6: tipo % ou R$ + limite por perfil ──
   const temSaida = document.getElementById("e-tem-saida")?.checked;
   let saidaValor = 0, saidaMotivo = "", idPar = null;
+  let saidaTipo = "valor", saidaPct = null, saidaRs = 0;
   if(temSaida) {
-    const sStr = document.getElementById("e-saida-valor").value.trim();
+    const desc = lerDescontoFormEntrada(); // {tipo, pct, rs, descR$, totalBruto}
     saidaMotivo = document.getElementById("e-saida-motivo").value;
-    if(!sStr)        { toast("Informe o valor da saída.","err"); return; }
     if(!saidaMotivo) { toast("Selecione o motivo da saída.","err"); return; }
-    saidaValor = parseBRL(sStr);
-    if(saidaValor <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
-    if(saidaValor > total) toast("Atenção: saída maior que o total.","ok");
+    if(desc.descR$ <= 0) { toast("Valor do desconto deve ser maior que zero.","err"); return; }
+
+    // Limite por perfil (recepcionista/callcenter/coord = 10%; líder/gestora = sem limite)
+    if(!descontoLiberado()) {
+      if(desc.tipo === "percentual" && desc.pct > 10) {
+        toast("Desconto máximo é 10% (faça login como líder/gestora pra ultrapassar).","err"); return;
+      }
+      if(desc.tipo === "valor") {
+        const limiteRs = desc.totalBruto * 0.10;
+        if(desc.rs > limiteRs + 0.005) {
+          toast(`Desconto em R$ máximo é ${brl(limiteRs)} (10% do total).`,"err"); return;
+        }
+      }
+    }
+    if(desc.descR$ > desc.totalBruto) toast("Atenção: desconto maior que o total.","ok");
+
+    saidaValor = desc.descR$;
+    saidaTipo  = desc.tipo;
+    saidaPct   = desc.tipo === "percentual" ? desc.pct : null;
+    saidaRs    = desc.descR$;
   }
 
   // Botão
@@ -3864,7 +3916,15 @@ async function salvarEntrada() {
       idPar = gerarIdPar();
       doc.id_par = idPar;
     } else {
-      doc.saida_pendente = { valor: saidaValor, motivo: saidaMotivo };
+      // Schema D3.6: armazena tipo + valor original + valor calculado em R$.
+      // Campo `valor` mantido pra retrocompat com D3.5 (lerDesconto fallback).
+      doc.saida_pendente = {
+        tipo_desconto: saidaTipo,
+        valor_percentual: saidaPct,
+        valor_reais: saidaValor,
+        valor: saidaValor,        // compat D3.5
+        motivo: saidaMotivo,
+      };
     }
   }
 
@@ -3890,6 +3950,11 @@ async function salvarEntrada() {
         prescritor: null,
         prescritor_especialidade: null,
         motivo_saida: saidaMotivo,
+        // D3.6: schema novo de desconto (tipo + valor original + valor R$)
+        tipo_desconto:    saidaTipo,
+        valor_percentual: saidaPct,
+        valor_reais:      saidaValor,
+        motivo:           saidaMotivo,
         mes_ano: getMesAno(),
         data_hora: firebase.firestore.FieldValue.serverTimestamp(),
         criado_em: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3918,6 +3983,7 @@ function toggleSaidaEmbutidaEntrada() {
   const cb = document.getElementById("e-tem-saida");
   const wrap = document.getElementById("e-saida-wrap");
   if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
+  if(cb && cb.checked) recalcDescontoEntrada();
 }
 
 // Toggle da seção "Saída embutida" no form de Orçamento
@@ -3925,6 +3991,164 @@ function toggleSaidaEmbutidaOrc() {
   const cb = document.getElementById("orc-tem-saida");
   const wrap = document.getElementById("orc-saida-wrap");
   if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Fase D3.6 — Desconto % ou R$ com limite por perfil + rateio
+// ─────────────────────────────────────────────────────────────
+// Líder/gestora/subgestora têm campos de desconto sem limite.
+// Recepcionista/callcenter/coord ficam capadas em 10% do total.
+function descontoLiberado() {
+  const p = (usuario?.perfil || "").toLowerCase();
+  return p === "lider" || p === "lider_callcenter"
+      || p === "gestor" || p === "subgestora";
+}
+
+// Lê os campos do form de Entrada e devolve {tipo, pct, rs, descR$, totalBruto}.
+// descR$ é o desconto FINAL em R$ (calculado se modo=%, lido se modo=R$).
+function lerDescontoFormEntrada() {
+  const tipo = document.querySelector('input[name="e-saida-tipo"]:checked')?.value || "percentual";
+  const totalBruto = recalcTotalEntrada(); // já existente; soma img+cons+lab+procs
+  let pct = 0, rs = 0, descR$ = 0;
+  if(tipo === "percentual") {
+    pct = Number(document.getElementById("e-saida-pct")?.value) || 0;
+    descR$ = Math.max(0, totalBruto * (pct/100));
+    rs = descR$;
+  } else {
+    rs = parseBRL(document.getElementById("e-saida-valor")?.value);
+    descR$ = rs;
+    pct = totalBruto > 0 ? (rs / totalBruto) * 100 : 0;
+  }
+  return { tipo, pct, rs, descR$, totalBruto };
+}
+
+// Mesma coisa pro modal de pagamento (D3.2).
+function lerDescontoFormModal() {
+  const tipo = document.querySelector('input[name="pag-saida-tipo"]:checked')?.value || "percentual";
+  const totalBruto = Number(document.getElementById("pag-total-num")?.value) || 0;
+  let pct = 0, rs = 0, descR$ = 0;
+  if(tipo === "percentual") {
+    pct = Number(document.getElementById("pag-saida-pct")?.value) || 0;
+    descR$ = Math.max(0, totalBruto * (pct/100));
+    rs = descR$;
+  } else {
+    rs = parseBRL(document.getElementById("pag-saida-valor")?.value);
+    descR$ = rs;
+    pct = totalBruto > 0 ? (rs / totalBruto) * 100 : 0;
+  }
+  return { tipo, pct, rs, descR$, totalBruto };
+}
+
+// Atualiza visual: alterna entre wraps de % e R$, atualiza limite máximo
+// dinâmico do input R$ (10% do total, se não-líder), e exibe o "desconto calculado".
+function recalcDescontoEntrada() {
+  const tipo = document.querySelector('input[name="e-saida-tipo"]:checked')?.value || "percentual";
+  const wrapPct = document.getElementById("e-saida-pct-wrap");
+  const wrapRs  = document.getElementById("e-saida-rs-wrap");
+  if(wrapPct) wrapPct.style.display = tipo === "percentual" ? "" : "none";
+  if(wrapRs)  wrapRs.style.display  = tipo === "valor"      ? "" : "none";
+
+  const liberado = descontoLiberado();
+  const { totalBruto, descR$ } = lerDescontoFormEntrada();
+  const limiteRs = totalBruto * 0.10;
+
+  // Atualiza atributos max + textos auxiliares
+  const inpPct = document.getElementById("e-saida-pct");
+  const inpRs  = document.getElementById("e-saida-valor");
+  const avisoPct = document.getElementById("e-saida-pct-aviso");
+  const avisoRs  = document.getElementById("e-saida-rs-aviso");
+  const maxRsTxt = document.getElementById("e-saida-rs-max");
+
+  if(liberado) {
+    if(inpPct) inpPct.removeAttribute("max");
+    if(inpRs)  inpRs.removeAttribute("max");
+    if(avisoPct) avisoPct.textContent = "Sem limite (líder/gestora)";
+    if(avisoRs)  avisoRs.innerHTML    = "Sem limite (líder/gestora)";
+  } else {
+    if(inpPct) inpPct.setAttribute("max","10");
+    if(inpRs)  inpRs.setAttribute("max", limiteRs.toFixed(2));
+    if(avisoPct) avisoPct.textContent = "Máximo 10%";
+    if(avisoRs)  avisoRs.innerHTML    = `Máximo R$ <span id="e-saida-rs-max">${limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2})}</span> (10%)`;
+    if(maxRsTxt) maxRsTxt.textContent = limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  }
+
+  const calc = document.getElementById("e-saida-desc-calc");
+  if(calc) calc.textContent = brl(descR$);
+}
+
+// Toggle entre os 2 modos no form de Entrada (chamado pelo onchange dos radios).
+function toggleTipoDescontoEntrada() { recalcDescontoEntrada(); }
+
+// Recalcula visual no Modal de Pagamento.
+function recalcDescontoModal() {
+  const tipo = document.querySelector('input[name="pag-saida-tipo"]:checked')?.value || "percentual";
+  const wrapPct = document.getElementById("pag-saida-pct-wrap");
+  const wrapRs  = document.getElementById("pag-saida-rs-wrap");
+  if(wrapPct) wrapPct.style.display = tipo === "percentual" ? "" : "none";
+  if(wrapRs)  wrapRs.style.display  = tipo === "valor"      ? "" : "none";
+
+  const liberado = descontoLiberado();
+  const { totalBruto, descR$ } = lerDescontoFormModal();
+  const limiteRs = totalBruto * 0.10;
+
+  const inpPct = document.getElementById("pag-saida-pct");
+  const inpRs  = document.getElementById("pag-saida-valor");
+  const avisoPct = document.getElementById("pag-saida-pct-aviso");
+  const avisoRs  = document.getElementById("pag-saida-rs-aviso");
+  const maxRsTxt = document.getElementById("pag-saida-rs-max");
+
+  if(liberado) {
+    if(inpPct) inpPct.removeAttribute("max");
+    if(inpRs)  inpRs.removeAttribute("max");
+    if(avisoPct) avisoPct.textContent = "Sem limite (líder/gestora)";
+    if(avisoRs)  avisoRs.innerHTML    = "Sem limite (líder/gestora)";
+  } else {
+    if(inpPct) inpPct.setAttribute("max","10");
+    if(inpRs)  inpRs.setAttribute("max", limiteRs.toFixed(2));
+    if(avisoPct) avisoPct.textContent = "Máximo 10%";
+    if(avisoRs)  avisoRs.innerHTML    = `Máximo R$ <span id="pag-saida-rs-max">${limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2})}</span> (10%)`;
+    if(maxRsTxt) maxRsTxt.textContent = limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  }
+
+  const calc = document.getElementById("pag-saida-desc-calc");
+  if(calc) calc.textContent = brl(descR$);
+}
+
+function toggleTipoDescontoModal() { recalcDescontoModal(); }
+
+// Lê uma saída-irmã/saida_pendente e devolve formato normalizado.
+// Aceita schema novo (D3.6: tipo_desconto/valor_percentual/valor_reais) e
+// schema antigo (D3.5: valor/total + motivo).
+function lerDesconto(saida) {
+  if(!saida) return { valor:0, percentual:null, motivo:"", tipo:"valor" };
+  const valor = Number(saida.valor_reais) || Number(saida.valor) || Number(saida.total) || 0;
+  const tipoNovo = saida.tipo_desconto;
+  const pct  = (tipoNovo === "percentual" && saida.valor_percentual != null)
+    ? Number(saida.valor_percentual) : null;
+  return {
+    valor,
+    percentual: pct,
+    motivo: saida.motivo || saida.motivo_saida || "",
+    tipo: tipoNovo || "valor",
+  };
+}
+
+// Distribui um desconto total proporcionalmente por categorias.
+// mapaCategoriaValor: { "Imagem":30, "Lab":20 } → desconta 5 (10%) →
+//                     { "Imagem":27, "Lab":18 }
+function calcularRateioProporcional(mapaCategoriaValor, valorDesconto) {
+  const totalBruto = Object.values(mapaCategoriaValor).reduce((a,b)=>a+(Number(b)||0),0);
+  const out = {};
+  if(totalBruto === 0 || (Number(valorDesconto)||0) === 0) {
+    Object.entries(mapaCategoriaValor).forEach(([k,v]) => out[k] = Number(v)||0);
+    return out;
+  }
+  Object.entries(mapaCategoriaValor).forEach(([k,v]) => {
+    const valor = Number(v) || 0;
+    const proporcao = valor / totalBruto;
+    out[k] = Math.max(0, valor - (valorDesconto * proporcao));
+  });
+  return out;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4293,26 +4517,39 @@ function atualizarResumoDia() {
   // Total entradas líquido = soma de Caixa + Crédito após abate
   const totalEntrada = totalCaixa + totalCredito;
 
-  // ── Por Produto ──
-  // Schema novo: 1 linha por categoria preenchida (Imagem 30 + Lab 20 → 2 linhas).
-  // Procedimentos: 1 linha por TIPO de procedimento.
-  // Schema legacy: usa l.produto.
+  // Helper: dado um doc-entrada, devolve o desconto (R$) da saída-irmã.
+  // Saídas avulsas NÃO entram no rateio (são despesas, não descontos da venda).
+  function descontoDoDoc(l) {
+    if(!l.id_par) return 0;
+    const irma = lancHoje.find(d => d.id_par === l.id_par && d.tipo === "saida");
+    if(!irma) return 0;
+    return Number(lerDesconto(irma).valor) || 0;
+  }
+
+  // ── Por Produto (com rateio proporcional D3.6) ──
+  // Schema novo: 1 linha por categoria preenchida; rateia desconto entre categorias.
+  // Schema legacy: usa l.produto, sem rateio (desconto não embutido).
   const porProd = {};
   const addProd = (k, v) => { if(v > 0) porProd[k] = (porProd[k]||0) + v; };
   entradas.forEach(l => {
     if(ehDocNovoSchema(l)) {
-      addProd("Consultas",     Number(l.consultas)   || 0);
-      addProd("Imagem",        Number(l.imagem)      || 0);
-      addProd("Laboratoriais", Number(l.laboratorio) || 0);
+      const mapa = {};
+      const cAdd = (k,v) => { v = Number(v)||0; if(v>0) mapa[k] = (mapa[k]||0) + v; };
+      cAdd("Consultas",     l.consultas);
+      cAdd("Imagem",        l.imagem);
+      cAdd("Laboratoriais", l.laboratorio);
       (Array.isArray(l.procedimentos) ? l.procedimentos : []).forEach(p => {
-        addProd(p.tipo || "Procedimento", Number(p.valor) || 0);
+        cAdd(p.tipo || "Procedimento", p.valor);
       });
+      const desc = descontoDoDoc(l);
+      const liquidoPorCat = calcularRateioProporcional(mapa, desc);
+      Object.entries(liquidoPorCat).forEach(([k,v]) => addProd(k, v));
     } else {
       addProd(l.produto || "Outros", Number(l.valor) || 0);
     }
   });
 
-  // ── Por Pagamento ──
+  // ── Por Pagamento (com rateio proporcional D3.6) ──
   // Agrupa por chave normalizada (lowercase sem acento) pra unificar legacy/novo.
   // Ordem fixa: Dinheiro, Débito, PIX, Boleto, Crédito.
   const porPgto = {}; // { chave: { label, total } }
@@ -4324,8 +4561,28 @@ function atualizarResumoDia() {
   };
   entradas.forEach(l => {
     if(ehDocNovoSchema(l)) {
-      addPgto(l.forma_pagamento_1, Number(l.valor_1) || 0);
-      addPgto(l.forma_pagamento_2, Number(l.valor_2) || 0);
+      const mapa = {};
+      // Chaves do mapa = chaves normalizadas do infoFormaPagamento pra evitar conflito legacy/novo
+      if(l.forma_pagamento_1 && Number(l.valor_1) > 0) {
+        const k = infoFormaPagamento(l.forma_pagamento_1).chave;
+        mapa[k] = (mapa[k]||0) + Number(l.valor_1);
+      }
+      if(l.forma_pagamento_2 && Number(l.valor_2) > 0) {
+        const k = infoFormaPagamento(l.forma_pagamento_2).chave;
+        mapa[k] = (mapa[k]||0) + Number(l.valor_2);
+      }
+      const desc = descontoDoDoc(l);
+      const liquidoPorForma = calcularRateioProporcional(mapa, desc);
+      // Re-inserir nas chaves originais (mantém label correto via infoFormaPagamento)
+      if(l.forma_pagamento_1 && Number(l.valor_1) > 0) {
+        const k = infoFormaPagamento(l.forma_pagamento_1).chave;
+        addPgto(l.forma_pagamento_1, liquidoPorForma[k] != null ? liquidoPorForma[k] : 0);
+        liquidoPorForma[k] = 0; // evita duplicar se 2ª forma tem mesma chave (raro)
+      }
+      if(l.forma_pagamento_2 && Number(l.valor_2) > 0) {
+        const k = infoFormaPagamento(l.forma_pagamento_2).chave;
+        addPgto(l.forma_pagamento_2, liquidoPorForma[k] != null ? liquidoPorForma[k] : 0);
+      }
     } else {
       addPgto(l.forma_pagamento, Number(l.valor) || 0);
     }
@@ -8176,10 +8433,14 @@ async function desfazerPagamento(doc, novoStatus) {
     if(!irmaQuery.empty) {
       saidaIrmaSnap = irmaQuery.docs[0]; // deve ter só 1
       const d = saidaIrmaSnap.data();
-      // Schema do nosso lancamento de saída usa `valor` e `motivo_saida`.
+      // D3.6: preserva tipo % ou R$ ao restaurar saida_pendente.
+      const desc = lerDesconto(d);
       saidaPendenteRestaurada = {
-        valor:  Number(d.valor) || 0,
-        motivo: d.motivo_saida || "Desconto",
+        tipo_desconto:    desc.tipo,
+        valor_percentual: desc.percentual,
+        valor_reais:      desc.valor,
+        valor:            desc.valor,                       // compat D3.5
+        motivo:           desc.motivo || d.motivo_saida || "Desconto",
       };
     }
   }
@@ -8258,19 +8519,31 @@ function abrirModalPagamento(doc, statusAnterior) {
   set("pag-fp2-val","");
   removerSegundaFormaModal();
 
-  // Saída pendente (se o doc tem) → pré-marca checkbox e preenche
+  // Saída pendente (D3.6): preserva tipo (% ou R$) gravado no doc.
   const cb = document.getElementById("pag-tem-saida");
-  const sp = doc.saida_pendente;
-  if(cb && sp && Number(sp.valor) > 0) {
+  const desc = lerDesconto(doc.saida_pendente);
+  // Reset radios pra default antes
+  document.querySelectorAll('input[name="pag-saida-tipo"]').forEach(r => r.checked = (r.value === "percentual"));
+  set("pag-saida-pct","");
+  set("pag-saida-valor","");
+  set("pag-saida-motivo","");
+  if(cb && desc.valor > 0) {
     cb.checked = true;
-    set("pag-saida-valor", Number(sp.valor).toLocaleString("pt-BR",{minimumFractionDigits:2}));
-    set("pag-saida-motivo", sp.motivo || "");
+    if(desc.tipo === "percentual" && desc.percentual != null) {
+      const radPct = document.querySelector('input[name="pag-saida-tipo"][value="percentual"]');
+      if(radPct) radPct.checked = true;
+      set("pag-saida-pct", String(desc.percentual));
+    } else {
+      const radRs = document.querySelector('input[name="pag-saida-tipo"][value="valor"]');
+      if(radRs) radRs.checked = true;
+      set("pag-saida-valor", desc.valor.toLocaleString("pt-BR",{minimumFractionDigits:2}));
+    }
+    set("pag-saida-motivo", desc.motivo || "");
   } else if(cb) {
     cb.checked = false;
-    set("pag-saida-valor","");
-    set("pag-saida-motivo","");
   }
   toggleSaidaModalPag();
+  recalcDescontoModal(); // atualiza visual + max + cálculo
 
   document.getElementById("modal-pag").classList.remove("hidden");
 }
@@ -8364,17 +8637,32 @@ async function salvarPagamentoModal() {
     fp1Final = fp1; fp2Final = fp2;
   }
 
-  // Saída embutida (opcional)
+  // Saída embutida (opcional) — Fase D3.6: % ou R$ + limite por perfil
   const temSaida = document.getElementById("pag-tem-saida")?.checked;
   let saidaValor = 0, saidaMotivo = "";
+  let saidaTipo = "valor", saidaPct = null;
   if(temSaida) {
-    const sStr = document.getElementById("pag-saida-valor").value.trim();
+    const desc = lerDescontoFormModal(); // {tipo, pct, rs, descR$, totalBruto}
     saidaMotivo = document.getElementById("pag-saida-motivo").value;
-    if(!sStr)        { toast("Informe o valor da saída.","err"); return; }
     if(!saidaMotivo) { toast("Selecione o motivo da saída.","err"); return; }
-    saidaValor = parseBRL(sStr);
-    if(saidaValor <= 0) { toast("Valor da saída deve ser maior que zero.","err"); return; }
-    if(saidaValor > total) toast("Atenção: saída maior que o total.","ok");
+    if(desc.descR$ <= 0) { toast("Valor do desconto deve ser maior que zero.","err"); return; }
+
+    if(!descontoLiberado()) {
+      if(desc.tipo === "percentual" && desc.pct > 10) {
+        toast("Desconto máximo é 10% (faça login como líder/gestora pra ultrapassar).","err"); return;
+      }
+      if(desc.tipo === "valor") {
+        const limiteRs = desc.totalBruto * 0.10;
+        if(desc.rs > limiteRs + 0.005) {
+          toast(`Desconto em R$ máximo é ${brl(limiteRs)} (10% do total).`,"err"); return;
+        }
+      }
+    }
+    if(desc.descR$ > total) toast("Atenção: saída maior que o total.","ok");
+
+    saidaValor = desc.descR$;
+    saidaTipo  = desc.tipo;
+    saidaPct   = desc.tipo === "percentual" ? desc.pct : null;
   }
 
   // Pré-computa caixa/credito (regra D7: Boleto vai pra caixa, campo boleto sempre 0)
@@ -8427,6 +8715,11 @@ async function salvarPagamentoModal() {
         produto: null, tipo_procedimento: null, forma_pagamento: null,
         prescritor: null, prescritor_especialidade: null,
         motivo_saida: saidaMotivo || "",
+        // D3.6: schema novo de desconto (tipo + valor original + valor R$)
+        tipo_desconto:    saidaTipo,
+        valor_percentual: saidaPct,
+        valor_reais:      Number(saidaValor) || 0,
+        motivo:           saidaMotivo || "",
         mes_ano:   d.mes_ano || getMesAno(),
         data_hora: ts,
         criado_em: ts,
@@ -8514,14 +8807,20 @@ function abrirModalOrcDet(id) {
         ${procsHtml}
       </div>
     </div>
-    ${(o.saida_pendente && o.saida_pendente.valor > 0) || (o.saida && o.saida.valor > 0) ? `
-      <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;color:#DC2626">
-        <strong>↩️ Saída pendente:</strong> ${brl((o.saida_pendente||o.saida).valor)} — Motivo: ${escHTML((o.saida_pendente||o.saida).motivo||"—")}
-        <div style="font-size:11px;color:var(--text2);margin-top:2px;font-style:italic">
-          Vira lançamento de saída automaticamente quando o status virar "Pago".
-        </div>
-      </div>
-    ` : ""}
+    ${(() => {
+      // D3.6: lê via lerDesconto pra mostrar % quando aplicável
+      const desc = lerDesconto(o.saida_pendente || o.saida);
+      if(desc.valor <= 0) return "";
+      const sufixo = (desc.tipo === "percentual" && desc.percentual != null)
+        ? ` (${desc.percentual}%)` : "";
+      return `
+        <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px;color:#DC2626">
+          <strong>↩️ Saída pendente:</strong> ${brl(desc.valor)}${sufixo} — Motivo: ${escHTML(desc.motivo||"—")}
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;font-style:italic">
+            Vira lançamento de saída automaticamente quando o status virar "Pago".
+          </div>
+        </div>`;
+    })()}
     <div style="border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text2)">
       Criado em ${fmt(dC)} por <strong>${escHTML(quemFez)}</strong><br>
       Última atualização: ${fmt(dU)}
