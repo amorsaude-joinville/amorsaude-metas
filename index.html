@@ -193,7 +193,20 @@
     .orc-col[data-status="lancar"]      .orc-col-head { color:#DC2626; }
     .orc-col[data-status="link_enviado"].orc-col-head, .orc-col[data-status="link_enviado"] .orc-col-head { color:#2563EB; }
     .orc-col[data-status="acompanhar"] .orc-col-head { color:#D97706; }
-    .orc-col[data-status="pago"]       .orc-col-head { color:#16A34A; }
+    .orc-col[data-status="pago"]       .orc-col-head { color:#047857; border-bottom:2px solid #10B981; padding-bottom:6px; }
+    /* Card de pago do dia — diferenciado visualmente (Fase D3.4) */
+    .orc-card.orc-card-pago { background:#D1FAE5; border-color:#10B981; }
+    .orc-card.orc-card-pago:hover { border-color:#047857; box-shadow:0 2px 8px rgba(16,185,129,.18); }
+    .orc-card.orc-card-pago .orc-tot { color:#047857; }
+    .btn-reverter-pagamento {
+      width:100%; margin-top:8px; padding:6px 10px;
+      background:#fff; border:1px solid #D1D5DB; border-radius:6px;
+      font-size:12px; cursor:pointer; color:#4B5563;
+      font-family:'Inter',sans-serif; transition:all .15s;
+    }
+    .btn-reverter-pagamento:hover {
+      background:#FEF2F2; border-color:#FCA5A5; color:#B91C1C;
+    }
     .orc-card { background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
     .orc-card:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(232,0,61,.10); }
     .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
@@ -813,6 +826,7 @@
               <option value="acompanhar">Acompanhar</option>
               <option value="link_enviado">Link Enviado</option>
               <option value="lancar">Lançar</option>
+              <option value="pago">Pagos do dia</option>
             </select>
           </div>
         </div>
@@ -832,10 +846,10 @@
           <div class="orc-col-head">🟡 Acompanhar <span class="orc-count" id="orc-cnt-acompanhar">0</span></div>
           <div id="orc-col-acompanhar"></div>
         </div>
-        <!-- Coluna "Pago" desativada pela Fase D — pagos vão direto pro Resumo/Dashboard.
-             Mantida no DOM (oculta) por ora; será removida na Fase G. -->
-        <div class="orc-col" data-status="pago" style="display:none">
-          <div class="orc-col-head">✅ Pago <span class="orc-count" id="orc-cnt-pago">0</span></div>
+        <!-- Coluna "Pagos do dia" (Fase D3.4) — mostra pagos com data === hoje.
+             Permite reverter pagamento via botão dedicado em cada card. -->
+        <div class="orc-col" data-status="pago">
+          <div class="orc-col-head">🟢 Pagos do dia <span class="orc-count" id="orc-cnt-pago">0</span></div>
           <div id="orc-col-pago"></div>
         </div>
       </div>
@@ -7601,13 +7615,14 @@ function renderFaturamentoChart(dados) {
 // Mantém o array `orcamentos` em memória sempre fresco.
 function iniciarListenerOrcamentos() {
   if(unsubOrcamentos) { unsubOrcamentos(); unsubOrcamentos = null; }
-  // Fase D: kanban "Acompanhamento" agora lê de lancamentos com status no
-  // kanban (acompanhar / link_enviado / lancar) do mês corrente.
+  // Fase D: kanban "Acompanhamento" lê de lancamentos com status no kanban
+  // (acompanhar/link_enviado/lancar) + "pago" do mês corrente.
+  // Os pagos são filtrados no cliente para mostrar só os do dia atual (D3.4).
   // Requer índice composto Firestore (mes_ano + status); link de criação
   // aparece no console do Firestore se o índice faltar.
   unsubOrcamentos = db.collection("lancamentos")
     .where("mes_ano", "==", getMesAno())
-    .where("status",  "in", STATUS_KANBAN)
+    .where("status",  "in", [...STATUS_KANBAN, "pago"])
     .onSnapshot(snap => {
       acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const sec = document.getElementById("sec-orcamentos");
@@ -7890,16 +7905,26 @@ function renderKanbanOrcamentos() {
   });
 
   // Ao escolher um status, ESCONDE as outras colunas (kanban com 1 coluna em foco).
-  // "pago" sempre escondida (Fase D — pagos não aparecem no kanban).
-  ["lancar","link_enviado","acompanhar"].forEach(s => {
+  ["lancar","link_enviado","acompanhar","pago"].forEach(s => {
     const col = document.querySelector(`.orc-col[data-status="${s}"]`);
     if(col) col.style.display = (stat && stat !== s) ? "none" : "";
   });
 
-  // Distribui em colunas (sem "pago" — esses já saíram via filtro do listener)
-  const colunas = { lancar:[], link_enviado:[], acompanhar:[] };
+  // Distribui em 4 colunas. "pago" só aceita docs com data===hoje (D3.4).
+  const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[] };
+  const hojeStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
   filtrados.forEach(o => {
     const s = o.status || "acompanhar";
+    if(s === "pago") {
+      // Só pagos do dia atual + somente entradas (saídas-doc com id_par ficam fora)
+      if((o.tipo || "entrada") !== "entrada") return;
+      if(dataDoc(o) !== hojeStr) return;
+      colunas.pago.push(o);
+      return;
+    }
     if(colunas[s]) colunas[s].push(o);
   });
 
@@ -7912,8 +7937,46 @@ function renderKanbanOrcamentos() {
       wrap.innerHTML = `<div class="orc-empty">Nenhum lançamento</div>`;
       return;
     }
-    wrap.innerHTML = colunas[s].map(o => cardOrcamentoHTML(o)).join("");
+    // Card pago tem layout próprio (sem dropdown, com botão Reverter)
+    const renderer = (s === "pago") ? cardPagoHTML : cardOrcamentoHTML;
+    wrap.innerHTML = colunas[s].map(o => renderer(o)).join("");
   });
+}
+
+// HTML de um card na coluna "🟢 Pagos do dia" (Fase D3.4).
+// Sem dropdown — só info + botão "↩️ Reverter pagamento".
+function cardPagoHTML(o) {
+  const ts = o.data_hora || o.criado_em;
+  const d  = ts?.toDate ? ts.toDate() : null;
+  const dataCurta = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
+  const paciente = o.paciente_nome || o.paciente   || "—";
+  const medico   = o.prescritor    || o.medico     || "";
+  const quemFez  = o.usuario_nome  || o.criado_por || "—";
+  const total    = Number(o.total) || Number(o.valor) || 0;
+  const formaLabel = (o.forma_pagamento_1)
+    ? infoFormaPagamento(o.forma_pagamento_1).label
+    + (o.forma_pagamento_2 ? ` + ${infoFormaPagamento(o.forma_pagamento_2).label}` : "")
+    : "—";
+  return `
+    <div class="orc-card orc-card-pago" onclick="abrirModalOrcDet('${o.id}')">
+      <div class="orc-pac">${escHTML(paciente)}</div>
+      <div class="orc-tot">${brl(total)}</div>
+      <div class="orc-meta-info">
+        ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
+        💳 ${escHTML(formaLabel)}<br>
+        🕒 ${dataCurta} · ${escHTML(quemFez)}
+      </div>
+      <div class="orc-card-acao" onclick="event.stopPropagation()">
+        <button class="btn-reverter-pagamento" onclick="confirmarReverterPagamento('${o.id}')">
+          ↩️ Reverter pagamento
+        </button>
+      </div>
+    </div>`;
+}
+
+// Wrapper UI: aciona o Caso 3 do router (D3.3) — confirm + desfazerPagamento.
+async function confirmarReverterPagamento(docId) {
+  await mudarStatusOrcamento(docId, "acompanhar");
 }
 
 // HTML de um card no kanban
