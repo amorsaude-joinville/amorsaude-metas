@@ -1595,11 +1595,12 @@
         <input type="text" id="ed-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
       </div>
 
-      <!-- Procedimentos (read-only no E1) -->
+      <!-- Procedimentos (editáveis em E2) -->
       <div class="fg full">
         <label>💉 Procedimentos</label>
-        <div id="ed-proc-readonly" style="background:var(--bg2);padding:10px;border-radius:var(--r2);font-size:13px;min-height:36px">—</div>
-        <small style="font-size:11px;color:var(--text2)">Edição de procedimentos virá na Fase E2.</small>
+        <div id="ed-proc-lista"></div>
+        <button type="button" class="btn btn-ghost" style="width:auto;margin-top:6px;font-size:13px;padding:8px 14px"
+          onclick="addLinhaProcEdicao()">➕ Adicionar procedimento</button>
       </div>
 
       <!-- Total -->
@@ -1635,20 +1636,55 @@
         </div>
       </div>
 
-      <!-- Desconto (read-only no E1) -->
-      <div class="fg full" id="ed-bloco-desconto" style="display:none;border-top:1px dashed var(--border);padding-top:12px;margin-top:6px">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">↩️ Desconto/Saída</div>
-        <div id="ed-desc-readonly" style="background:var(--bg2);padding:10px;border-radius:var(--r2);color:#B91C1C;font-size:13px"></div>
-        <small style="font-size:11px;color:var(--text2)">Edição de desconto virá na Fase E2.</small>
+      <!-- Desconto (editável em E2) — bloco completo no padrão D3.6 -->
+      <div class="fg full" style="border-top:1px dashed var(--border);padding-top:12px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+          <input type="checkbox" id="ed-tem-saida" onchange="toggleSaidaModalEdicao()" />
+          ↩️ Tem desconto/saída associado?
+        </label>
+        <div id="ed-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
+          <div class="fgrid">
+            <div class="fg full" style="margin-bottom:0">
+              <label style="font-size:13px;font-weight:600">Tipo de desconto</label>
+              <div style="display:flex;flex-wrap:wrap;gap:14px;font-weight:500">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ed-saida-tipo" value="percentual" checked onchange="recalcDescontoEdicao()" /> Percentual (%)</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ed-saida-tipo" value="valor"               onchange="recalcDescontoEdicao()" /> Valor fixo (R$)</label>
+              </div>
+            </div>
+            <div class="fg" id="ed-saida-pct-wrap">
+              <label>% de desconto *</label>
+              <input type="number" id="ed-saida-pct" min="0" max="10" step="0.5" placeholder="0" oninput="recalcDescontoEdicao()" />
+              <small id="ed-saida-pct-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo 10%</small>
+            </div>
+            <div class="fg" id="ed-saida-rs-wrap" style="display:none">
+              <label>Valor R$ *</label>
+              <input type="text" id="ed-saida-valor" placeholder="0,00" oninput="mascaraValor(this);recalcDescontoEdicao()" />
+              <small id="ed-saida-rs-aviso" style="font-size:11px;color:var(--text2);display:block;margin-top:4px">Máximo R$ <span id="ed-saida-rs-max">0,00</span> (10%)</small>
+            </div>
+            <div class="fg">
+              <label>Motivo *</label>
+              <select id="ed-saida-motivo">
+                <option value="" disabled selected>Selecione...</option>
+              </select>
+            </div>
+            <div class="fg full" style="font-size:12px;color:var(--text2);margin:0">
+              Desconto calculado: <strong id="ed-saida-desc-calc" style="color:#B91C1C">R$ 0,00</strong>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <input type="hidden" id="ed-doc-id" value="" />
     <input type="hidden" id="ed-status" value="" />
 
-    <div class="modal-btns" style="margin-top:18px">
-      <button class="btn btn-ghost" onclick="fecharModalEdicao()">❌ Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarEdicaoLanc()">💾 Salvar Alterações</button>
+    <div class="modal-btns" style="margin-top:18px;justify-content:space-between">
+      <!-- Botão Excluir só aparece pra perfis autorizados (PODE_EDITAR_LANC) -->
+      <button class="btn btn-red" id="ed-btn-excluir" style="display:none" onclick="excluirLancamento()">🗑️ Excluir</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="fecharModalEdicao()">❌ Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarEdicaoLanc()">💾 Salvar Alterações</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3174,6 +3210,7 @@ function iniciarApp() {
   popularSelectMotivos("e-saida-motivo");
   popularSelectMotivos("orc-saida-motivo");
   popularSelectMotivos("pag-saida-motivo");
+  popularSelectMotivos("ed-saida-motivo");
   // Formas de pagamento detalhadas (Fase B do modelo unificado)
   popularSelectFormaPagamento("e-fp1");
   popularSelectFormaPagamento("e-fp2");
@@ -3553,7 +3590,7 @@ function iniciarListener() {
     .where("usuario_nome","==",nome)
     .orderBy("data_hora","desc")
     .onSnapshot(snap => {
-      lancMes = snap.docs.map(d=>({id:d.id,...d.data()}));
+      lancMes = snap.docs.map(d=>({id:d.id,...d.data()})).filter(l => l.excluido !== true);
 
       const hoje = new Date();
       const hs = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}-${String(hoje.getDate()).padStart(2,"0")}`;
@@ -3733,6 +3770,7 @@ async function calcularRanking() {
     const por = {};
     snap.docs.forEach(d => {
       const data = d.data();
+      if(data.excluido === true) return; // E2: ignora soft-deleted
       if(!por[data.usuario_nome]) por[data.usuario_nome] = [];
       por[data.usuario_nome].push(data);
     });
@@ -4944,7 +4982,7 @@ function iniciarCoord() {
     .where("mes_ano","==",mesAnoCoord)
     .where("perfil","in",["callcenter","lider_callcenter"])
     .onSnapshot(snap => {
-      coordLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
+      coordLancs = snap.docs.map(d => ({id:d.id,...d.data()})).filter(l => l.excluido !== true);
       renderCoord();
     }, e => console.error("coord listener:", e));
 }
@@ -4970,7 +5008,7 @@ function iniciarListenerEquipe() {
     .where("mes_ano","==",mesAno)
     .where("perfil","in",filtro)
     .onSnapshot(snap => {
-      equipeLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
+      equipeLancs = snap.docs.map(d => ({id:d.id,...d.data()})).filter(l => l.excluido !== true);
       renderCardMetasEquipe();
     }, e => console.error("equipe listener:", e));
 }
@@ -5756,7 +5794,7 @@ function carregarDashListener() {
     unsubDash = db.collection("lancamentos")
       .where("mes_ano","==",dashMesAno)
       .onSnapshot(snap => {
-        dashLancs = snap.docs.map(d => ({id:d.id,...d.data()}));
+        dashLancs = snap.docs.map(d => ({id:d.id,...d.data()})).filter(l => l.excluido !== true);
         console.log(`[dash] lancamentos ${dashMesAno}: ${snap.size} documento(s) encontrado(s)`);
         renderDashboard();
       }, e => console.error("dash listener:", e));
@@ -7080,7 +7118,7 @@ async function buscarLancsMes(mesAnoStr) {
   const snap = await db.collection("lancamentos")
     .where("mes_ano","==",mesAnoStr)
     .get();
-  return snap.docs.map(d => ({id:d.id,...d.data()}));
+  return snap.docs.map(d => ({id:d.id,...d.data()})).filter(l => l.excluido !== true);
 }
 
 // Filtra lista de lançamentos para o intervalo de datas informado (inclusive)
@@ -8177,7 +8215,7 @@ function iniciarListenerOrcamentos() {
     .where("mes_ano", "==", getMesAno())
     .where("status",  "in", [...STATUS_KANBAN, "pago"])
     .onSnapshot(snap => {
-      acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.excluido !== true);
       const sec = document.getElementById("sec-orcamentos");
       if(sec && sec.style.display !== "none") renderKanbanOrcamentos();
     }, e => console.warn("[acompanhamento] listener erro:", e));
@@ -8983,41 +9021,154 @@ async function abrirModalEdicao(docId) {
     set("ed-fp2",""); set("ed-fp2-val","");
   }
 
-  // Desconto (read-only no E1) — busca saída-irmã se existir, ou usa saida_pendente
-  const blocoDesc = document.getElementById("ed-bloco-desconto");
-  const descEl = document.getElementById("ed-desc-readonly");
+  // Procedimentos editáveis (E2) — reconstrói lista
+  const procListaEl = document.getElementById("ed-proc-lista");
+  if(procListaEl) {
+    procListaEl.innerHTML = "";
+    (Array.isArray(doc.procedimentos) ? doc.procedimentos : []).forEach(p => {
+      addLinhaProcEdicao(p.tipo, Number(p.valor) ? Number(p.valor).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
+    });
+  }
+
+  // Desconto (E2 editável) — busca saída-irmã se existir, ou usa saida_pendente
   let saidaInfo = null;
+  // edicaoSaidaIrmaId guarda o ID da saída-irmã atual (pra UPDATE/DELETE no save)
+  edicaoSaidaIrmaId = null;
   if(doc.id_par) {
-    // Busca em acompLancs primeiro, fallback Firestore
     const fonte = (typeof acompLancs !== "undefined" ? acompLancs : []);
     const irma = fonte.find(d => d.id_par === doc.id_par && d.tipo === "saida" && d.id !== doc.id);
-    if(irma) saidaInfo = irma;
+    if(irma) { saidaInfo = irma; edicaoSaidaIrmaId = irma.id; }
     else {
       try {
         const sn = await db.collection("lancamentos")
           .where("id_par","==", doc.id_par).where("tipo","==","saida").get();
-        if(!sn.empty) saidaInfo = sn.docs[0].data();
+        if(!sn.empty) {
+          saidaInfo = sn.docs[0].data();
+          edicaoSaidaIrmaId = sn.docs[0].id;
+        }
       } catch(e) { /* silencioso */ }
     }
   } else if(doc.saida_pendente) {
     saidaInfo = doc.saida_pendente;
   }
+
+  // Reset radios + inputs do desconto
+  document.querySelectorAll('input[name="ed-saida-tipo"]').forEach(r => r.checked = (r.value === "percentual"));
+  set("ed-saida-pct","");
+  set("ed-saida-valor","");
+  set("ed-saida-motivo","");
+  const cbS = document.getElementById("ed-tem-saida");
   if(saidaInfo) {
     const desc = lerDesconto(saidaInfo);
-    if(desc.valor > 0 && blocoDesc && descEl) {
-      blocoDesc.style.display = "";
-      const sufixo = (desc.tipo === "percentual" && desc.percentual != null) ? ` (${desc.percentual}%)` : "";
-      descEl.innerHTML = `<strong>↩️ ${brl(desc.valor)}${sufixo}</strong> — Motivo: ${escHTML(desc.motivo || "—")}`;
-    } else if(blocoDesc) {
-      blocoDesc.style.display = "none";
+    if(desc.valor > 0) {
+      if(cbS) cbS.checked = true;
+      if(desc.tipo === "percentual" && desc.percentual != null) {
+        const radPct = document.querySelector('input[name="ed-saida-tipo"][value="percentual"]');
+        if(radPct) radPct.checked = true;
+        set("ed-saida-pct", String(desc.percentual));
+      } else {
+        const radRs = document.querySelector('input[name="ed-saida-tipo"][value="valor"]');
+        if(radRs) radRs.checked = true;
+        set("ed-saida-valor", desc.valor.toLocaleString("pt-BR",{minimumFractionDigits:2}));
+      }
+      set("ed-saida-motivo", desc.motivo || "");
+    } else {
+      if(cbS) cbS.checked = false;
     }
-  } else if(blocoDesc) {
-    blocoDesc.style.display = "none";
+  } else {
+    if(cbS) cbS.checked = false;
   }
+  toggleSaidaModalEdicao();
+  recalcDescontoEdicao();
+
+  // Botão Excluir só aparece pra perfis em PODE_EDITAR_LANC (E2)
+  const btnExcl = document.getElementById("ed-btn-excluir");
+  if(btnExcl) btnExcl.style.display = PODE_EDITAR_LANC.includes(usuario.perfil) ? "" : "none";
 
   recalcTotalEdicao();
   validarSomaPagamentosEdicao();
   document.getElementById("modal-edicao-lanc").classList.remove("hidden");
+}
+
+// Estado interno: id da saída-irmã enquanto modal está aberto (pra update/delete)
+let edicaoSaidaIrmaId = null;
+
+// E2 — Adiciona uma linha de procedimento no modal de edição
+function addLinhaProcEdicao(tipoSel, valor) {
+  const lista = document.getElementById("ed-proc-lista");
+  if(!lista) return;
+  const div = document.createElement("div");
+  div.className = "orc-proc-linha";
+  div.innerHTML = `
+    <select class="ed-proc-tipo" onchange="recalcTotalEdicao()">
+      <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
+      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${t}</option>`).join("")}
+    </select>
+    <input type="text" class="ed-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEdicao()" />
+    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEdicao()" title="Remover">🗑</button>
+  `;
+  lista.appendChild(div);
+  recalcTotalEdicao();
+}
+
+// E2 — Toggle do bloco de desconto no modal de edição
+function toggleSaidaModalEdicao() {
+  const cb = document.getElementById("ed-tem-saida");
+  const wrap = document.getElementById("ed-saida-wrap");
+  if(wrap) wrap.style.display = cb && cb.checked ? "" : "none";
+  if(cb && cb.checked) recalcDescontoEdicao();
+}
+
+// E2 — Lê os campos do form de Edição e devolve {tipo, pct, rs, descR$, totalBruto}
+function lerDescontoFormEdicao() {
+  const tipo = document.querySelector('input[name="ed-saida-tipo"]:checked')?.value || "percentual";
+  const totalBruto = parseBRL(document.getElementById("ed-total")?.value);
+  let pct = 0, rs = 0, descR$ = 0;
+  if(tipo === "percentual") {
+    pct = Number(document.getElementById("ed-saida-pct")?.value) || 0;
+    descR$ = Math.max(0, totalBruto * (pct/100));
+    rs = descR$;
+  } else {
+    rs = parseBRL(document.getElementById("ed-saida-valor")?.value);
+    descR$ = rs;
+    pct = totalBruto > 0 ? (rs / totalBruto) * 100 : 0;
+  }
+  return { tipo, pct, rs, descR$, totalBruto };
+}
+
+// E2 — Atualiza visual do bloco de desconto (alterna wraps, atualiza limites, mostra cálculo)
+function recalcDescontoEdicao() {
+  const tipo = document.querySelector('input[name="ed-saida-tipo"]:checked')?.value || "percentual";
+  const wrapPct = document.getElementById("ed-saida-pct-wrap");
+  const wrapRs  = document.getElementById("ed-saida-rs-wrap");
+  if(wrapPct) wrapPct.style.display = tipo === "percentual" ? "" : "none";
+  if(wrapRs)  wrapRs.style.display  = tipo === "valor"      ? "" : "none";
+
+  const liberado = descontoLiberado();
+  const { totalBruto, descR$ } = lerDescontoFormEdicao();
+  const limiteRs = totalBruto * 0.10;
+
+  const inpPct = document.getElementById("ed-saida-pct");
+  const inpRs  = document.getElementById("ed-saida-valor");
+  const avisoPct = document.getElementById("ed-saida-pct-aviso");
+  const avisoRs  = document.getElementById("ed-saida-rs-aviso");
+  const maxRsTxt = document.getElementById("ed-saida-rs-max");
+
+  if(liberado) {
+    if(inpPct) inpPct.removeAttribute("max");
+    if(inpRs)  inpRs.removeAttribute("max");
+    if(avisoPct) avisoPct.textContent = "Sem limite (líder/gestora)";
+    if(avisoRs)  avisoRs.innerHTML    = "Sem limite (líder/gestora)";
+  } else {
+    if(inpPct) inpPct.setAttribute("max","10");
+    if(inpRs)  inpRs.setAttribute("max", limiteRs.toFixed(2));
+    if(avisoPct) avisoPct.textContent = "Máximo 10%";
+    if(avisoRs)  avisoRs.innerHTML    = `Máximo R$ <span id="ed-saida-rs-max">${limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2})}</span> (10%)`;
+    if(maxRsTxt) maxRsTxt.textContent = limiteRs.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  }
+
+  const calc = document.getElementById("ed-saida-desc-calc");
+  if(calc) calc.textContent = brl(descR$);
 }
 
 function fecharModalEdicao() {
@@ -9025,25 +9176,20 @@ function fecharModalEdicao() {
   edicaoIdAtual = null;
 }
 
-// Recalcula total no modal de edição (Imagem + Consultas + Lab + procedimentos atuais).
-// Procedimentos não são editáveis no E1 — usa o total que veio do doc original
-// armazenado em ed-doc-id pra preservar a parte de procedimentos.
+// Recalcula total no modal de edição (Imagem + Consultas + Lab + procedimentos editáveis).
+// E2: procedimentos vêm dos inputs do form, não mais do doc original.
 function recalcTotalEdicao() {
   const img  = parseBRL(document.getElementById("ed-imagem")?.value);
   const cons = parseBRL(document.getElementById("ed-consultas")?.value);
   const lab  = parseBRL(document.getElementById("ed-lab")?.value);
-  // Soma dos procedimentos atuais (read-only) — busca do cache via edicaoIdAtual
   let procs = 0;
-  const docs = [...(typeof acompLancs !== "undefined" ? acompLancs : []),
-                ...(typeof lancMes !== "undefined" ? lancMes : [])];
-  const docAtual = docs.find(x => x.id === edicaoIdAtual);
-  if(docAtual && Array.isArray(docAtual.procedimentos)) {
-    procs = docAtual.procedimentos.reduce((s,p) => s + (Number(p?.valor) || 0), 0);
-  }
+  document.querySelectorAll("#ed-proc-lista .ed-proc-valor").forEach(i => { procs += parseBRL(i.value); });
   const total = img + cons + lab + procs;
   const inp = document.getElementById("ed-total");
   if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
   validarSomaPagamentosEdicao();
+  // Recalcula limite/cálculo do desconto pq depende do total
+  if(document.getElementById("ed-tem-saida")?.checked) recalcDescontoEdicao();
   return total;
 }
 
@@ -9088,14 +9234,43 @@ async function salvarEdicaoLanc() {
   const status = document.getElementById("ed-status")?.value || "";
   const ehPago = status === "pago";
 
-  // Recalcula procedimentos (read-only — herda do doc original)
+  // Pega doc original do cache pra calcular diff de mudanças (auditoria E2)
   const docs = [...(typeof acompLancs !== "undefined" ? acompLancs : []),
                 ...(typeof lancMes !== "undefined" ? lancMes : [])];
   const docOrig = docs.find(x => x.id === docId);
-  const procedimentos = docOrig && Array.isArray(docOrig.procedimentos) ? docOrig.procedimentos : [];
+  if(!docOrig) { toast("Lançamento não encontrado no cache.","err"); return; }
+
+  // E2: procedimentos editáveis — coleta dos inputs do form
+  const procedimentos = [];
+  document.querySelectorAll("#ed-proc-lista .orc-proc-linha").forEach(div => {
+    const tipo = div.querySelector(".ed-proc-tipo")?.value || "";
+    const valor = parseBRL(div.querySelector(".ed-proc-valor")?.value);
+    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+  });
   const totalProcs = procedimentos.reduce((s,p) => s + (Number(p?.valor) || 0), 0);
   const total = imagem + consultas + laboratorio + totalProcs;
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
+
+  // E2: desconto editável — valida limite por perfil se checkbox marcado
+  const temSaida = document.getElementById("ed-tem-saida")?.checked;
+  let descSaida = null; // { tipo, pct, rs, descR$, motivo } ou null
+  if(temSaida) {
+    const d = lerDescontoFormEdicao();
+    const motivo = (document.getElementById("ed-saida-motivo")?.value || "").trim();
+    if(!motivo)         { toast("Selecione o motivo da saída.","err"); return; }
+    if(d.descR$ <= 0)   { toast("Valor do desconto deve ser maior que zero.","err"); return; }
+    if(!descontoLiberado()) {
+      if(d.tipo === "percentual" && d.pct > 10) {
+        toast("Desconto máximo é 10% (faça login como líder/gestora pra ultrapassar).","err"); return;
+      }
+      if(d.tipo === "valor") {
+        const limiteRs = total * 0.10;
+        if(d.rs > limiteRs + 0.005) { toast(`Desconto em R$ máximo é ${brl(limiteRs)} (10%).`,"err"); return; }
+      }
+    }
+    if(d.descR$ > total) toast("Atenção: desconto maior que o total.","ok");
+    descSaida = { tipo: d.tipo, pct: d.tipo === "percentual" ? d.pct : null, valor: d.descR$, motivo };
+  }
 
   const updates = {
     paciente_nome: paciente,
@@ -9105,6 +9280,7 @@ async function salvarEdicaoLanc() {
     imagem:      Number(imagem)      || 0,
     consultas:   Number(consultas)   || 0,
     laboratorio: Number(laboratorio) || 0,
+    procedimentos,
     total: Number(total) || 0,
     atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -9150,7 +9326,121 @@ async function salvarEdicaoLanc() {
     updates.valor             = Number(total)       || 0;
   }
 
-  // Auditoria mínima (E2 vai expandir)
+  // ── E2: gestão de desconto/saída-irmã ──
+  // Cenários:
+  //  a) status=pago + temSaida → cria/atualiza saída-irmã (id_par)
+  //  b) status=pago + !temSaida + tinha id_par → deleta saída-irmã + remove id_par
+  //  c) status≠pago + temSaida → atualiza saida_pendente no doc
+  //  d) status≠pago + !temSaida → remove saida_pendente
+  // (Recalcula caixa/credito quando status=pago — saída-irmã não muda esses campos diretamente
+  //  porque caixa/credito do doc principal continuam sendo o valor BRUTO da venda.)
+  let opSaidaIrma = null; // { tipo:"add"|"update"|"delete", id?, payload? }
+  if(ehPago) {
+    if(temSaida) {
+      // Cria id_par se ainda não tem
+      const idPar = docOrig.id_par || gerarIdPar();
+      updates.id_par = idPar;
+      updates.saida_pendente = firebase.firestore.FieldValue.delete();
+      const saidaPayload = {
+        usuario_id:   docOrig.usuario_id || (usuario.uid || usuario.nome),
+        usuario_nome: docOrig.usuario_nome || usuario.nome || "",
+        perfil:       docOrig.perfil || usuario.perfil || "",
+        tipo: "saida",
+        paciente_nome: paciente,
+        paciente_cpf:  cpf,
+        valor: Number(descSaida.valor) || 0,
+        produto: null, tipo_procedimento: null, forma_pagamento: null,
+        prescritor: null, prescritor_especialidade: null,
+        motivo_saida:     descSaida.motivo,
+        tipo_desconto:    descSaida.tipo,
+        valor_percentual: descSaida.pct,
+        valor_reais:      Number(descSaida.valor) || 0,
+        motivo:           descSaida.motivo,
+        mes_ano:   docOrig.mes_ano || getMesAno(),
+        data_hora: firebase.firestore.FieldValue.serverTimestamp(),
+        criado_em: firebase.firestore.FieldValue.serverTimestamp(),
+        id_par: idPar,
+        status: "pago",
+      };
+      if(edicaoSaidaIrmaId) {
+        opSaidaIrma = { tipo:"update", id: edicaoSaidaIrmaId, payload: saidaPayload };
+      } else {
+        opSaidaIrma = { tipo:"add", payload: saidaPayload };
+      }
+    } else {
+      // Sem saída no form
+      if(edicaoSaidaIrmaId) {
+        opSaidaIrma = { tipo:"delete", id: edicaoSaidaIrmaId };
+        updates.id_par = firebase.firestore.FieldValue.delete();
+      }
+      updates.saida_pendente = firebase.firestore.FieldValue.delete();
+    }
+  } else {
+    // status ≠ pago: atualiza saida_pendente no próprio doc
+    if(temSaida) {
+      updates.saida_pendente = {
+        tipo_desconto:    descSaida.tipo,
+        valor_percentual: descSaida.pct,
+        valor_reais:      Number(descSaida.valor) || 0,
+        valor:            Number(descSaida.valor) || 0,
+        motivo:           descSaida.motivo,
+      };
+    } else {
+      updates.saida_pendente = firebase.firestore.FieldValue.delete();
+    }
+  }
+
+  // ── E2: histórico de edições ──
+  // Compara docOrig vs updates pra saber o que mudou. Normaliza valores
+  // (number 0 vs undefined são equivalentes; objetos comparados via JSON).
+  const camposCmp = [
+    "paciente_nome","paciente_cpf","prescritor","prescritor_especialidade",
+    "imagem","consultas","laboratorio","procedimentos","total","valor",
+    "forma_pagamento_1","valor_1","forma_pagamento_2","valor_2",
+    "caixa","credito","boleto",
+  ];
+  function norm(v) {
+    if(v === undefined || v === null) return null;
+    if(typeof v === "number") return v;
+    if(Array.isArray(v) || (typeof v === "object" && v && !v._isFieldValue)) return JSON.stringify(v);
+    return v;
+  }
+  const mudancas = [];
+  camposCmp.forEach(c => {
+    if(!(c in updates)) return;
+    const antes  = norm(docOrig[c]);
+    const depois = norm(updates[c]);
+    if(antes !== depois) mudancas.push({ campo: c, de: docOrig[c] ?? null, para: updates[c] ?? null });
+  });
+  // Mudança de saída-irmã/saida_pendente (rastreamento simplificado)
+  const tinhaDesc = !!docOrig.id_par || (docOrig.saida_pendente && Number(docOrig.saida_pendente.valor) > 0);
+  if(tinhaDesc !== !!temSaida) {
+    mudancas.push({ campo: "desconto_presenca", de: tinhaDesc, para: !!temSaida });
+  } else if(temSaida && descSaida) {
+    const antDesc = lerDesconto(docOrig.id_par
+      ? (docs.find(d => d.id_par === docOrig.id_par && d.tipo === "saida") || null)
+      : docOrig.saida_pendente);
+    if(Math.abs((antDesc.valor || 0) - (descSaida.valor || 0)) > 0.005 || antDesc.tipo !== descSaida.tipo) {
+      mudancas.push({ campo: "desconto", de: { tipo: antDesc.tipo, valor: antDesc.valor }, para: { tipo: descSaida.tipo, valor: descSaida.valor } });
+    }
+  }
+
+  if(mudancas.length === 0) {
+    toast("Nenhuma alteração detectada.","ok");
+    fecharModalEdicao();
+    return;
+  }
+
+  const novaEntrada = {
+    em:       new Date().toISOString(), // arrayUnion não aceita serverTimestamp dentro
+    por_uid:  usuario.uid    || null,
+    por:      usuario.nome   || "",
+    perfil:   usuario.perfil || "",
+    mudancas,
+  };
+  updates.historico_edicoes = firebase.firestore.FieldValue.arrayUnion(novaEntrada);
+
+  // Auditoria simples (última edição) — leitura rápida sem percorrer array
   updates.editado_em        = firebase.firestore.FieldValue.serverTimestamp();
   updates.editado_por       = usuario.nome   || "";
   updates.editado_por_uid   = usuario.uid    || null;
@@ -9159,15 +9449,97 @@ async function salvarEdicaoLanc() {
   const btn = document.querySelector("#modal-edicao-lanc .btn-primary");
   if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
   try {
-    await db.collection("lancamentos").doc(docId).update(updates);
+    // Batch: update do doc principal + add/update/delete da saída-irmã (atomicidade)
+    const batch = db.batch();
+    batch.update(db.collection("lancamentos").doc(docId), updates);
+    if(opSaidaIrma?.tipo === "add") {
+      const ref = db.collection("lancamentos").doc(); // gera id novo
+      batch.set(ref, opSaidaIrma.payload);
+    } else if(opSaidaIrma?.tipo === "update") {
+      // arrayUnion não cabe em saída-irmã — só atualiza campos relevantes
+      const { tipo_desconto, valor_percentual, valor_reais, motivo, motivo_saida, valor } = opSaidaIrma.payload;
+      batch.update(db.collection("lancamentos").doc(opSaidaIrma.id), {
+        tipo_desconto, valor_percentual, valor_reais, motivo, motivo_saida, valor,
+        atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } else if(opSaidaIrma?.tipo === "delete") {
+      batch.delete(db.collection("lancamentos").doc(opSaidaIrma.id));
+    }
+    await batch.commit();
     toast("Alterações salvas!","ok");
     fecharModalEdicao();
-    // Listener onSnapshot refresh acompLancs/lancMes automaticamente
   } catch(e) {
     console.error("[salvarEdicaoLanc]", e);
     toast("Erro ao salvar alterações: " + (e.message || e.code), "err");
   } finally {
     if(btn) { btn.disabled = false; btn.textContent = "💾 Salvar Alterações"; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXCLUIR LANÇAMENTO (Fase E2 — soft delete)
+// ═══════════════════════════════════════════════════════════
+async function excluirLancamento() {
+  const docId = document.getElementById("ed-doc-id")?.value || edicaoIdAtual;
+  if(!docId) { toast("Doc inválido.","err"); return; }
+  if(!usuario) { toast("Sessão expirada.","err"); return; }
+  // Validação defensiva (mesmo com botão escondido)
+  if(!PODE_EDITAR_LANC.includes(usuario.perfil)) {
+    toast("Você não tem permissão para excluir lançamentos.","err"); return;
+  }
+
+  const ok = confirm(
+    "Tem certeza? Esta ação não pode ser desfeita.\n\n" +
+    "O lançamento será removido do sistema e não aparecerá mais em " +
+    "Resumo, Lançamentos, Histórico, Dashboard ou Kanban."
+  );
+  if(!ok) return;
+
+  try {
+    const docRef = db.collection("lancamentos").doc(docId);
+    const snap = await docRef.get();
+    if(!snap.exists) { toast("Lançamento não encontrado.","err"); return; }
+    const docData = { id: snap.id, ...snap.data() };
+
+    // Procura saída-irmã via id_par
+    let saidaIrmaSnap = null;
+    if(docData.id_par) {
+      const sn = await db.collection("lancamentos")
+        .where("id_par","==", docData.id_par)
+        .where("tipo","==", "saida")
+        .get();
+      if(!sn.empty) saidaIrmaSnap = sn.docs[0];
+    }
+
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    const auditBase = {
+      excluido: true,
+      excluido_em: ts,
+      excluido_por_uid: usuario.uid || null,
+      excluido_por: usuario.nome || "",
+      excluido_por_perfil: usuario.perfil || "",
+    };
+
+    const batch = db.batch();
+    batch.update(docRef, {
+      ...auditBase,
+      snapshot_antes_exclusao: docData,
+    });
+    if(saidaIrmaSnap) {
+      const sd = { id: saidaIrmaSnap.id, ...saidaIrmaSnap.data() };
+      batch.update(saidaIrmaSnap.ref, {
+        ...auditBase,
+        snapshot_antes_exclusao: sd,
+        excluido_motivo: "saida_irma_de_doc_excluido",
+      });
+    }
+    await batch.commit();
+    toast("Lançamento excluído com sucesso.","ok");
+    fecharModalEdicao();
+    // Listener onSnapshot já filtra excluido!==true → docs somem das views
+  } catch(e) {
+    console.error("[excluirLancamento]", e);
+    toast("Erro ao excluir: " + (e.message || e.code), "err");
   }
 }
 
