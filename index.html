@@ -3894,6 +3894,7 @@ async function salvarEntrada() {
         data_hora: firebase.firestore.FieldValue.serverTimestamp(),
         criado_em: firebase.firestore.FieldValue.serverTimestamp(),
         id_par: idPar,
+        status: "pago", // necessário pra listener do kanban trazer essa saída-doc (D3.5)
       };
       const refS = await db.collection("lancamentos").add(docSaida);
       console.log("[Amor Saúde] Saída embutida salva (id_par):", refS.id, idPar);
@@ -4239,15 +4240,58 @@ function atualizarResumoDia() {
   if(!el) return;
 
   // Entradas: só status="pago" ou legacy (ehDocPago). Saídas: todas (sempre reais).
-  const entradas     = lancHoje.filter(l => l.tipo==="entrada" && ehDocPago(l));
-  const saidas       = lancHoje.filter(l => l.tipo==="saida");
-  const totalEntrada = entradas.reduce((s,l)=>s+(Number(l.valor)||Number(l.total)||0), 0);
-  const totalSaida   = saidas.reduce((s,l)=>s+(Number(l.valor)||0), 0);
+  const entradas = lancHoje.filter(l => l.tipo==="entrada" && ehDocPago(l));
+  const saidas   = lancHoje.filter(l => l.tipo==="saida");
 
   if(!entradas.length && !saidas.length) {
     el.innerHTML = `<div class="empty" style="padding:20px"><div class="ei">📊</div>Nenhum lançamento hoje ainda.</div>`;
     return;
   }
+
+  // ── Caixa/Crédito brutos (somando campos pré-computados das entradas) ──
+  let caixaBruto = 0, creditoBruto = 0;
+  entradas.forEach(l => {
+    if(ehDocNovoSchema(l)) {
+      caixaBruto   += Number(l.caixa)   || 0;
+      creditoBruto += Number(l.credito) || 0;
+    } else {
+      // Legacy: deriva de forma_pagamento + valor
+      const fmCaixa = ["Dinheiro","Débito","Pix","Boleto"];
+      const v  = Number(l.valor) || 0;
+      const fp = (l.forma_pagamento || "").normalize("NFC").trim();
+      if(fmCaixa.includes(fp))   caixaBruto   += v;
+      else if(fp === "Crédito")  creditoBruto += v;
+    }
+  });
+
+  // ── Saídas separadas: embutidas (com id_par) vs avulsas (sem id_par) ──
+  let totalSaidasEmbutidas = 0, totalSaidasAvulsas = 0;
+  saidas.forEach(l => {
+    const v = Number(l.valor) || Number(l.total) || 0;
+    if(l.id_par) totalSaidasEmbutidas += v;
+    else         totalSaidasAvulsas   += v;
+  });
+
+  // ── Abate: Caixa primeiro, depois Crédito (para ambas as categorias de saída) ──
+  // Saída embutida = desconto em venda. Saída avulsa = despesa do dia (presume dinheiro).
+  let totalCaixa = caixaBruto, totalCredito = creditoBruto;
+  function abater(valor) {
+    if(valor <= 0) return;
+    const fromCaixa = Math.min(valor, totalCaixa);
+    totalCaixa -= fromCaixa;
+    valor -= fromCaixa;
+    if(valor > 0) {
+      const fromCredito = Math.min(valor, totalCredito);
+      totalCredito -= fromCredito;
+    }
+  }
+  abater(totalSaidasEmbutidas);
+  abater(totalSaidasAvulsas);
+  totalCaixa   = Math.max(0, totalCaixa);
+  totalCredito = Math.max(0, totalCredito);
+
+  // Total entradas líquido = soma de Caixa + Crédito após abate
+  const totalEntrada = totalCaixa + totalCredito;
 
   // ── Por Produto ──
   // Schema novo: 1 linha por categoria preenchida (Imagem 30 + Lab 20 → 2 linhas).
@@ -4300,13 +4344,24 @@ function atualizarResumoDia() {
     .map(([p,v])=>`<div class="resumo-row"><span>${p}</span><span class="vp">${brl(v)}</span></div>`).join("")
     || `<div class="resumo-row" style="color:var(--text2)">—</div>`;
 
+  // Linhas de saída só aparecem quando há valor (mantém UI limpa em dias sem desconto/despesa)
+  const saidaEmbutidaHtml = totalSaidasEmbutidas > 0
+    ? `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas embutidas</span><span style="font-weight:600">−${brl(totalSaidasEmbutidas)}</span></div>`
+    : "";
+  const saidaAvulsaHtml = totalSaidasAvulsas > 0
+    ? `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas avulsas</span><span style="font-weight:600">−${brl(totalSaidasAvulsas)}</span></div>`
+    : "";
+
   el.innerHTML = `
     <div class="resumo-cols">
       <div class="resumo-sec">
         <label>Por produto</label>
         ${prodHtml || `<div class="resumo-row" style="color:var(--text2)">Sem entradas hoje</div>`}
-        <div class="resumo-tot"><span>Total entradas</span><span class="vp">${brl(totalEntrada)}</span></div>
-        ${totalSaida > 0 ? `<div class="resumo-tot" style="margin-top:6px"><span>Total saídas</span><span class="tag-saida">−${brl(totalSaida)}</span></div>` : ""}
+        <div class="resumo-tot" style="margin-top:8px"><span>💵 Caixa</span><span class="vp">${brl(totalCaixa)}</span></div>
+        <div class="resumo-tot" style="margin-top:4px"><span>💳 Crédito</span><span class="vp">${brl(totalCredito)}</span></div>
+        <div class="resumo-tot" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><span>Total entradas</span><span class="vp">${brl(totalEntrada)}</span></div>
+        ${saidaEmbutidaHtml}
+        ${saidaAvulsaHtml}
       </div>
       <div class="resumo-sec">
         <label>Por pagamento</label>
@@ -7945,6 +8000,19 @@ function renderKanbanOrcamentos() {
 
 // HTML de um card na coluna "🟢 Pagos do dia" (Fase D3.4).
 // Sem dropdown — só info + botão "↩️ Reverter pagamento".
+// Calcula valor líquido de um doc pago: bruto − saída-irmã (se houver id_par).
+// Busca a saída em `todosDocs` (acompLancs ou lancMes). Saídas-doc gravam `valor`
+// (não `total`), por isso usamos Number(saida.valor||saida.total).
+function calcularLiquidoDoc(l, todosDocs) {
+  const bruto = Number(l.total) || Number(l.valor) || 0;
+  if(!l.id_par) return bruto;
+  const irma = (todosDocs || []).find(d =>
+    d && d.id_par === l.id_par && d.tipo === "saida" && d.id !== l.id
+  );
+  const desconto = irma ? (Number(irma.valor) || Number(irma.total) || 0) : 0;
+  return Math.max(0, bruto - desconto);
+}
+
 function cardPagoHTML(o) {
   const ts = o.data_hora || o.criado_em;
   const d  = ts?.toDate ? ts.toDate() : null;
@@ -7952,7 +8020,13 @@ function cardPagoHTML(o) {
   const paciente = o.paciente_nome || o.paciente   || "—";
   const medico   = o.prescritor    || o.medico     || "";
   const quemFez  = o.usuario_nome  || o.criado_por || "—";
-  const total    = Number(o.total) || Number(o.valor) || 0;
+  // Líquido (D3.5): se tem id_par, abate saída-irmã. Senão, usa bruto.
+  // Saída-doc embutida agora é gravada com status:"pago" → entra no listener acompLancs.
+  // Fallback pra lancMes (cobre docs antigos antes do D3.5 caso ainda existam).
+  const fonte = (typeof acompLancs !== "undefined" && acompLancs.length)
+    ? acompLancs
+    : (typeof lancMes !== "undefined" ? lancMes : []);
+  const liquido = calcularLiquidoDoc(o, fonte);
   const formaLabel = (o.forma_pagamento_1)
     ? infoFormaPagamento(o.forma_pagamento_1).label
     + (o.forma_pagamento_2 ? ` + ${infoFormaPagamento(o.forma_pagamento_2).label}` : "")
@@ -7960,7 +8034,7 @@ function cardPagoHTML(o) {
   return `
     <div class="orc-card orc-card-pago" onclick="abrirModalOrcDet('${o.id}')">
       <div class="orc-pac">${escHTML(paciente)}</div>
-      <div class="orc-tot">${brl(total)}</div>
+      <div class="orc-tot">${brl(liquido)}</div>
       <div class="orc-meta-info">
         ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
         💳 ${escHTML(formaLabel)}<br>
@@ -8357,6 +8431,7 @@ async function salvarPagamentoModal() {
         data_hora: ts,
         criado_em: ts,
         id_par: idPar,
+        status: "pago", // necessário pra listener do kanban trazer essa saída-doc (D3.5)
       });
     } else {
       // Sem saída no modal: remove saida_pendente (se havia) — recepcionista desistiu
