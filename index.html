@@ -4530,7 +4530,22 @@ function atualizarResumoDia() {
   const entradas = lancHoje.filter(l => l.tipo==="entrada" && ehDocPago(l));
   const saidas   = lancHoje.filter(l => l.tipo==="saida");
 
-  if(!entradas.length && !saidas.length) {
+  // D3.7 fix: oportunidades (status≠pago do dia) também devem fazer o Resumo aparecer.
+  // Quick-check em lancMes pra decidir se mostra estado vazio ou render completo.
+  const _hojeStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  const _temOportunidade = (typeof lancMes !== "undefined" ? lancMes : []).some(l => {
+    if((l.tipo || "entrada") !== "entrada") return false;
+    if(!STATUS_KANBAN.includes(l.status))   return false;
+    const ts = l.data_hora || l.criado_em;
+    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+    if(!d) return false;
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` === _hojeStr;
+  });
+
+  if(!entradas.length && !saidas.length && !_temOportunidade) {
     el.innerHTML = `<div class="empty" style="padding:20px"><div class="ei">📊</div>Nenhum lançamento hoje ainda.</div>`;
     return;
   }
