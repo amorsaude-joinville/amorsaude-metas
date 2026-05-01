@@ -207,6 +207,19 @@
     .btn-reverter-pagamento:hover {
       background:#FEF2F2; border-color:#FCA5A5; color:#B91C1C;
     }
+    /* E1 — Botão Editar nos cards do kanban */
+    .btn-editar-lanc {
+      width:100%; margin-top:6px; padding:6px 10px;
+      background:#fff; border:1px solid #D1D5DB; border-radius:6px;
+      font-size:12px; cursor:pointer; color:#4B5563;
+      font-family:'Inter',sans-serif; transition:all .15s;
+    }
+    .btn-editar-lanc:hover:not(:disabled) {
+      background:#EFF6FF; border-color:#93C5FD; color:#1D4ED8;
+    }
+    .btn-editar-lanc:disabled {
+      opacity:.4; cursor:not-allowed;
+    }
     .orc-card { background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
     .orc-card:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(232,0,61,.10); }
     .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
@@ -1532,6 +1545,114 @@
 <!-- Modal de Pagamento (Fase D3.2) — abre quando status muda pra "Pago" via kanban.
      Mostra dados do doc (read-only) e pede só Forma de Pagamento + saída opcional.
      Cancelar não muda status; Salvar atualiza doc com status="pago" + dados. -->
+<!-- Modal de Edição (Fase E1) — abre via botão "✏️ Editar" em cards do kanban.
+     Status fica como display read-only (pra mudar status, usa dropdown do kanban).
+     Procedimentos e desconto também ficam read-only no E1 — E2 cuida. -->
+<div class="overlay hidden" id="modal-edicao-lanc">
+  <div class="modal" style="width:600px;max-height:92vh;overflow-y:auto">
+    <h3>✏️ Editar Lançamento</h3>
+
+    <!-- Status display (não editável) -->
+    <div style="background:var(--bg2);padding:10px 12px;border-radius:var(--r2);margin-bottom:14px;font-size:13px">
+      <strong>Status atual:</strong> <span id="ed-status-label">—</span>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">Para mudar status, use o dropdown do card no kanban.</div>
+    </div>
+
+    <div class="fgrid">
+      <div class="fg">
+        <label>Paciente *</label>
+        <input type="text" id="ed-paciente" placeholder="Nome completo" />
+      </div>
+      <div class="fg">
+        <label>CPF</label>
+        <input type="text" id="ed-cpf" maxlength="14" placeholder="000.000.000-00 (opcional)" oninput="mascaraCPF(this)" />
+      </div>
+      <div class="fg full">
+        <label>Médico Solicitante *</label>
+        <input type="text" id="ed-prescritor" placeholder="Nome do médico" />
+      </div>
+      <div class="fg full">
+        <label>Especialidade</label>
+        <input type="text" id="ed-especialidade" placeholder="(opcional)" />
+      </div>
+      <div class="fg full">
+        <label>Data do atendimento</label>
+        <input type="text" id="ed-data-disp" readonly style="background:#F3F4F6" />
+        <small style="font-size:11px;color:var(--text2)">A data do atendimento não é editável (gerada no momento da gravação).</small>
+      </div>
+
+      <!-- Categorias -->
+      <div class="fg">
+        <label>🩻 Imagem (R$)</label>
+        <input type="text" id="ed-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+      </div>
+      <div class="fg">
+        <label>👨‍⚕️ Consultas (R$)</label>
+        <input type="text" id="ed-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+      </div>
+      <div class="fg">
+        <label>🧪 Laboratoriais (R$)</label>
+        <input type="text" id="ed-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+      </div>
+
+      <!-- Procedimentos (read-only no E1) -->
+      <div class="fg full">
+        <label>💉 Procedimentos</label>
+        <div id="ed-proc-readonly" style="background:var(--bg2);padding:10px;border-radius:var(--r2);font-size:13px;min-height:36px">—</div>
+        <small style="font-size:11px;color:var(--text2)">Edição de procedimentos virá na Fase E2.</small>
+      </div>
+
+      <!-- Total -->
+      <div class="fg full">
+        <label>Total (R$)</label>
+        <input type="text" id="ed-total" readonly style="font-weight:700;color:var(--primary);font-size:16px" value="0,00" />
+        <small style="font-size:11px;color:var(--text2)">Soma de Imagem + Consultas + Lab + Procedimentos. Procedimentos não editáveis aqui no E1.</small>
+      </div>
+
+      <!-- Pagamento (só se status === "pago") -->
+      <div class="fg full" id="ed-bloco-pagamento" style="display:none;border-top:1px dashed var(--border);padding-top:12px;margin-top:6px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">💳 Pagamento</div>
+        <div class="fgrid">
+          <div class="fg">
+            <label>Forma de Pagamento *</label>
+            <select id="ed-fp1"><option value="" disabled selected>Selecione...</option></select>
+          </div>
+          <div class="fg">
+            <label>Valor 1ª (R$) *</label>
+            <input type="text" id="ed-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosEdicao()" />
+          </div>
+          <div class="fg">
+            <label>2ª Forma de Pagamento (opcional)</label>
+            <select id="ed-fp2"><option value="">— nenhuma —</option></select>
+          </div>
+          <div class="fg">
+            <label>Valor 2ª (R$)</label>
+            <input type="text" id="ed-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosEdicao()" />
+          </div>
+          <div class="fg full">
+            <div id="ed-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desconto (read-only no E1) -->
+      <div class="fg full" id="ed-bloco-desconto" style="display:none;border-top:1px dashed var(--border);padding-top:12px;margin-top:6px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">↩️ Desconto/Saída</div>
+        <div id="ed-desc-readonly" style="background:var(--bg2);padding:10px;border-radius:var(--r2);color:#B91C1C;font-size:13px"></div>
+        <small style="font-size:11px;color:var(--text2)">Edição de desconto virá na Fase E2.</small>
+      </div>
+    </div>
+
+    <input type="hidden" id="ed-doc-id" value="" />
+    <input type="hidden" id="ed-status" value="" />
+
+    <div class="modal-btns" style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="fecharModalEdicao()">❌ Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoLanc()">💾 Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="modal-pag">
   <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto">
     <h3>💳 Registrar pagamento</h3>
@@ -3058,6 +3179,8 @@ function iniciarApp() {
   popularSelectFormaPagamento("e-fp2");
   popularSelectFormaPagamento("pag-fp1");
   popularSelectFormaPagamento("pag-fp2");
+  popularSelectFormaPagamento("ed-fp1");
+  popularSelectFormaPagamento("ed-fp2");
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
@@ -8506,6 +8629,7 @@ function cardPagoHTML(o) {
         <button class="btn-reverter-pagamento" onclick="confirmarReverterPagamento('${o.id}')">
           ↩️ Reverter pagamento
         </button>
+        ${btnEditarHTML(o)}
       </div>
     </div>`;
 }
@@ -8513,6 +8637,25 @@ function cardPagoHTML(o) {
 // Wrapper UI: aciona o Caso 3 do router (D3.3) — confirm + desfazerPagamento.
 async function confirmarReverterPagamento(docId) {
   await mudarStatusOrcamento(docId, "acompanhar");
+}
+
+// E1 — quem pode editar este lançamento agora.
+// Recepcionista/callcenter editam apenas cards não-pagos.
+// Liderança (PODE_EDITAR_LANC: gestor/subgestora/coordenadora/lider/lider_callcenter) edita qualquer.
+function podeEditarCard(l) {
+  const perfil = usuario?.perfil;
+  const ehPago = (l?.status || "acompanhar") === "pago";
+  if(PODE_EDITAR_LANC.includes(perfil)) return true;
+  return !ehPago;
+}
+
+// HTML do botão Editar (E1) — incluído em todos os cards do kanban.
+function btnEditarHTML(l) {
+  const ok = podeEditarCard(l);
+  if(ok) {
+    return `<button class="btn-editar-lanc" onclick="abrirModalEdicao('${l.id}')" title="Editar lançamento">✏️ Editar</button>`;
+  }
+  return `<button class="btn-editar-lanc" disabled title="Apenas líder/gestora/coordenadora pode editar pagamentos">✏️ Editar</button>`;
 }
 
 // HTML de um card no kanban
@@ -8540,6 +8683,7 @@ function cardOrcamentoHTML(o) {
       </div>
       <div class="orc-card-acao" onclick="event.stopPropagation()">
         <select onchange="mudarStatusOrcamento('${o.id}', this.value)">${opts}</select>
+        ${btnEditarHTML(o)}
       </div>
     </div>`;
 }
@@ -8751,6 +8895,275 @@ function abrirModalPagamento(doc, statusAnterior) {
   recalcDescontoModal(); // atualiza visual + max + cálculo
 
   document.getElementById("modal-pag").classList.remove("hidden");
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL DE EDIÇÃO (Fase E1)
+// ═══════════════════════════════════════════════════════════
+
+let edicaoIdAtual = null; // doc id sendo editado (pra salvar)
+
+async function abrirModalEdicao(docId) {
+  if(!usuario) { toast("Sessão expirada.","err"); return; }
+
+  // Busca doc atual (cache primeiro, Firestore depois)
+  let doc = (typeof acompLancs !== "undefined" ? acompLancs : []).find(x => x.id === docId);
+  if(!doc) doc = (typeof lancMes !== "undefined" ? lancMes : []).find(x => x.id === docId);
+  if(!doc) {
+    try {
+      const snap = await db.collection("lancamentos").doc(docId).get();
+      if(!snap.exists) { toast("Lançamento não encontrado.","err"); return; }
+      doc = { id: snap.id, ...snap.data() };
+    } catch(e) { toast("Erro ao buscar lançamento.","err"); return; }
+  }
+
+  // Validação defensiva de permissão (mesmo que botão venha disabled)
+  if(!podeEditarCard(doc)) {
+    toast("Apenas líder/gestora/coordenadora pode editar pagamentos.","err");
+    return;
+  }
+
+  edicaoIdAtual = docId;
+  const set = (id,v) => { const e = document.getElementById(id); if(e) e.value = v; };
+  const setText = (id,v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+
+  // Status display
+  setText("ed-status-label", ORC_STATUS_LABEL[doc.status] || doc.status || "—");
+  set("ed-doc-id", docId);
+  set("ed-status", doc.status || "");
+
+  // Campos básicos
+  set("ed-paciente",      doc.paciente_nome || doc.paciente || "");
+  set("ed-cpf",           doc.paciente_cpf  || "");
+  set("ed-prescritor",    doc.prescritor    || doc.medico   || "");
+  set("ed-especialidade", doc.prescritor_especialidade || "");
+
+  // Data (read-only display)
+  const ts = doc.data_hora || doc.criado_em;
+  const dt = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+  set("ed-data-disp", dt
+    ? `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`
+    : "—");
+
+  // Categorias numéricas
+  const fmtNum = v => Number(v) ? Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "";
+  set("ed-imagem",    fmtNum(doc.imagem));
+  set("ed-consultas", fmtNum(doc.consultas));
+  set("ed-lab",       fmtNum(doc.laboratorio));
+
+  // Procedimentos (read-only no E1)
+  const procEl = document.getElementById("ed-proc-readonly");
+  if(procEl) {
+    const procs = Array.isArray(doc.procedimentos) ? doc.procedimentos.filter(p => Number(p?.valor) > 0) : [];
+    if(procs.length) {
+      procEl.innerHTML = procs.map(p =>
+        `<div>${escHTML(p.tipo || "Procedimento")} — <strong>${brl(Number(p.valor)||0)}</strong></div>`
+      ).join("");
+    } else {
+      procEl.innerHTML = `<span style="color:var(--text2)">— sem procedimentos —</span>`;
+    }
+  }
+
+  // Pagamento (só se status === "pago")
+  const blocoPag = document.getElementById("ed-bloco-pagamento");
+  const ehPago = (doc.status || "") === "pago";
+  if(blocoPag) blocoPag.style.display = ehPago ? "" : "none";
+  if(ehPago) {
+    set("ed-fp1",     doc.forma_pagamento_1 || "");
+    set("ed-fp1-val", fmtNum(doc.valor_1));
+    set("ed-fp2",     doc.forma_pagamento_2 || "");
+    set("ed-fp2-val", fmtNum(doc.valor_2));
+  } else {
+    set("ed-fp1",""); set("ed-fp1-val","");
+    set("ed-fp2",""); set("ed-fp2-val","");
+  }
+
+  // Desconto (read-only no E1) — busca saída-irmã se existir, ou usa saida_pendente
+  const blocoDesc = document.getElementById("ed-bloco-desconto");
+  const descEl = document.getElementById("ed-desc-readonly");
+  let saidaInfo = null;
+  if(doc.id_par) {
+    // Busca em acompLancs primeiro, fallback Firestore
+    const fonte = (typeof acompLancs !== "undefined" ? acompLancs : []);
+    const irma = fonte.find(d => d.id_par === doc.id_par && d.tipo === "saida" && d.id !== doc.id);
+    if(irma) saidaInfo = irma;
+    else {
+      try {
+        const sn = await db.collection("lancamentos")
+          .where("id_par","==", doc.id_par).where("tipo","==","saida").get();
+        if(!sn.empty) saidaInfo = sn.docs[0].data();
+      } catch(e) { /* silencioso */ }
+    }
+  } else if(doc.saida_pendente) {
+    saidaInfo = doc.saida_pendente;
+  }
+  if(saidaInfo) {
+    const desc = lerDesconto(saidaInfo);
+    if(desc.valor > 0 && blocoDesc && descEl) {
+      blocoDesc.style.display = "";
+      const sufixo = (desc.tipo === "percentual" && desc.percentual != null) ? ` (${desc.percentual}%)` : "";
+      descEl.innerHTML = `<strong>↩️ ${brl(desc.valor)}${sufixo}</strong> — Motivo: ${escHTML(desc.motivo || "—")}`;
+    } else if(blocoDesc) {
+      blocoDesc.style.display = "none";
+    }
+  } else if(blocoDesc) {
+    blocoDesc.style.display = "none";
+  }
+
+  recalcTotalEdicao();
+  validarSomaPagamentosEdicao();
+  document.getElementById("modal-edicao-lanc").classList.remove("hidden");
+}
+
+function fecharModalEdicao() {
+  document.getElementById("modal-edicao-lanc").classList.add("hidden");
+  edicaoIdAtual = null;
+}
+
+// Recalcula total no modal de edição (Imagem + Consultas + Lab + procedimentos atuais).
+// Procedimentos não são editáveis no E1 — usa o total que veio do doc original
+// armazenado em ed-doc-id pra preservar a parte de procedimentos.
+function recalcTotalEdicao() {
+  const img  = parseBRL(document.getElementById("ed-imagem")?.value);
+  const cons = parseBRL(document.getElementById("ed-consultas")?.value);
+  const lab  = parseBRL(document.getElementById("ed-lab")?.value);
+  // Soma dos procedimentos atuais (read-only) — busca do cache via edicaoIdAtual
+  let procs = 0;
+  const docs = [...(typeof acompLancs !== "undefined" ? acompLancs : []),
+                ...(typeof lancMes !== "undefined" ? lancMes : [])];
+  const docAtual = docs.find(x => x.id === edicaoIdAtual);
+  if(docAtual && Array.isArray(docAtual.procedimentos)) {
+    procs = docAtual.procedimentos.reduce((s,p) => s + (Number(p?.valor) || 0), 0);
+  }
+  const total = img + cons + lab + procs;
+  const inp = document.getElementById("ed-total");
+  if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
+  validarSomaPagamentosEdicao();
+  return total;
+}
+
+function validarSomaPagamentosEdicao() {
+  const ehPago = document.getElementById("ed-status")?.value === "pago";
+  const aviso = document.getElementById("ed-fp-aviso");
+  if(!aviso) return;
+  if(!ehPago) { aviso.textContent = ""; return; }
+  const total = parseBRL(document.getElementById("ed-total")?.value);
+  const fp2   = document.getElementById("ed-fp2")?.value || "";
+  const v1 = parseBRL(document.getElementById("ed-fp1-val")?.value);
+  const v2 = fp2 ? parseBRL(document.getElementById("ed-fp2-val")?.value) : 0;
+  const soma = Math.round((v1 + v2) * 100) / 100;
+  const dif  = Math.round((total - soma) * 100) / 100;
+  if(!fp2) {
+    // Forma única: valor_1 deve ser igual ao total
+    if(Math.abs(dif) < 0.01) { aviso.style.color="var(--success)"; aviso.textContent = "✅ Valor confere com o total"; }
+    else                      { aviso.style.color="#DC2626";       aviso.textContent = `⚠️ Esperado ${brl(total)}, informado ${brl(v1)}`; }
+  } else {
+    if(Math.abs(dif) < 0.01)     { aviso.style.color="var(--success)"; aviso.textContent = "✅ Soma confere com o total"; }
+    else if(dif > 0)             { aviso.style.color="#DC2626";       aviso.textContent = `⚠️ Faltam ${brl(dif)} para fechar o total`; }
+    else                          { aviso.style.color="#DC2626";       aviso.textContent = `⚠️ Excedeu em ${brl(-dif)}`; }
+  }
+}
+
+async function salvarEdicaoLanc() {
+  const docId = document.getElementById("ed-doc-id")?.value || edicaoIdAtual;
+  if(!docId) { toast("Doc inválido.","err"); return; }
+  if(!usuario) { toast("Sessão expirada.","err"); return; }
+
+  const paciente = (document.getElementById("ed-paciente")?.value || "").trim();
+  const cpf      = (document.getElementById("ed-cpf")?.value      || "").trim();
+  const pres     = (document.getElementById("ed-prescritor")?.value || "").trim();
+  const presEsp  = (document.getElementById("ed-especialidade")?.value || "").trim();
+  const imagem      = parseBRL(document.getElementById("ed-imagem")?.value);
+  const consultas   = parseBRL(document.getElementById("ed-consultas")?.value);
+  const laboratorio = parseBRL(document.getElementById("ed-lab")?.value);
+
+  if(!paciente) { toast("Informe o nome do paciente.","err"); return; }
+  if(!pres)     { toast("Informe o médico solicitante.","err"); return; }
+
+  const status = document.getElementById("ed-status")?.value || "";
+  const ehPago = status === "pago";
+
+  // Recalcula procedimentos (read-only — herda do doc original)
+  const docs = [...(typeof acompLancs !== "undefined" ? acompLancs : []),
+                ...(typeof lancMes !== "undefined" ? lancMes : [])];
+  const docOrig = docs.find(x => x.id === docId);
+  const procedimentos = docOrig && Array.isArray(docOrig.procedimentos) ? docOrig.procedimentos : [];
+  const totalProcs = procedimentos.reduce((s,p) => s + (Number(p?.valor) || 0), 0);
+  const total = imagem + consultas + laboratorio + totalProcs;
+  if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
+
+  const updates = {
+    paciente_nome: paciente,
+    paciente_cpf:  cpf,
+    prescritor:    pres,
+    prescritor_especialidade: presEsp,
+    imagem:      Number(imagem)      || 0,
+    consultas:   Number(consultas)   || 0,
+    laboratorio: Number(laboratorio) || 0,
+    total: Number(total) || 0,
+    atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  // Pagamento — só se status="pago"
+  if(ehPago) {
+    const fp1 = document.getElementById("ed-fp1")?.value || "";
+    const fp2 = document.getElementById("ed-fp2")?.value || "";
+    const v1  = parseBRL(document.getElementById("ed-fp1-val")?.value);
+    const v2  = fp2 ? parseBRL(document.getElementById("ed-fp2-val")?.value) : 0;
+    if(!fp1) { toast("Selecione a forma de pagamento.","err"); return; }
+    if(!FORMAS_PAGAMENTO.some(f => f.value === fp1)) { toast("Forma de pagamento inválida.","err"); return; }
+
+    let valor1Final = v1, valor2Final = 0, fp2Final = "";
+    if(fp2) {
+      if(v1 <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
+      if(v2 <= 0) { toast("Informe o valor da 2ª forma.","err"); return; }
+      const soma = Math.round((v1 + v2) * 100) / 100;
+      if(Math.abs(soma - total) > 0.01) {
+        toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err"); return;
+      }
+      valor1Final = v1; valor2Final = v2; fp2Final = fp2;
+    } else {
+      // Forma única — valor_1 deve bater com total
+      if(Math.abs(v1 - total) > 0.01 && v1 > 0) {
+        toast(`Valor da forma (${brl(v1)}) não bate com o total (${brl(total)}). Use Salvar com valor=${brl(total)} ou adicione 2ª forma.`,"err"); return;
+      }
+      valor1Final = total; // assume total quando uma forma só
+    }
+
+    const m1 = mapearFormaPagamento(fp1, valor1Final);
+    const m2 = fp2Final ? mapearFormaPagamento(fp2Final, valor2Final) : { caixa:0, credito:0 };
+    const caixaCalc   = m1.caixa   + m2.caixa;
+    const creditoCalc = m1.credito + m2.credito;
+
+    updates.forma_pagamento_1 = fp1;
+    updates.valor_1           = Number(valor1Final) || 0;
+    updates.forma_pagamento_2 = fp2Final;
+    updates.valor_2           = Number(valor2Final) || 0;
+    updates.caixa             = Number(caixaCalc)   || 0;
+    updates.credito           = Number(creditoCalc) || 0;
+    updates.boleto            = 0;
+    updates.valor             = Number(total)       || 0;
+  }
+
+  // Auditoria mínima (E2 vai expandir)
+  updates.editado_em        = firebase.firestore.FieldValue.serverTimestamp();
+  updates.editado_por       = usuario.nome   || "";
+  updates.editado_por_uid   = usuario.uid    || null;
+  updates.editado_por_perfil = usuario.perfil || "";
+
+  const btn = document.querySelector("#modal-edicao-lanc .btn-primary");
+  if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  try {
+    await db.collection("lancamentos").doc(docId).update(updates);
+    toast("Alterações salvas!","ok");
+    fecharModalEdicao();
+    // Listener onSnapshot refresh acompLancs/lancMes automaticamente
+  } catch(e) {
+    console.error("[salvarEdicaoLanc]", e);
+    toast("Erro ao salvar alterações: " + (e.message || e.code), "err");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = "💾 Salvar Alterações"; }
+  }
 }
 
 function fecharModalPagamento() {
