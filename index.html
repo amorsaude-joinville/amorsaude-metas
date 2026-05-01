@@ -1304,15 +1304,15 @@
             <!-- 3 categorias com valores numéricos -->
             <div class="fg">
               <label>🩻 Imagem (R$)</label>
-              <input type="text" id="e-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+              <input type="text" id="e-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
             </div>
             <div class="fg">
               <label>👨‍⚕️ Consultas (R$)</label>
-              <input type="text" id="e-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+              <input type="text" id="e-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
             </div>
             <div class="fg">
               <label>🧪 Laboratoriais (R$)</label>
-              <input type="text" id="e-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada()" />
+              <input type="text" id="e-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
             </div>
 
             <!-- Procedimentos (lista dinâmica) -->
@@ -1584,15 +1584,15 @@
       <!-- Categorias -->
       <div class="fg">
         <label>🩻 Imagem (R$)</label>
-        <input type="text" id="ed-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+        <input type="text" id="ed-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
       </div>
       <div class="fg">
         <label>👨‍⚕️ Consultas (R$)</label>
-        <input type="text" id="ed-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+        <input type="text" id="ed-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
       </div>
       <div class="fg">
         <label>🧪 Laboratoriais (R$)</label>
-        <input type="text" id="ed-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao()" />
+        <input type="text" id="ed-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
       </div>
 
       <!-- Procedimentos (editáveis em E2) -->
@@ -2254,13 +2254,44 @@ function extrairCategoriasDoDocNovo(l) {
   return out;
 }
 
-// Tipos de Procedimento — reutilizados no formulário de Orçamentos
-// (mesma lista do <select id="e-proced"> da aba Lançamentos)
+// Tipos de Procedimento — value (gravado no doc) + label (exibido).
+// "Injetáveis" mantém value antigo pra retrocompat com docs gravados.
+// Label visível agora é "Injetáveis (Vitaminas)". "Mounjaro" e "Outros" novos.
+// Quando tipo === "Outros", o item de procedimento ganha campo `descricao` (livre).
 const TIPOS_PROCEDIMENTO = [
-  "DIU","Implanon","Procedimento Dermatológico","Infiltração","Sessão",
-  "Procedimento Otorrinolaringológico","Preventivo","Eletrocardiograma",
-  "Taxa Parceiros","Testes Rápidos","Injetáveis"
+  { value: "DIU",                                  label: "DIU" },
+  { value: "Implanon",                              label: "Implanon" },
+  { value: "Procedimento Dermatológico",            label: "Procedimento Dermatológico" },
+  { value: "Infiltração",                           label: "Infiltração" },
+  { value: "Sessão",                                label: "Sessão" },
+  { value: "Procedimento Otorrinolaringológico",    label: "Procedimento Otorrinolaringológico" },
+  { value: "Preventivo",                            label: "Preventivo" },
+  { value: "Eletrocardiograma",                     label: "Eletrocardiograma" },
+  { value: "Taxa Parceiros",                        label: "Taxa Parceiros" },
+  { value: "Testes Rápidos",                        label: "Testes Rápidos" },
+  { value: "Injetáveis",                            label: "Injetáveis (Vitaminas)" }, // value preservado
+  { value: "Mounjaro",                              label: "Mounjaro" },
+  { value: "Outros",                                label: "Outros" },
 ];
+
+// Subtipos que NÃO exigem médico solicitante (regra F1).
+// Categorias que dispensam médico: Consultas (sozinha) e Procedimento "Sessão".
+// Imagem, Lab, Vacina e qualquer outro subtipo de procedimento exigem médico.
+const PROCEDIMENTOS_SEM_MEDICO = ["Sessão"];
+
+// Decide se a forma atual do orçamento exige médico solicitante.
+// Recebe { imagem, consultas, laboratorio, procedimentos:[{tipo, valor}, ...] }
+// Lógica AND: se PELO MENOS UMA categoria preenchida exige médico, exige.
+function exigeMedicoSolicitante(form) {
+  if(Number(form.imagem)      > 0) return true;
+  if(Number(form.laboratorio) > 0) return true;
+  const procs = Array.isArray(form.procedimentos) ? form.procedimentos.filter(p => Number(p.valor) > 0) : [];
+  for(const p of procs) {
+    if(!PROCEDIMENTOS_SEM_MEDICO.includes(p.tipo)) return true;
+  }
+  // Sobra: Consultas + (Procedimento Sessão) → não exige
+  return false;
+}
 
 // Motivos de saída — única fonte de verdade. Usado em 3 lugares:
 // 1) <select id="s-motivo"> da aba Saída avulsa
@@ -3871,21 +3902,56 @@ function recalcTotalEntrada() {
 }
 
 // Adiciona uma linha de procedimento com tipo (select) + valor + remover
-function addLinhaProcEntrada(tipoSel, valor) {
+function addLinhaProcEntrada(tipoSel, valor, descricao) {
   const lista = document.getElementById("e-proc-lista");
   if(!lista) return;
   const div = document.createElement("div");
   div.className = "orc-proc-linha"; // reutiliza estilo do kanban
+  const isOutros = tipoSel === "Outros";
   div.innerHTML = `
-    <select class="e-proc-tipo" onchange="recalcTotalEntrada()">
+    <select class="e-proc-tipo" onchange="onChangeProcTipoEntrada(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()">
       <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
-      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${t}</option>`).join("")}
+      ${TIPOS_PROCEDIMENTO.map(t => `<option value="${escHTML(t.value)}" ${tipoSel===t.value?"selected":""}>${escHTML(t.label)}</option>`).join("")}
     </select>
-    <input type="text" class="e-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEntrada()" />
-    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEntrada()" title="Remover">🗑</button>
+    <input type="text" class="e-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
+    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEntrada();atualizarLabelMedicoEntrada()" title="Remover">🗑</button>
+    <input type="text" class="e-proc-desc" placeholder="Descreva qual procedimento *" value="${escHTML(descricao||"")}" style="display:${isOutros?"":"none"};grid-column:1/-1;margin-top:6px" />
   `;
   lista.appendChild(div);
   recalcTotalEntrada();
+  atualizarLabelMedicoEntrada();
+}
+
+// Mostra/esconde o campo "Descreva qual procedimento" quando tipo === "Outros"
+function onChangeProcTipoEntrada(selectEl) {
+  const linha = selectEl.closest(".orc-proc-linha");
+  if(!linha) return;
+  const desc = linha.querySelector(".e-proc-desc");
+  if(!desc) return;
+  if(selectEl.value === "Outros") {
+    desc.style.display = "";
+  } else {
+    desc.style.display = "none";
+    desc.value = "";
+  }
+}
+
+// Atualiza o label do campo "Médico Solicitante" no form de Entrada conforme as
+// categorias preenchidas (regra F1). Asterisco aparece quando médico é obrigatório.
+function atualizarLabelMedicoEntrada() {
+  const lbl = document.getElementById("label-pres");
+  if(!lbl) return;
+  const imagem      = parseBRL(document.getElementById("e-imagem")?.value);
+  const consultas   = parseBRL(document.getElementById("e-consultas")?.value);
+  const laboratorio = parseBRL(document.getElementById("e-lab")?.value);
+  const procedimentos = [];
+  document.querySelectorAll("#e-proc-lista .orc-proc-linha").forEach(div => {
+    const tipo = div.querySelector(".e-proc-tipo")?.value || "";
+    const valor = parseBRL(div.querySelector(".e-proc-valor")?.value);
+    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+  });
+  const exige = exigeMedicoSolicitante({ imagem, consultas, laboratorio, procedimentos });
+  lbl.textContent = exige ? "Médico Solicitante *" : "Médico Solicitante (opcional)";
 }
 
 // Mostra a 2ª forma de pagamento + campo de valor da 1ª forma
@@ -3998,7 +4064,12 @@ async function salvarEntrada() {
   document.querySelectorAll("#e-proc-lista .orc-proc-linha").forEach(div => {
     const tipo = div.querySelector(".e-proc-tipo")?.value || "";
     const valor = parseBRL(div.querySelector(".e-proc-valor")?.value);
-    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+    const descricao = (div.querySelector(".e-proc-desc")?.value || "").trim();
+    if(tipo && valor > 0) {
+      const item = { tipo, valor };
+      if(tipo === "Outros" && descricao) item.descricao = descricao;
+      procedimentos.push(item);
+    }
   });
   const total = imagem + consultas + laboratorio + procedimentos.reduce((s,p)=>s+p.valor,0);
 
@@ -4017,8 +4088,18 @@ async function salvarEntrada() {
 
   // ── Validações ──
   if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
-  if(!pres)  { toast("Selecione o médico solicitante.","err"); return; }
+  if(!cpf)   { toast("CPF é obrigatório.","err"); return; }
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
+  // F1: médico solicitante condicional (Consulta sozinha ou Procedimento Sessão dispensam)
+  if(exigeMedicoSolicitante({ imagem, consultas, laboratorio, procedimentos }) && !pres) {
+    toast("Médico solicitante é obrigatório para esta categoria.","err"); return;
+  }
+  // F1: se algum procedimento é "Outros", exigir descrição
+  for(const p of procedimentos) {
+    if(p.tipo === "Outros" && !(p.descricao && p.descricao.trim())) {
+      toast("Descreva qual procedimento (campo 'Outros').","err"); return;
+    }
+  }
 
   // Forma de pagamento: obrigatória SOMENTE se status === "pago".
   // Para status≠"pago" (Acompanhar/Lançar/Link Enviado), o paciente ainda
@@ -8345,7 +8426,7 @@ function addLinhaProcedimento(tipoSel, valor) {
   div.innerHTML = `
     <select class="orc-proc-tipo" onchange="recalcTotalOrcamento()">
       <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
-      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${escHTML(t)}</option>`).join("")}
+      ${TIPOS_PROCEDIMENTO.map(t => `<option value="${escHTML(t.value)}" ${tipoSel===t.value?"selected":""}>${escHTML(t.label)}</option>`).join("")}
     </select>
     <input type="text" class="orc-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalOrcamento()" />
     <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalOrcamento()" title="Remover">🗑</button>
@@ -9026,7 +9107,7 @@ async function abrirModalEdicao(docId) {
   if(procListaEl) {
     procListaEl.innerHTML = "";
     (Array.isArray(doc.procedimentos) ? doc.procedimentos : []).forEach(p => {
-      addLinhaProcEdicao(p.tipo, Number(p.valor) ? Number(p.valor).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "");
+      addLinhaProcEdicao(p.tipo, Number(p.valor) ? Number(p.valor).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "", p.descricao || "");
     });
   }
 
@@ -9094,21 +9175,65 @@ async function abrirModalEdicao(docId) {
 let edicaoSaidaIrmaId = null;
 
 // E2 — Adiciona uma linha de procedimento no modal de edição
-function addLinhaProcEdicao(tipoSel, valor) {
+function addLinhaProcEdicao(tipoSel, valor, descricao) {
   const lista = document.getElementById("ed-proc-lista");
   if(!lista) return;
   const div = document.createElement("div");
   div.className = "orc-proc-linha";
+  const isOutros = tipoSel === "Outros";
   div.innerHTML = `
-    <select class="ed-proc-tipo" onchange="recalcTotalEdicao()">
+    <select class="ed-proc-tipo" onchange="onChangeProcTipoEdicao(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()">
       <option value="" disabled ${tipoSel?"":"selected"}>Tipo de procedimento...</option>
-      ${TIPOS_PROCEDIMENTO.map(t => `<option ${tipoSel===t?"selected":""}>${t}</option>`).join("")}
+      ${TIPOS_PROCEDIMENTO.map(t => `<option value="${escHTML(t.value)}" ${tipoSel===t.value?"selected":""}>${escHTML(t.label)}</option>`).join("")}
     </select>
-    <input type="text" class="ed-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEdicao()" />
-    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEdicao()" title="Remover">🗑</button>
+    <input type="text" class="ed-proc-valor" placeholder="0,00" value="${valor||""}" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
+    <button type="button" class="btn-rm" onclick="this.parentElement.remove();recalcTotalEdicao();atualizarLabelMedicoEdicao()" title="Remover">🗑</button>
+    <input type="text" class="ed-proc-desc" placeholder="Descreva qual procedimento *" value="${escHTML(descricao||"")}" style="display:${isOutros?"":"none"};grid-column:1/-1;margin-top:6px" />
   `;
   lista.appendChild(div);
   recalcTotalEdicao();
+  atualizarLabelMedicoEdicao();
+}
+
+// Mostra/esconde "Descreva qual procedimento" no modal de edição
+function onChangeProcTipoEdicao(selectEl) {
+  const linha = selectEl.closest(".orc-proc-linha");
+  if(!linha) return;
+  const desc = linha.querySelector(".ed-proc-desc");
+  if(!desc) return;
+  if(selectEl.value === "Outros") {
+    desc.style.display = "";
+  } else {
+    desc.style.display = "none";
+    desc.value = "";
+  }
+}
+
+// Atualiza label "Médico Solicitante" no modal de edição conforme F1.
+// Modal não tem id="label-pres" próprio; usa atributo data ou simplesmente texto fixo.
+// Como o modal usa `<label>Médico Solicitante *</label>` inline, vou usar atributo
+// data-label-medico no <input id="ed-prescritor"> e atualizar o <label> via DOM.
+function atualizarLabelMedicoEdicao() {
+  const lbl = document.querySelector('#modal-edicao-lanc label[for="ed-prescritor-lbl"], #modal-edicao-lanc #ed-label-medico');
+  // Fallback: busca o <label> que precede o <input id="ed-prescritor">
+  const inp = document.getElementById("ed-prescritor");
+  let target = lbl;
+  if(!target && inp) {
+    const parent = inp.parentElement;
+    if(parent) target = parent.querySelector("label");
+  }
+  if(!target) return;
+  const imagem      = parseBRL(document.getElementById("ed-imagem")?.value);
+  const consultas   = parseBRL(document.getElementById("ed-consultas")?.value);
+  const laboratorio = parseBRL(document.getElementById("ed-lab")?.value);
+  const procedimentos = [];
+  document.querySelectorAll("#ed-proc-lista .orc-proc-linha").forEach(div => {
+    const tipo = div.querySelector(".ed-proc-tipo")?.value || "";
+    const valor = parseBRL(div.querySelector(".ed-proc-valor")?.value);
+    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+  });
+  const exige = exigeMedicoSolicitante({ imagem, consultas, laboratorio, procedimentos });
+  target.textContent = exige ? "Médico Solicitante *" : "Médico Solicitante (opcional)";
 }
 
 // E2 — Toggle do bloco de desconto no modal de edição
@@ -9229,7 +9354,7 @@ async function salvarEdicaoLanc() {
   const laboratorio = parseBRL(document.getElementById("ed-lab")?.value);
 
   if(!paciente) { toast("Informe o nome do paciente.","err"); return; }
-  if(!pres)     { toast("Informe o médico solicitante.","err"); return; }
+  if(!cpf)      { toast("CPF é obrigatório.","err"); return; } // F1: CPF obrigatório
 
   const status = document.getElementById("ed-status")?.value || "";
   const ehPago = status === "pago";
@@ -9240,16 +9365,31 @@ async function salvarEdicaoLanc() {
   const docOrig = docs.find(x => x.id === docId);
   if(!docOrig) { toast("Lançamento não encontrado no cache.","err"); return; }
 
-  // E2: procedimentos editáveis — coleta dos inputs do form
+  // E2: procedimentos editáveis — coleta dos inputs do form (com descrição se "Outros")
   const procedimentos = [];
   document.querySelectorAll("#ed-proc-lista .orc-proc-linha").forEach(div => {
     const tipo = div.querySelector(".ed-proc-tipo")?.value || "";
     const valor = parseBRL(div.querySelector(".ed-proc-valor")?.value);
-    if(tipo && valor > 0) procedimentos.push({ tipo, valor });
+    const descricao = (div.querySelector(".ed-proc-desc")?.value || "").trim();
+    if(tipo && valor > 0) {
+      const item = { tipo, valor };
+      if(tipo === "Outros" && descricao) item.descricao = descricao;
+      procedimentos.push(item);
+    }
   });
   const totalProcs = procedimentos.reduce((s,p) => s + (Number(p?.valor) || 0), 0);
   const total = imagem + consultas + laboratorio + totalProcs;
   if(total <= 0) { toast("Pelo menos uma categoria precisa ter valor maior que zero.","err"); return; }
+
+  // F1: médico solicitante condicional + "Outros" exige descrição
+  if(exigeMedicoSolicitante({ imagem, consultas, laboratorio, procedimentos }) && !pres) {
+    toast("Médico solicitante é obrigatório para esta categoria.","err"); return;
+  }
+  for(const p of procedimentos) {
+    if(p.tipo === "Outros" && !(p.descricao && p.descricao.trim())) {
+      toast("Descreva qual procedimento (campo 'Outros').","err"); return;
+    }
+  }
 
   // E2: desconto editável — valida limite por perfil se checkbox marcado
   const temSaida = document.getElementById("ed-tem-saida")?.checked;
