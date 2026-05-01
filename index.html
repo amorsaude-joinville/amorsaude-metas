@@ -215,7 +215,32 @@
     .orc-card .orc-card-acao { margin-top:8px; }
     .orc-card .orc-card-acao select { width:100%; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px; font-family:'Inter',sans-serif; outline:none; cursor:pointer; }
     .orc-empty { text-align:center; color:var(--text2); font-size:12px; padding:14px 4px; }
+
+    /* D3.7 — Mini-dashboard no topo do Acompanhamento */
+    .kb-mini { background:#F9FAFB; border:1px solid var(--border); border-radius:var(--r); padding:12px; margin-bottom:14px; display:flex; flex-direction:column; gap:8px; }
+    .kb-mini-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .kb-mini-label { font-weight:600; color:#374151; font-size:13px; min-width:90px; }
+    .kb-mini-card { display:flex; flex-direction:column; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; transition:all .15s; font-family:'Inter',sans-serif; text-align:left; min-width:120px; }
+    .kb-mini-card:hover { border-color:#93C5FD; background:#EFF6FF; }
+    .kb-mini-card.active { border-color:#2563EB; background:#DBEAFE; }
+    .kb-mini-card.kb-mini-taxa { cursor:default; background:#F3F4F6; }
+    .kb-mini-card.kb-mini-taxa:hover { border-color:var(--border); background:#F3F4F6; }
+    .kb-mini-titulo { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; }
+    .kb-mini-valor { font-size:14px; font-weight:600; color:#1F2937; margin-top:2px; }
+    .kb-mini-pendentes .kb-mini-titulo { color:#D97706; }
+    .kb-mini-pagos     .kb-mini-titulo { color:#047857; }
+    .kb-mini-aviso { font-size:12px; color:#78350F; padding:6px 10px; background:#FEF3C7; border-radius:6px; }
+    .kb-mini-aviso button { margin-left:8px; border:none; background:transparent; cursor:pointer; color:#B91C1C; font-weight:600; font-family:'Inter',sans-serif; }
+
+    /* D3.7 — Oportunidades no Resumo de Hoje */
+    .resumo-divisor { border-top:1px dashed var(--border); margin:10px 0; }
+    .resumo-oport-titulo { font-size:11px; color:var(--text2); font-weight:600; letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px; }
+    .resumo-oport-row { color:#1D4ED8; font-weight:500; display:flex; justify-content:space-between; padding:3px 0; font-size:13px; }
+    .resumo-oport-total { color:#1E3A8A; border-top:1px solid var(--border); padding-top:4px; margin-top:4px; display:flex; justify-content:space-between; font-size:13px; }
+
     @media(max-width:768px) {
+      .kb-mini-row { flex-direction:column; align-items:stretch; }
+      .kb-mini-card { width:100%; }
       .orc-kanban { display:flex; overflow-x:auto; gap:12px; padding-bottom:8px; }
       .orc-col { min-width:260px; flex:0 0 auto; }
       .orc-proc-linha { grid-template-columns:1fr 110px 36px; }
@@ -797,6 +822,44 @@
             <button class="btn btn-ghost" style="max-width:160px" onclick="resetFormOrcamento()" id="btn-orc-cancelar">Limpar</button>
           </div>
           <input type="hidden" id="orc-edit-id" value="" />
+        </div>
+      </div>
+
+      <!-- D3.7 — Mini-dashboard (Hoje + Mês). Botões clicáveis filtram colunas do kanban. -->
+      <div class="kb-mini">
+        <div class="kb-mini-row">
+          <span class="kb-mini-label">📅 Hoje:</span>
+          <button type="button" class="kb-mini-card kb-mini-pendentes" data-filtro="pendentes" onclick="toggleFiltroKanbanMini('pendentes')">
+            <span class="kb-mini-titulo">Pendentes</span>
+            <span class="kb-mini-valor" id="kb-mini-dia-pend">0 · R$ 0,00</span>
+          </button>
+          <button type="button" class="kb-mini-card kb-mini-pagos" data-filtro="pagos" onclick="toggleFiltroKanbanMini('pagos')">
+            <span class="kb-mini-titulo">Pagos</span>
+            <span class="kb-mini-valor" id="kb-mini-dia-pagos">0 · R$ 0,00</span>
+          </button>
+          <div class="kb-mini-card kb-mini-taxa">
+            <span class="kb-mini-titulo">Conversão</span>
+            <span class="kb-mini-valor" id="kb-mini-dia-taxa">0%</span>
+          </div>
+        </div>
+        <div class="kb-mini-row">
+          <span class="kb-mini-label">📆 Este mês:</span>
+          <button type="button" class="kb-mini-card kb-mini-pendentes" data-filtro="pendentes" onclick="toggleFiltroKanbanMini('pendentes')">
+            <span class="kb-mini-titulo">Pendentes</span>
+            <span class="kb-mini-valor" id="kb-mini-mes-pend">0 · R$ 0,00</span>
+          </button>
+          <button type="button" class="kb-mini-card kb-mini-pagos" data-filtro="pagos" onclick="toggleFiltroKanbanMini('pagos')">
+            <span class="kb-mini-titulo">Pagos</span>
+            <span class="kb-mini-valor" id="kb-mini-mes-pagos">0 · R$ 0,00</span>
+          </button>
+          <div class="kb-mini-card kb-mini-taxa">
+            <span class="kb-mini-titulo">Conversão</span>
+            <span class="kb-mini-valor" id="kb-mini-mes-taxa">0%</span>
+          </div>
+        </div>
+        <div class="kb-mini-aviso" id="kb-mini-aviso" style="display:none">
+          Filtro ativo: <span id="kb-mini-aviso-label"></span>
+          <button type="button" onclick="toggleFiltroKanbanMini(null)">✕ Limpar filtro</button>
         </div>
       </div>
 
@@ -4609,6 +4672,45 @@ function atualizarResumoDia() {
     ? `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas avulsas</span><span style="font-weight:600">−${brl(totalSaidasAvulsas)}</span></div>`
     : "";
 
+  // ── D3.7 — Oportunidades do dia (orçamentos cadastrados hoje em status≠pago) ──
+  // Lê de `lancMes` (do usuário logado), filtra por data===hoje + status no kanban.
+  function isoDocLanc(l) {
+    const ts = l.data_hora || l.criado_em;
+    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+    if(!d) return "";
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  const hojeStrR = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  const oportunidadesHoje = (typeof lancMes !== "undefined" ? lancMes : []).filter(l =>
+    (l.tipo || "entrada") === "entrada" &&
+    STATUS_KANBAN.includes(l.status) &&
+    isoDocLanc(l) === hojeStrR
+  );
+  const oportStats = { acompanhar:{c:0,t:0}, lancar:{c:0,t:0}, link_enviado:{c:0,t:0} };
+  oportunidadesHoje.forEach(l => {
+    const s = l.status;
+    if(oportStats[s]) {
+      oportStats[s].c += 1;
+      oportStats[s].t += Number(l.total) || Number(l.valor) || 0;
+    }
+  });
+  const oportTotalC = oportStats.acompanhar.c + oportStats.lancar.c + oportStats.link_enviado.c;
+  const oportTotalT = oportStats.acompanhar.t + oportStats.lancar.t + oportStats.link_enviado.t;
+  const fmtOp = (c,t) => `${c} · ${brl(t)}`;
+  const linha = (cond, ico, label, c, t) => cond
+    ? `<div class="resumo-oport-row"><span>${ico} ${label}</span><span>${fmtOp(c,t)}</span></div>` : "";
+  const oportHtml = oportTotalC === 0 ? "" : `
+    <div class="resumo-divisor"></div>
+    <div class="resumo-oport-titulo">✨ Oportunidades do dia</div>
+    ${linha(oportStats.acompanhar.c   > 0, "🟡", "Acompanhar",   oportStats.acompanhar.c,   oportStats.acompanhar.t)}
+    ${linha(oportStats.lancar.c       > 0, "⏰", "Lançar",       oportStats.lancar.c,       oportStats.lancar.t)}
+    ${linha(oportStats.link_enviado.c > 0, "📨", "Link Enviado", oportStats.link_enviado.c, oportStats.link_enviado.t)}
+    <div class="resumo-oport-total"><strong>Total potencial</strong><strong>${fmtOp(oportTotalC, oportTotalT)}</strong></div>
+  `;
+
   el.innerHTML = `
     <div class="resumo-cols">
       <div class="resumo-sec">
@@ -4619,6 +4721,7 @@ function atualizarResumoDia() {
         <div class="resumo-tot" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><span>Total entradas</span><span class="vp">${brl(totalEntrada)}</span></div>
         ${saidaEmbutidaHtml}
         ${saidaAvulsaHtml}
+        ${oportHtml}
       </div>
       <div class="resumo-sec">
         <label>Por pagamento</label>
@@ -8180,6 +8283,83 @@ async function salvarOrcamento() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  D3.7 — Mini-dashboard do Acompanhamento + Filtro Pendentes/Pagos
+// ─────────────────────────────────────────────────────────────
+let kanbanFiltroAtivo = null; // null | "pendentes" | "pagos"
+
+function toggleFiltroKanbanMini(filtro) {
+  // null força reset; clicar 2x no mesmo botão também reseta
+  kanbanFiltroAtivo = (filtro && kanbanFiltroAtivo === filtro) ? null : filtro;
+  renderKanbanOrcamentos();
+}
+
+// Calcula stats {pendentes, pagos, taxa} de um array de docs.
+// Filtra por dia atual se periodo="dia"; senão, considera o array todo (mês).
+function calcularKanbanStats(docs, periodo) {
+  const hojeStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  function isoDoc(l) {
+    const ts = l.data_hora || l.criado_em;
+    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+    if(!d) return "";
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  const filtrados = docs.filter(l => {
+    if((l.tipo || "entrada") !== "entrada") return false;
+    if(periodo === "dia") return isoDoc(l) === hojeStr;
+    return true; // mês inteiro (acompLancs já é filtrado por mes_ano no listener)
+  });
+
+  const pendentes = filtrados.filter(l => STATUS_KANBAN.includes(l.status));
+  const pagos     = filtrados.filter(l => l.status === "pago");
+
+  const sum = arr => arr.reduce((s,l) => s + (Number(l.total) || Number(l.valor) || 0), 0);
+  const cPend  = pendentes.length;
+  const cPagos = pagos.length;
+  const taxa = (cPend + cPagos) > 0 ? (cPagos / (cPend + cPagos)) * 100 : 0;
+  return {
+    pendentes: { count: cPend,  total: sum(pendentes) },
+    pagos:     { count: cPagos, total: sum(pagos) },
+    taxa,
+  };
+}
+
+function renderKanbanMiniDashboard() {
+  if(!document.getElementById("kb-mini-dia-pend")) return;
+  // Aplica filtro de visibilidade por perfil ANTES de calcular stats
+  const visiveis = filtrarOrcamentosPorPerfil(acompLancs);
+  const fmt = (count, total) => `${count} · ${brl(total)}`;
+  const setText = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+
+  ["dia","mes"].forEach(periodo => {
+    const stats = calcularKanbanStats(visiveis, periodo);
+    setText(`kb-mini-${periodo}-pend`,  fmt(stats.pendentes.count, stats.pendentes.total));
+    setText(`kb-mini-${periodo}-pagos`, fmt(stats.pagos.count, stats.pagos.total));
+    setText(`kb-mini-${periodo}-taxa`,  `${stats.taxa.toFixed(0)}%`);
+  });
+
+  // Estado dos botões + aviso de filtro ativo
+  document.querySelectorAll(".kb-mini-card[data-filtro]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.filtro === kanbanFiltroAtivo);
+  });
+  const aviso = document.getElementById("kb-mini-aviso");
+  const lbl   = document.getElementById("kb-mini-aviso-label");
+  if(aviso && lbl) {
+    if(kanbanFiltroAtivo === "pendentes") {
+      aviso.style.display = "";
+      lbl.textContent = "Apenas pendentes (Acompanhar / Lançar / Link Enviado)";
+    } else if(kanbanFiltroAtivo === "pagos") {
+      aviso.style.display = "";
+      lbl.textContent = "Apenas pagos do dia";
+    } else {
+      aviso.style.display = "none";
+    }
+  }
+}
+
 // Renderiza o kanban com base nos filtros e na visibilidade do perfil
 function renderKanbanOrcamentos() {
   if(!document.getElementById("orc-kanban")) return;
@@ -8217,9 +8397,16 @@ function renderKanbanOrcamentos() {
   });
 
   // Ao escolher um status, ESCONDE as outras colunas (kanban com 1 coluna em foco).
-  ["lancar","link_enviado","acompanhar","pago"].forEach(s => {
+  // D3.7: filtro mini-dashboard se sobrepõe — pendentes esconde "pago", pagos esconde os 3 não-pagos.
+  const naoPagas = ["lancar","link_enviado","acompanhar"];
+  const todasCols = [...naoPagas, "pago"];
+  todasCols.forEach(s => {
     const col = document.querySelector(`.orc-col[data-status="${s}"]`);
-    if(col) col.style.display = (stat && stat !== s) ? "none" : "";
+    if(!col) return;
+    let visivel = !stat || stat === s; // base: filtro do select
+    if(kanbanFiltroAtivo === "pendentes" && s === "pago") visivel = false;
+    if(kanbanFiltroAtivo === "pagos"     && s !== "pago") visivel = false;
+    col.style.display = visivel ? "" : "none";
   });
 
   // Distribui em 4 colunas. "pago" só aceita docs com data===hoje (D3.4).
@@ -8253,6 +8440,9 @@ function renderKanbanOrcamentos() {
     const renderer = (s === "pago") ? cardPagoHTML : cardOrcamentoHTML;
     wrap.innerHTML = colunas[s].map(o => renderer(o)).join("");
   });
+
+  // D3.7: atualiza mini-dashboard (sempre, mesmo se kanban vazio)
+  renderKanbanMiniDashboard();
 }
 
 // HTML de um card na coluna "🟢 Pagos do dia" (Fase D3.4).
