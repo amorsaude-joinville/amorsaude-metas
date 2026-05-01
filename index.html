@@ -7976,6 +7976,33 @@ async function mudarStatusOrcamento(id, novoStatus) {
     return;
   }
 
+  // Caso 3 (D3.3): SAINDO de Pago → não-pago (rebote/desfazer pagamento).
+  // Precisa de confirmação dupla porque é destrutivo, e precisa:
+  //  - limpar campos de pagamento (caixa/credito/valor/forma_pagamento_*)
+  //  - deletar saída-doc-irmã se existir (vinculada por id_par)
+  //  - restaurar saida_pendente no doc original a partir da saída-doc deletada
+  if(statusAtual === "pago") {
+    const totalDoc = Number(doc.total) || Number(doc.valor) || 0;
+    const ok = confirm(
+      `⚠️ Tem certeza?\n\n` +
+      `Isso vai DESFAZER o pagamento e voltar o card para "${ORC_STATUS_LABEL[novoStatus] || novoStatus}".\n\n` +
+      `O valor pago (${brl(totalDoc)}) será removido do Resumo de Hoje.`
+    );
+    if(!ok) {
+      renderKanbanOrcamentos(); // reverte dropdown visualmente
+      return;
+    }
+    try {
+      await desfazerPagamento(doc, novoStatus);
+      toast(`Pagamento desfeito. Card voltou para "${ORC_STATUS_LABEL[novoStatus] || novoStatus}".`, "ok");
+    } catch(e) {
+      console.error("[desfazerPagamento]", e);
+      toast("Erro ao desfazer pagamento: " + (e.message || e.code), "err");
+      renderKanbanOrcamentos(); // tenta reverter o dropdown se deu erro
+    }
+    return;
+  }
+
   // Caso 2: mudança entre não-pagos → confirm() simples + update direto
   const ok = confirm(`Mudar status para "${ORC_STATUS_LABEL[novoStatus] || novoStatus}"?`);
   if(!ok) {
@@ -7993,6 +8020,62 @@ async function mudarStatusOrcamento(id, novoStatus) {
     console.error("[mudarStatusOrcamento]", e);
     toast("Erro ao atualizar status: " + (e.message || e.code), "err");
   }
+}
+
+// Desfaz um pagamento: limpa campos de pagamento do doc original e,
+// se houver saída-doc-irmã (via id_par), deleta-a e restaura saida_pendente
+// no doc original com os dados dela. Tudo via batch para atomicidade.
+async function desfazerPagamento(doc, novoStatus) {
+  const docRef = db.collection("lancamentos").doc(doc.id);
+
+  // 1) Procurar saída-doc-irmã via id_par (se houver)
+  let saidaIrmaSnap = null;
+  let saidaPendenteRestaurada = null;
+  if(doc.id_par) {
+    const irmaQuery = await db.collection("lancamentos")
+      .where("id_par","==", doc.id_par)
+      .where("tipo","==", "saida")
+      .get();
+    if(!irmaQuery.empty) {
+      saidaIrmaSnap = irmaQuery.docs[0]; // deve ter só 1
+      const d = saidaIrmaSnap.data();
+      // Schema do nosso lancamento de saída usa `valor` e `motivo_saida`.
+      saidaPendenteRestaurada = {
+        valor:  Number(d.valor) || 0,
+        motivo: d.motivo_saida || "Desconto",
+      };
+    }
+  }
+
+  // 2) Payload de update do doc original
+  const ts = firebase.firestore.FieldValue.serverTimestamp();
+  const updates = {
+    status: novoStatus,
+    valor:   0,
+    caixa:   0,
+    credito: 0,
+    boleto:  0,
+    forma_pagamento_1: "",
+    valor_1:           0,
+    forma_pagamento_2: "",
+    valor_2:           0,
+    id_par: firebase.firestore.FieldValue.delete(),
+    atualizado_em: ts,
+    // Auditoria mínima do desfazer
+    editado_em:        ts,
+    editado_por:       usuario?.nome   || "",
+    editado_por_uid:   usuario?.uid    || null,
+    editado_por_perfil: usuario?.perfil || "",
+  };
+  if(saidaPendenteRestaurada) {
+    updates.saida_pendente = saidaPendenteRestaurada;
+  }
+
+  // 3) Batch: update + delete da saída-irmã (atomicidade)
+  const batch = db.batch();
+  batch.update(docRef, updates);
+  if(saidaIrmaSnap) batch.delete(saidaIrmaSnap.ref);
+  await batch.commit();
 }
 
 // ═══════════════════════════════════════════════════════════
