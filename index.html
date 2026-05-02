@@ -175,12 +175,7 @@
     .modal p { font-size:14px; color:var(--text2); margin-bottom:24px; }
     .modal-btns { display:flex; gap:12px; justify-content:flex-end; }
 
-    /* ── ORÇAMENTOS (kanban + form) ── */
-    .orc-form-wrap { background:#fff; border:1px solid var(--border); border-radius:var(--r); padding:0; margin-bottom:20px; overflow:hidden; }
-    .orc-form-toggle { width:100%; padding:14px 18px; background:linear-gradient(135deg,#fff 0%,var(--bg2) 100%); border:none; cursor:pointer; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; color:var(--primary); display:flex; align-items:center; justify-content:space-between; }
-    .orc-form-toggle:hover { background:var(--bg2); }
-    .orc-form-body { padding:20px; border-top:1px solid var(--border); display:none; }
-    .orc-form-body.show { display:block; }
+    /* ── ORÇAMENTOS (kanban) ── */
     .orc-proc-linha { display:grid; grid-template-columns:1fr 160px 40px; gap:8px; align-items:end; margin-bottom:8px; }
     .orc-proc-linha .btn-rm { background:#FEE2E2; color:#DC2626; border:none; border-radius:var(--r2); cursor:pointer; padding:11px 0; font-size:14px; }
     .orc-proc-linha .btn-rm:hover { background:#DC2626; color:#fff; }
@@ -749,99 +744,6 @@
 
     <!-- ══════════ ORÇAMENTOS (Fase 1) ══════════ -->
     <div id="sec-orcamentos" style="display:none">
-
-      <!-- Form Fase 1 desativado pela Fase D — cadastro agora é via aba "📝 Orçamento".
-           Mantido no DOM (oculto) por ora; será removido na Fase G. -->
-      <div class="orc-form-wrap" style="display:none">
-        <button class="orc-form-toggle" type="button" onclick="toggleOrcForm()">
-          <span>➕ Novo Orçamento</span>
-          <span id="orc-form-arrow">▼</span>
-        </button>
-        <div class="orc-form-body" id="orc-form-body">
-          <div class="fgrid">
-            <div class="fg">
-              <label>Data do Orçamento</label>
-              <input type="text" id="orc-data-disp" readonly />
-            </div>
-            <div class="fg">
-              <label>Quem fez</label>
-              <input type="text" id="orc-quem" readonly />
-            </div>
-            <div class="fg">
-              <label>Nome do Paciente *</label>
-              <input type="text" id="orc-paciente" placeholder="Nome completo" />
-            </div>
-            <div class="fg" id="orc-id-caso-wrap">
-              <label>ID do Caso *</label>
-              <input type="text" id="orc-id-caso" placeholder="Ex: 12345" />
-            </div>
-            <div class="fg full">
-              <label>Médico Solicitante *</label>
-              <input type="text" id="orc-medico" list="orc-medicos-dl" placeholder="Selecione ou digite..." />
-              <datalist id="orc-medicos-dl"></datalist>
-            </div>
-            <div class="fg">
-              <label>Exames de Imagem (R$)</label>
-              <input type="text" id="orc-imagem" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
-            </div>
-            <div class="fg">
-              <label>Consultas (R$)</label>
-              <input type="text" id="orc-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
-            </div>
-            <div class="fg">
-              <label>Exames Laboratoriais (R$)</label>
-              <input type="text" id="orc-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalOrcamento()" />
-            </div>
-            <div class="fg">
-              <label>Forma de Pagamento *</label>
-              <select id="orc-pgto">
-                <option value="" disabled selected>Selecione...</option>
-                <option value="caixa">Caixa</option>
-                <option value="credito">Crédito</option>
-              </select>
-            </div>
-            <div class="fg full">
-              <label>Procedimentos</label>
-              <div id="orc-proc-lista"></div>
-              <button type="button" class="btn btn-ghost" style="width:auto;margin-top:6px;font-size:13px;padding:8px 14px" onclick="addLinhaProcedimento()">➕ Adicionar procedimento</button>
-            </div>
-            <div class="fg full">
-              <label>Total (R$)</label>
-              <input type="text" id="orc-total" readonly style="font-weight:700;color:var(--primary);font-size:16px" value="0,00" />
-            </div>
-
-            <!-- Saída embutida do orçamento — armazenada no doc, vira lançamento só na Fase 2 -->
-            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
-                <input type="checkbox" id="orc-tem-saida" onchange="toggleSaidaEmbutidaOrc()" />
-                ↩️ Tem desconto/saída associada?
-              </label>
-              <div id="orc-saida-wrap" style="display:none;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--r2)">
-                <div class="fgrid">
-                  <div class="fg">
-                    <label>Valor da Saída (R$) *</label>
-                    <input type="text" id="orc-saida-valor" placeholder="0,00" oninput="mascaraValor(this)" />
-                  </div>
-                  <div class="fg">
-                    <label>Motivo *</label>
-                    <select id="orc-saida-motivo">
-                      <option value="" disabled selected>Selecione...</option>
-                    </select>
-                  </div>
-                </div>
-                <div style="font-size:11px;color:var(--text2);margin-top:6px;font-style:italic">
-                  ⓘ A saída fica registrada no orçamento. Vira lançamento de saída automaticamente quando o orçamento for marcado como Pago (Fase 2).
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-primary" style="max-width:220px" onclick="salvarOrcamento()">Salvar Orçamento</button>
-            <button class="btn btn-ghost" style="max-width:160px" onclick="resetFormOrcamento()" id="btn-orc-cancelar">Limpar</button>
-          </div>
-          <input type="hidden" id="orc-edit-id" value="" />
-        </div>
-      </div>
 
       <!-- D3.7 — Mini-dashboard (Hoje + Mês). Botões clicáveis filtram colunas do kanban. -->
       <div class="kb-mini">
@@ -1840,7 +1742,6 @@
     <div id="orc-det-corpo" style="font-size:14px;color:var(--text);line-height:1.55"></div>
     <div class="modal-btns" style="margin-top:18px;flex-wrap:wrap;gap:10px">
       <button class="btn btn-ghost" onclick="fecharModalOrcDet()">Fechar</button>
-      <button class="btn btn-ghost" id="orc-det-btn-editar" onclick="editarOrcamentoFromModal()" style="display:none">✏️ Editar</button>
     </div>
   </div>
 </div>
@@ -3460,7 +3361,6 @@ function aplicarAbaLider() {
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
-  if(emOrc) prepararFormOrcamento();
   if(emOrc) renderKanbanOrcamentos();
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
 }
@@ -3493,7 +3393,7 @@ function aplicarAbaRec() {
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
-  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
+  if(emOrc) renderKanbanOrcamentos();
 }
 
 function mudarAbaRec(aba) {
@@ -3524,7 +3424,7 @@ function aplicarAbaCC() {
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
-  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
+  if(emOrc) renderKanbanOrcamentos();
 }
 
 function mudarAbaCC(aba) {
@@ -3555,7 +3455,7 @@ function aplicarAbaLiderCC() {
   document.getElementById("sec-coord").style.display       = emCC   ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc  ? "" : "none";
 
-  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
+  if(emOrc) renderKanbanOrcamentos();
   // Inicia listener equipe CC na primeira vez
   if(emLanc && !unsubEquipe) iniciarListenerEquipe();
 }
@@ -3577,7 +3477,7 @@ function aplicarAbaGestor() {
   document.getElementById("sec-dashboard").style.display  = emDash ? "" : "none";
   document.getElementById("sec-orcamentos").style.display = emOrc  ? "" : "none";
 
-  if(emOrc) { prepararFormOrcamento(); renderKanbanOrcamentos(); }
+  if(emOrc) renderKanbanOrcamentos();
 }
 
 function mudarAbaGestor(aba) {
