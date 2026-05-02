@@ -220,6 +220,11 @@
     .btn-editar-lanc:disabled {
       opacity:.4; cursor:not-allowed;
     }
+    /* F2 — Ícone de observação no card do kanban */
+    .card-icone-obs {
+      margin-left:6px; cursor:help; opacity:.7; font-size:.9em; transition:opacity .15s;
+    }
+    .card-icone-obs:hover { opacity:1; }
     .orc-card { background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
     .orc-card:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(232,0,61,.10); }
     .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
@@ -1425,6 +1430,16 @@
               </div>
             </div>
 
+            <!-- F2 — Observações livres (opcional, máximo 250 caracteres) -->
+            <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label>📝 Observações <small style="font-weight:400;color:var(--text2)">(opcional)</small></label>
+              <textarea id="e-observacoes" maxlength="250" rows="3"
+                placeholder="Ex: Paciente trouxe pedido, convênio em análise..."
+                oninput="atualizarContadorObs(this,'e-contador-obs')"
+                style="width:100%;resize:vertical;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)"></textarea>
+              <small style="font-size:11px;color:var(--text2);display:block;margin-top:4px"><span id="e-contador-obs">0</span>/250 caracteres</small>
+            </div>
+
           </div>
           <div style="margin-top:12px">
             <button class="btn btn-primary" style="max-width:220px" onclick="salvarEntrada()">Salvar Orçamento</button>
@@ -1673,6 +1688,16 @@
           </div>
         </div>
       </div>
+
+      <!-- F2 — Observações livres (opcional, máximo 250 caracteres) -->
+      <div class="fg full" style="border-top:1px dashed var(--border);padding-top:12px;margin-top:6px">
+        <label>📝 Observações <small style="font-weight:400;color:var(--text2)">(opcional)</small></label>
+        <textarea id="ed-observacoes" maxlength="250" rows="3"
+          placeholder="Ex: Paciente trouxe pedido, convênio em análise..."
+          oninput="atualizarContadorObs(this,'ed-contador-obs')"
+          style="width:100%;resize:vertical;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)"></textarea>
+        <small style="font-size:11px;color:var(--text2);display:block;margin-top:4px"><span id="ed-contador-obs">0</span>/250 caracteres</small>
+      </div>
     </div>
 
     <input type="hidden" id="ed-doc-id" value="" />
@@ -1784,6 +1809,16 @@
           ⓘ A saída cria um lançamento separado vinculado por id_par.
         </div>
       </div>
+    </div>
+
+    <!-- F2 — Observações livres (opcional) — substitui o texto anterior do doc -->
+    <div class="fg full" style="border-top:1px dashed var(--border);padding-top:12px;margin-top:10px">
+      <label>📝 Observações <small style="font-weight:400;color:var(--text2)">(opcional)</small></label>
+      <textarea id="pag-observacoes" maxlength="250" rows="2"
+        placeholder="Anote aqui se necessário..."
+        oninput="atualizarContadorObs(this,'pag-contador-obs')"
+        style="width:100%;resize:vertical;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)"></textarea>
+      <small style="font-size:11px;color:var(--text2);display:block;margin-top:4px"><span id="pag-contador-obs">0</span>/250 caracteres</small>
     </div>
 
     <!-- Estado interno: doc id e status anterior (pra rollback) -->
@@ -4038,6 +4073,10 @@ function resetFormEntrada() {
   const cbS = document.getElementById("e-tem-saida");
   if(cbS) { cbS.checked = false; toggleSaidaEmbutidaEntrada(); }
   set("e-saida-valor",""); set("e-saida-motivo","");
+  // F2 — limpar observações
+  set("e-observacoes","");
+  const cobs = document.getElementById("e-contador-obs");
+  if(cobs) { cobs.textContent = "0"; cobs.style.color = "var(--text2)"; }
   // Status default = Pago (e bloco de pagamento visível)
   const radPago = document.querySelector('input[name="e-status"][value="pago"]');
   if(radPago) radPago.checked = true;
@@ -4207,6 +4246,8 @@ async function salvarEntrada() {
     valor_1:           Number(valor1Final) || 0,
     forma_pagamento_2: fp2Final || "",
     valor_2:           Number(valor2Final) || 0,
+    // F2 — Observações livres (até 250 chars)
+    observacoes: ((document.getElementById("e-observacoes")?.value || "").trim().slice(0, 250)),
     // Status do kanban / faturamento
     status: status || "pago",
     mes_ano: getMesAno(),
@@ -8742,7 +8783,7 @@ function cardPagoHTML(o) {
     : "—";
   return `
     <div class="orc-card orc-card-pago" onclick="abrirModalOrcDet('${o.id}')">
-      <div class="orc-pac">${escHTML(paciente)}</div>
+      <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
       <div class="orc-tot">${brl(liquido)}</div>
       <div class="orc-meta-info">
         ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
@@ -8774,6 +8815,26 @@ function podeEditarCard(l) {
 }
 
 // HTML do botão Editar (E1) — incluído em todos os cards do kanban.
+// F2 — Atualiza contador de caracteres do textarea de observações
+function atualizarContadorObs(textareaEl, contadorId) {
+  if(!textareaEl) return;
+  const len = textareaEl.value.length;
+  const contador = document.getElementById(contadorId);
+  if(contador) {
+    contador.textContent = len;
+    contador.style.color = len > 240 ? "#B91C1C" : "var(--text2)";
+  }
+}
+
+// F2 — Render do ícone 📝 no card quando há observação. Tooltip nativo via title=.
+function iconeObsHTML(doc) {
+  const obs = (doc?.observacoes || "").trim();
+  if(!obs) return "";
+  // Escapa aspas duplas e tags pra atributo HTML
+  const titleEsc = obs.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return ` <span class="card-icone-obs" title="${titleEsc}">📝</span>`;
+}
+
 function btnEditarHTML(l) {
   const ok = podeEditarCard(l);
   if(ok) {
@@ -8799,7 +8860,7 @@ function cardOrcamentoHTML(o) {
   const total    = Number(o.total) || Number(o.valor) || 0;
   return `
     <div class="orc-card" onclick="abrirModalOrcDet('${o.id}')">
-      <div class="orc-pac">${escHTML(paciente)}</div>
+      <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
       <div class="orc-tot">${brl(total)}</div>
       <div class="orc-meta-info">
         ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
@@ -9018,6 +9079,15 @@ function abrirModalPagamento(doc, statusAnterior) {
   toggleSaidaModalPag();
   recalcDescontoModal(); // atualiza visual + max + cálculo
 
+  // F2 — Observações pré-preenchidas com texto atual do doc
+  set("pag-observacoes", doc.observacoes || "");
+  const pagCobs = document.getElementById("pag-contador-obs");
+  if(pagCobs) {
+    const len = (doc.observacoes || "").length;
+    pagCobs.textContent = String(len);
+    pagCobs.style.color = len > 240 ? "#B91C1C" : "var(--text2)";
+  }
+
   document.getElementById("modal-pag").classList.remove("hidden");
 }
 
@@ -9061,6 +9131,14 @@ async function abrirModalEdicao(docId) {
   set("ed-cpf",           doc.paciente_cpf  || "");
   set("ed-prescritor",    doc.prescritor    || doc.medico   || "");
   set("ed-especialidade", doc.prescritor_especialidade || "");
+  // F2 — Observações
+  set("ed-observacoes", doc.observacoes || "");
+  const edCobs = document.getElementById("ed-contador-obs");
+  if(edCobs) {
+    const len = (doc.observacoes || "").length;
+    edCobs.textContent = String(len);
+    edCobs.style.color = len > 240 ? "#B91C1C" : "var(--text2)";
+  }
 
   // Data (read-only display)
   const ts = doc.data_hora || doc.criado_em;
@@ -9422,6 +9500,8 @@ async function salvarEdicaoLanc() {
     laboratorio: Number(laboratorio) || 0,
     procedimentos,
     total: Number(total) || 0,
+    // F2 — observacoes (sempre gravado, mesmo se vazio — preserva diff de auditoria)
+    observacoes: ((document.getElementById("ed-observacoes")?.value || "").trim().slice(0, 250)),
     atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
 
@@ -9538,6 +9618,7 @@ async function salvarEdicaoLanc() {
     "imagem","consultas","laboratorio","procedimentos","total","valor",
     "forma_pagamento_1","valor_1","forma_pagamento_2","valor_2",
     "caixa","credito","boleto",
+    "observacoes", // F2
   ];
   function norm(v) {
     if(v === undefined || v === null) return null;
@@ -9822,6 +9903,8 @@ async function salvarPagamentoModal() {
       valor_1:           Number(valor1Final) || 0,
       forma_pagamento_2: fp2Final || "",
       valor_2:           Number(valor2Final) || 0,
+      // F2 — observacoes (sempre gravado, mesmo vazio — sobrescreve o anterior)
+      observacoes: ((document.getElementById("pag-observacoes")?.value || "").trim().slice(0, 250)),
       atualizado_em: ts,
       // Auditoria mínima
       editado_em:        ts,
