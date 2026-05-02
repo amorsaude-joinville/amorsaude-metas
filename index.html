@@ -1832,11 +1832,11 @@
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-weight:700;font-size:15px;color:#fff">🚀 Inserir Todos os Meses</div>
-          <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">92 dias — Jan/2026 a Abr/2026</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">100 dias — Jan/2026 a Abr/2026</div>
         </div>
         <button class="btn" style="background:#fff;color:var(--primary);width:auto;white-space:nowrap"
           onclick="importarFaturamentoHistorico(this)">
-          Inserir 92 dias
+          Inserir 100 dias
         </button>
       </div>
       <div id="fat-import-status-todos" style="margin-top:10px"></div>
@@ -7810,23 +7810,31 @@ const DADOS_FAT_MAR = [
 ]; // 26 dias (inc. feriado 09/03)
 
 const DADOS_FAT_ABR = [
-  { data:"2026-04-01", diaSemana:"QUARTA",  dia:1,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8830.48,  procedimentos:6211.00,  imagem:9384.30,  caixa:31128.72,  credito:3441.06, boleto:0.00,    injetaveis:1535.30 },
-  { data:"2026-04-02", diaSemana:"QUINTA",  dia:2,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9571.45,  procedimentos:6560.09,  imagem:8113.80,  caixa:28948.33,  credito:2797.01, boleto:679.99,  injetaveis:3986.10 },
-  { data:"2026-04-06", diaSemana:"SEGUNDA", dia:6,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9848.90,  procedimentos:4313.99,  imagem:10048.30, caixa:27388.04,  credito:4255.25, boleto:410.00,  injetaveis:1828.00 },
-  { data:"2026-04-07", diaSemana:"TERCA",   dia:7,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12332.44, procedimentos:5330.96,  imagem:5752.40,  caixa:27831.98,  credito:3778.82, boleto:0.00,    injetaveis:1499.96 },
-  { data:"2026-04-08", diaSemana:"QUARTA",  dia:8,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:16428.00, procedimentos:9150.98,  imagem:9350.00,  caixa:40305.90,  credito:4287.83, boleto:0.00,    injetaveis:0.00    },
-  { data:"2026-04-09", diaSemana:"QUINTA",  dia:9,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13272.52, procedimentos:14114.73, imagem:6635.00,  caixa:38179.26,  credito:6090.99, boleto:783.00,  injetaveis:3578.76 },
-  { data:"2026-04-10", diaSemana:"SEXTA",   dia:10, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:14192.98, procedimentos:9780.94,  imagem:5945.90,  caixa:38434.80,  credito:2961.02, boleto:3288.90, injetaveis:4239.96 },
-  { data:"2026-04-11", diaSemana:"SABADO",  dia:11, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8054.49,  procedimentos:10172.96, imagem:1832.50,  caixa:23947.97,  credito:2329.98, boleto:0.00,    injetaveis:2819.80 },
-  { data:"2026-04-13", diaSemana:"SEGUNDA", dia:13, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13113.50, procedimentos:5979.00,  imagem:8507.15,  caixa:36967.69,  credito:3005.96, boleto:2100.00, injetaveis:0.00    },
-  { data:"2026-04-14", diaSemana:"TERCA",   dia:14, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11956.14, procedimentos:14559.05, imagem:4945.99,  caixa:34390.57,  credito:6612.61, boleto:0.00,    injetaveis:3814.12 },
-  { data:"2026-04-15", diaSemana:"QUARTA",  dia:15, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13306.43, procedimentos:4890.50,  imagem:6202.00,  caixa:30514.68,  credito:2353.75, boleto:0.00,    injetaveis:0.00    },
-  { data:"2026-04-16", diaSemana:"QUINTA",  dia:16, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8450.50,  procedimentos:4504.00,  imagem:6421.60,  caixa:26781.70,  credito:2437.25, boleto:1500.50, injetaveis:1585.00 },
-  { data:"2026-04-17", diaSemana:"SEXTA",   dia:17, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11385.00, procedimentos:3409.98,  imagem:5500.50,  caixa:26617.75,  credito:3287.73, boleto:0.00,    injetaveis:760.00  },
-  { data:"2026-04-18", diaSemana:"SABADO",  dia:18, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7388.69,  procedimentos:4161.00,  imagem:3771.50,  caixa:19059.44,  credito:2019.75, boleto:0.00,    injetaveis:760.00  },
-  { data:"2026-04-20", diaSemana:"SEGUNDA", dia:20, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12186.03, procedimentos:3659.90,  imagem:4201.25,  caixa:26655.26,  credito:3555.92, boleto:0.00,    injetaveis:0.00    },
-  { data:"2026-04-21", diaSemana:"TERCA",   dia:21, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:4224.00,  procedimentos:9058.56,  imagem:1205.00,  caixa:20817.06,  credito:2732.50, boleto:759.96,  injetaveis:2333.06 },
-]; // 16 dias (parcial até 21/04)
+  { data:"2026-04-01", diaSemana:"QUARTA",  dia:1,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8830.48,  procedimentos:6211.00,  imagem:9384.30,   caixa:31128.72, credito:3441.06, boleto:0.00,    injetaveis:1535.30 },
+  { data:"2026-04-02", diaSemana:"QUINTA",  dia:2,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9571.45,  procedimentos:6560.09,  imagem:8113.80,   caixa:28948.33, credito:2797.01, boleto:679.99,  injetaveis:3986.10 },
+  { data:"2026-04-06", diaSemana:"SEGUNDA", dia:6,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9848.90,  procedimentos:4313.99,  imagem:10048.30,  caixa:27388.04, credito:4255.25, boleto:410.00,  injetaveis:1828.00 },
+  { data:"2026-04-07", diaSemana:"TERCA",   dia:7,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12332.44, procedimentos:5330.96,  imagem:5752.40,   caixa:27831.98, credito:3778.82, boleto:0.00,    injetaveis:1499.96 },
+  { data:"2026-04-08", diaSemana:"QUARTA",  dia:8,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:16428.00, procedimentos:9150.98,  imagem:9350.00,   caixa:40305.90, credito:4287.83, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-09", diaSemana:"QUINTA",  dia:9,  mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13272.52, procedimentos:14114.73, imagem:6635.00,   caixa:38179.26, credito:6090.99, boleto:783.00,  injetaveis:3578.76 },
+  { data:"2026-04-10", diaSemana:"SEXTA",   dia:10, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:14192.98, procedimentos:9780.94,  imagem:5945.90,   caixa:38434.80, credito:2961.02, boleto:3288.90, injetaveis:4239.96 },
+  { data:"2026-04-11", diaSemana:"SABADO",  dia:11, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8054.49,  procedimentos:10172.96, imagem:1832.50,   caixa:23947.97, credito:2329.98, boleto:0.00,    injetaveis:2819.96 },
+  { data:"2026-04-13", diaSemana:"SEGUNDA", dia:13, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13113.50, procedimentos:5979.00,  imagem:8507.15,   caixa:36967.69, credito:3005.96, boleto:2100.00, injetaveis:0.00    },
+  { data:"2026-04-14", diaSemana:"TERCA",   dia:14, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11956.14, procedimentos:14559.05, imagem:4945.99,   caixa:34390.57, credito:6612.61, boleto:0.00,    injetaveis:3814.12 },
+  { data:"2026-04-15", diaSemana:"QUARTA",  dia:15, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:13306.43, procedimentos:4890.50,  imagem:6202.00,   caixa:30514.68, credito:2353.75, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-16", diaSemana:"QUINTA",  dia:16, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:8450.50,  procedimentos:4504.00,  imagem:6421.60,   caixa:26781.70, credito:2437.25, boleto:1500.50, injetaveis:1585.00 },
+  { data:"2026-04-17", diaSemana:"SEXTA",   dia:17, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:11385.00, procedimentos:3409.98,  imagem:5500.50,   caixa:26617.75, credito:3287.73, boleto:0.00,    injetaveis:760.00  },
+  { data:"2026-04-18", diaSemana:"SABADO",  dia:18, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7388.69,  procedimentos:4161.00,  imagem:3771.50,   caixa:19059.44, credito:2019.75, boleto:0.00,    injetaveis:760.00  },
+  { data:"2026-04-20", diaSemana:"SEGUNDA", dia:20, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12186.03, procedimentos:3659.90,  imagem:4251.25,   caixa:26655.26, credito:3555.92, boleto:0.00,    injetaveis:0.00    },
+  { data:"2026-04-21", diaSemana:"TERCA",   dia:21, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:4224.00,  procedimentos:9058.56,  imagem:1305.00,   caixa:20817.06, credito:2732.50, boleto:759.96,  injetaveis:2333.06 },
+  { data:"2026-04-22", diaSemana:"QUARTA",  dia:22, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9768.64,  procedimentos:6849.00,  imagem:7162.00,   caixa:29698.88, credito:3121.76, boleto:1939.64, injetaveis:66.00   },
+  { data:"2026-04-23", diaSemana:"QUINTA",  dia:23, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:12763.04, procedimentos:19317.96, imagem:8944.59,   caixa:46187.79, credito:5508.80, boleto:2559.90, injetaveis:3415.10 },
+  { data:"2026-04-24", diaSemana:"SEXTA",   dia:24, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:10110.76, procedimentos:8137.29,  imagem:5304.90,   caixa:28483.65, credito:4688.30, boleto:1394.64, injetaveis:1601.00 },
+  { data:"2026-04-25", diaSemana:"SABADO",  dia:25, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7126.00,  procedimentos:4690.46,  imagem:4196.75,   caixa:21742.36, credito:2654.85, boleto:0.00,    injetaveis:759.96  },
+  { data:"2026-04-27", diaSemana:"SEGUNDA", dia:27, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9280.80,  procedimentos:7817.85,  imagem:6293.99,   caixa:30366.46, credito:4371.68, boleto:0.00,    injetaveis:2791.87 },
+  { data:"2026-04-28", diaSemana:"TERCA",   dia:28, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7939.56,  procedimentos:11538.00, imagem:3999.40,   caixa:28066.48, credito:3825.05, boleto:0.00,    injetaveis:1716.00 },
+  { data:"2026-04-29", diaSemana:"QUARTA",  dia:29, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:9703.50,  procedimentos:6325.94,  imagem:5658.00,   caixa:27047.76, credito:3568.61, boleto:769.50,  injetaveis:760.00  },
+  { data:"2026-04-30", diaSemana:"QUINTA",  dia:30, mes:4, ano:2026, mes_ano:"2026-04", exameslaboratoriais:7785.40,  procedimentos:8888.85,  imagem:5183.40,   caixa:28703.05, credito:2482.60, boleto:2133.50, injetaveis:4405.26 },
+]; // 24 dias úteis (Abril completo)
 
 // Mapa: mes_ano → dataset de inserção
 const DATASETS_FATURAMENTO = {
@@ -7926,7 +7934,7 @@ async function importarFaturamentoHistorico(btn) {
     }
     await batch.commit();
 
-    if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${todos.length} dias inseridos! (Jan: 26, Fev: 24, Mar: 26, Abr: 16)</div>`;
+    if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${todos.length} dias inseridos! (Jan: 26, Fev: 24, Mar: 26, Abr: 24)</div>`;
     toast(`✅ ${todos.length} dias históricos inseridos com sucesso!`, "ok");
 
   } catch(e) {
