@@ -2747,12 +2747,10 @@ function diasUteisPassadosFloat() {
   return diasUteisFloat(ini, hoje);
 }
 
+// Delega para calcularDiasUteisRestantes — inclui o dia atual e desconta feriados.
 function diasUteisRestantes() {
-  const hoje  = new Date();
-  const fim   = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
-  const aman  = new Date(hoje); aman.setDate(hoje.getDate()+1);
-  if(aman > fim) return 0;
-  return diasUteisFloat(aman, fim);
+  const hoje = new Date();
+  return calcularDiasUteisRestantes(hoje.getFullYear(), hoje.getMonth() + 1);
 }
 
 // Calcula premiação por faixa para recepcionista/lider e callcenter
