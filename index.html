@@ -5055,8 +5055,12 @@ function renderCardMetasEquipe() {
   const perfil   = usuario?.perfil;
   const grupoCC  = perfil === "callcenter" || VE_COORD.includes(perfil);
   const usarHist = historicoEquipeAtual.length > 0;
-  // Totais de medicina: lê de faturamentoDiario (dados consolidados da unidade)
-  const tot      = getTotaisEquipeFatDiario(mesAno);
+  // A partir do MARCO (Maio/2026), equipe lança via formulário — usa equipeLancs.
+  // Antes do marco, lê de faturamentoDiario importado.
+  const usaLancs = mesAno >= MARCO_NOVO_MODELO;
+  // Totais da equipe (usado pelo bloco Recepção/Líder)
+  const tot      = usaLancs ? agregarTotaisEquipeLancs(equipeLancs) : getTotaisEquipeFatDiario(mesAno);
+  const fonteHtml = bannerFonteEquipe(usaLancs);
   const m        = metas;
   const diasUteis = m.dias_uteis || 22;
   const diasPassF = diasUteisPassadosFloat();
@@ -5092,8 +5096,10 @@ function renderCardMetasEquipe() {
     // ── CC puro (Erielly / Júlia): vê medicina SEM premiações + CC com ranking ──
 
     // Separa por grupo (historico ou lancamentos)
-    // Medicina: totais consolidados de faturamentoDiario
-    const totMed = getTotaisEquipeFatDiario(mesAno);
+    // Medicina: a partir do marco usa equipeLancs (filtrando recep/líder); antes do marco usa fatDiario.
+    const totMed = usaLancs
+      ? agregarTotaisEquipeLancs(equipeLancs.filter(l => ["recepcionista","lider"].includes(l.perfil)))
+      : getTotaisEquipeFatDiario(mesAno);
     // CC: mantém lancamentos para ranking individual por pessoa
     const srcCC  = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
     const totCC  = usarHist ? calcTotaisFromHistoricoDocs(srcCC)  : calcTotaisDetalhados(srcCC);
@@ -5110,6 +5116,7 @@ function renderCardMetasEquipe() {
 
     // Seção medicina (sem "Sua parte" — CC não participa do pool)
     const medHtml =
+      fonteHtml +
       `<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🏥 Recepção Médica</div>` +
       `<div class="equipe-metricas-grid">` +
         metrica("💰 Caixa",   totMed.caixa,   metaCxMed) +
@@ -5183,6 +5190,7 @@ function renderCardMetasEquipe() {
         <span style="font-size:12px;font-weight:700;color:${r.cor}">${r.pct.toFixed(1)}%</span>
       </div>`).join("");
     el.innerHTML =
+      fonteHtml +
       `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC2.caixa, metaCC)}</div>` +
       `<div style="margin-top:16px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
@@ -5217,7 +5225,7 @@ function renderCardMetasEquipe() {
       projPoolProc = calcPoolPremio((tot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
     }
 
-    el.innerHTML = `<div class="equipe-metricas-grid">` +
+    el.innerHTML = fonteHtml + `<div class="equipe-metricas-grid">` +
       metrica("💰 Caixa",        tot.caixa,      metaCaixa)   +
       metrica("💳 Crédito",      tot.credito,    metaCredito) +
       metrica("📄 Boleto",       tot.boleto,     metaBoleto)  +
@@ -7130,6 +7138,33 @@ function getTotaisEquipeFatDiario(mesAnoStr) {
     injetaveis: docs.reduce((s, d) => s + (d.injetaveis          || 0), 0),
     porProcTipo: {},
   };
+}
+
+// Agrega totais da equipe a partir de lancamentos pagos do mês corrente
+// (entrada com status="pago" + saída-irmã via id_par). Usado a partir do
+// MARCO_NOVO_MODELO, quando equipe lança via formulário e fatDiario não é
+// mais importado.
+function agregarTotaisEquipeLancs(lancs) {
+  const pagos     = lancs.filter(l => l.tipo === "entrada" && l.status === "pago");
+  const saidasPar = lancs.filter(l => l.tipo === "saida"   && l.id_par);
+  const t = calcTotaisDetalhados([...pagos, ...saidasPar]);
+  return {
+    caixa:      Number(t.caixa)      || 0,
+    credito:    Number(t.credito)    || 0,
+    boleto:     Number(t.boleto)     || 0,
+    lab:        Number(t.lab)        || 0,
+    img:        Number(t.img)        || 0,
+    proc:       Number(t.proc)       || 0,
+    injetaveis: Number(t.injetaveis) || 0,
+    porProcTipo: t.porProcTipo || {},
+  };
+}
+
+// Banner de fonte para a aba Metas Equipe — mesma semântica do dashboard.
+function bannerFonteEquipe(usaLancs) {
+  return usaLancs
+    ? `<div style="font-size:11px;color:#16A34A;font-weight:600;margin-bottom:12px">📋 Lançamentos ao vivo do mês corrente</div>`
+    : `<div style="font-size:11px;color:#0EA5E9;font-weight:600;margin-bottom:12px">📦 Dados consolidados (importação histórica)</div>`;
 }
 
 // Calcula totais agregados de uma lista de docs de faturamentoDiario
