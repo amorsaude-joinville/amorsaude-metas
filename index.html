@@ -644,8 +644,7 @@
           <option value="Dawilla">Dawilla</option>
           <option value="Suélen">Suélen</option>
           <option value="Graziele">Graziele</option>
-          <option value="Thamyres">Thamyres</option>
-          <option value="Tuane">Tuane</option>
+          <option value="Tuane" style="color:#9CA3AF;font-style:italic">Tuane (afastada)</option>
           <option value="Raiane">Raiane</option>
           <option value="Leticia">Leticia</option>
         </optgroup>
@@ -1972,8 +1971,7 @@ const USUARIOS = {
   "stefany.dsgcs@gmail.com":           { nome: "Dawilla",   perfil: "recepcionista"    },
   "susuh.medeiros28@gmail.com":        { nome: "Suélen",    perfil: "recepcionista"    },
   "graziiaraujo8@gmail.com":           { nome: "Graziele",  perfil: "recepcionista"    },
-  "thamyresilva1020@gmail.com":        { nome: "Thamyres",  perfil: "recepcionista"    },
-  "fagundestuane99@gmail.com":         { nome: "Tuane",     perfil: "recepcionista"    },
+  "fagundestuane99@gmail.com":         { nome: "Tuane",     perfil: "recepcionista", status: "afastada" },
   "raiiane.almeida1401@gmail.com":     { nome: "Raiane",    perfil: "recepcionista"    },
   "leticiaac.r.eis@gmail.com":         { nome: "Leticia",   perfil: "recepcionista"    },
   "eriellypachecodossantos@gmail.com": { nome: "Erielly",   perfil: "callcenter"       },
@@ -1989,6 +1987,14 @@ const PERFIS = Object.fromEntries(
 function emailPorNome(nome) {
   return Object.keys(USUARIOS).find(e => USUARIOS[e].nome === nome) || null;
 }
+
+// Status de colaboradora: "afastada" (Tuane) bloqueia login mas mantém histórico.
+// "desligada" não fica em USUARIOS — sai de todas as listagens individuais.
+function statusPorNome(nome) {
+  const u = Object.values(USUARIOS).find(x => x.nome === nome);
+  return u?.status || null;
+}
+function ehAfastada(nome) { return statusPorNome(nome) === "afastada"; }
 
 const PERFIL_LABEL = {
   gestor:"Gestor", subgestora:"Sub-Gestora", coordenadora:"Coordenadora",
@@ -2849,8 +2855,8 @@ const SENHAS_LOCAL = {
   "Laudenir":  "amor2026CONTEXTO",
   "Eduarda":   "amor2026", "Paola":     "amor2026", "Dara":      "amor2026",
   "Bianca":    "amor2026", "Andrielli": "amor2026", "Dawilla":   "amor2026",
-  "Suélen":    "amor2026", "Graziele":  "amor2026", "Thamyres":  "amor2026",
-  "Tuane":     "amor2026", "Raiane":    "amor2026", "Leticia":   "amor2026",
+  "Suélen":    "amor2026", "Graziele":  "amor2026",
+  "Raiane":    "amor2026", "Leticia":   "amor2026",
   "Erielly":   "amor2026", "Júlia":     "amor2026",
 };
 
@@ -2864,6 +2870,7 @@ async function fazerLogin() {
   if(!nome) { err.textContent="Selecione seu nome."; err.classList.remove("hidden"); return; }
   if(!senha){ err.textContent="Informe a senha.";    err.classList.remove("hidden"); return; }
   if(!PERFIS[nome]) { err.textContent="Usuária não encontrada."; err.classList.remove("hidden"); return; }
+  if(ehAfastada(nome)) { err.textContent="Colaboradora afastada — login indisponível."; err.classList.remove("hidden"); return; }
 
   const btn = document.querySelector("#tela-login .btn-primary");
   btn.disabled = true; btn.textContent = "Entrando...";
@@ -2992,6 +2999,15 @@ auth.onAuthStateChanged(async fbUser => {
     if(!u) {
       console.warn("[Auth] Email não reconhecido:", fbUser.email);
       auth.signOut(); return;
+    }
+    if(u.status === "afastada") {
+      const errEl = document.getElementById("erro-login");
+      if(errEl) {
+        errEl.textContent = "Colaboradora afastada — login indisponível.";
+        errEl.classList.remove("hidden");
+      }
+      auth.signOut();
+      return;
     }
     usuario = { nome: u.nome, perfil: u.perfil, uid: fbUser.uid, email: fbUser.email };
     mesAno  = getMesAno();
