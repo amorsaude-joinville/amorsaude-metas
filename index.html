@@ -2720,12 +2720,7 @@ function mascaraValor(el) {
 function parseBRL(s) { return parseFloat((s||"").replace(/\./g,"").replace(",","."))||0; }
 
 function diasUteisPassados(total) {
-  const hoje = new Date();
-  const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  let c = 0;
-  const d = new Date(ini);
-  while(d <= hoje){ const dw=d.getDay(); if(dw!==0&&dw!==6) c++; d.setDate(d.getDate()+1); }
-  return Math.min(c, total);
+  return Math.min(diasUteisPassadosFloat(), total);
 }
 
 // Mon-Fri=1, Sáb=0.5, Dom=0 — de dataIni até dataFim inclusive
@@ -2741,10 +2736,12 @@ function diasUteisFloat(dataIni, dataFim) {
   return total;
 }
 
+// Simetria: passados + restantes = total do mês (desconta feriados, exclui hoje).
 function diasUteisPassadosFloat() {
   const hoje = new Date();
-  const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  return diasUteisFloat(ini, hoje);
+  const a = hoje.getFullYear();
+  const m = hoje.getMonth() + 1;
+  return calcularDiasUteisMes(a, m) - calcularDiasUteisRestantes(a, m);
 }
 
 // Delega para calcularDiasUteisRestantes — inclui o dia atual e desconta feriados.
