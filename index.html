@@ -2290,12 +2290,14 @@ const ORC_STATUS_LABEL = {
 // Perfis com dashboard próprio de coordenação (painel Call Center)
 const VE_COORD = ["coordenadora","lider_callcenter"];
 
-// Premiação coletiva (pool) para Lab, Imagem e Procedimentos
+// Premiação coletiva (pool) para Lab, Imagem, Procedimentos e Crédito
 const POOL_REC_EXCLUIDOS = ["Tuane", "Thamyres"];  // não participam do pool
 const POOL_REC_QTD       = 5;                       // recepcionistas no pool (excl. Tuane e Thamyres)
 const FAIXAS_POOL_LAB    = [{pct:1.0,pool:1500},{pct:0.9,pool:1125},{pct:0.8,pool:500}];
 const FAIXAS_POOL_IMG    = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 const FAIXAS_POOL_PROC   = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
+// Crédito vigente apenas a partir de MARCO_NOVO_MODELO ("2026-05") — não-retroativo.
+const FAIXAS_POOL_CRED   = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 
 
 
@@ -4613,25 +4615,30 @@ function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, 
 
   // Recepcionista / Lider: premiação detalhada com pool coletivo
   const m          = metas || {};
-  const metaLab    = m.meta_lab_equipe   || 273000;
-  const metaImg    = m.meta_img_equipe   || 144000;
-  const metaProc   = m.meta_proc_equipe  || 227500;
-  const diasUteis  = m.dias_uteis        || 22;
+  const metaLab    = m.meta_lab_equipe          || 273000;
+  const metaImg    = m.meta_img_equipe          || 144000;
+  const metaProc   = m.meta_proc_equipe         || 227500;
+  const metaCred   = m.meta_credito_equipe      || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+  const diasUteis  = m.dias_uteis               || 22;
   const diasPassF  = diasUteisPassadosFloat();
+  // Pool de Crédito vigente apenas a partir do marco (Maio/2026).
+  const credVig    = mesAno >= MARCO_NOVO_MODELO;
 
   const teamTot = historicoEquipeAtual.length > 0
     ? calcTotaisFromHistoricoDocs(historicoEquipeAtual.filter(d => ["recepcionista","lider"].includes(d.perfil)))
     : calcTotaisDetalhados(equipeLancs);
-  const poolLab   = calcPoolPremio(teamTot.lab,  metaLab,  FAIXAS_POOL_LAB);
-  const poolImg   = calcPoolPremio(teamTot.img,  metaImg,  FAIXAS_POOL_IMG);
-  const poolProc  = calcPoolPremio(teamTot.proc, metaProc, FAIXAS_POOL_PROC);
+  const poolLab   = calcPoolPremio(teamTot.lab,     metaLab,  FAIXAS_POOL_LAB);
+  const poolImg   = calcPoolPremio(teamTot.img,     metaImg,  FAIXAS_POOL_IMG);
+  const poolProc  = calcPoolPremio(teamTot.proc,    metaProc, FAIXAS_POOL_PROC);
+  const poolCred  = credVig ? calcPoolPremio(teamTot.credito, metaCred, FAIXAS_POOL_CRED) : 0;
   const parteLab  = calcPartePool(usuario.nome, poolLab);
   const parteImg  = calcPartePool(usuario.nome, poolImg);
   const parteProc = calcPartePool(usuario.nome, poolProc);
+  const parteCred = calcPartePool(usuario.nome, poolCred);
 
   const premCaixa  = calcPremiacaoCaixaRec(caixa, credito, metaCaixa, metaCredito);
   const premBoleto = calcPremBoleto(contBoleto || 0);
-  const totalAtual = premCaixa.valor + premBoleto + parteLab + parteImg + parteProc;
+  const totalAtual = premCaixa.valor + premBoleto + parteLab + parteImg + parteProc + parteCred;
 
   // Projeção ao final do mês
   let totalProj = totalAtual;
@@ -4641,20 +4648,24 @@ function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, 
     const projLab      = (teamTot.lab      / diasPassF) * diasUteis;
     const projImg      = (teamTot.img      / diasPassF) * diasUteis;
     const projProc     = (teamTot.proc     / diasPassF) * diasUteis;
+    const projCredEq   = (teamTot.credito  / diasPassF) * diasUteis;
     const projCont     = Math.round((contBoleto / diasPassF) * diasUteis);
-    const projPoolLab  = calcPoolPremio(projLab,  metaLab,  FAIXAS_POOL_LAB);
-    const projPoolImg  = calcPoolPremio(projImg,  metaImg,  FAIXAS_POOL_IMG);
-    const projPoolProc = calcPoolPremio(projProc, metaProc, FAIXAS_POOL_PROC);
+    const projPoolLab  = calcPoolPremio(projLab,    metaLab,  FAIXAS_POOL_LAB);
+    const projPoolImg  = calcPoolPremio(projImg,    metaImg,  FAIXAS_POOL_IMG);
+    const projPoolProc = calcPoolPremio(projProc,   metaProc, FAIXAS_POOL_PROC);
+    const projPoolCred = credVig ? calcPoolPremio(projCredEq, metaCred, FAIXAS_POOL_CRED) : 0;
     totalProj = calcPremiacaoCaixaRec(projCaixa, projCredito, metaCaixa, metaCredito).valor
               + calcPremBoleto(projCont)
               + calcPartePool(usuario.nome, projPoolLab)
               + calcPartePool(usuario.nome, projPoolImg)
-              + calcPartePool(usuario.nome, projPoolProc);
+              + calcPartePool(usuario.nome, projPoolProc)
+              + calcPartePool(usuario.nome, projPoolCred);
   }
 
-  const pctLab  = metaLab  > 0 ? (teamTot.lab  / metaLab  * 100).toFixed(1) : "0.0";
-  const pctImg  = metaImg  > 0 ? (teamTot.img  / metaImg  * 100).toFixed(1) : "0.0";
-  const pctProc = metaProc > 0 ? (teamTot.proc / metaProc * 100).toFixed(1) : "0.0";
+  const pctLab  = metaLab  > 0 ? (teamTot.lab     / metaLab  * 100).toFixed(1) : "0.0";
+  const pctImg  = metaImg  > 0 ? (teamTot.img     / metaImg  * 100).toFixed(1) : "0.0";
+  const pctProc = metaProc > 0 ? (teamTot.proc    / metaProc * 100).toFixed(1) : "0.0";
+  const pctCred = metaCred > 0 ? (teamTot.credito / metaCred * 100).toFixed(1) : "0.0";
 
   let proxHtml = "";
   if(premCaixa.proxFaixa && premCaixa.faltaProx > 0) {
@@ -4669,6 +4680,7 @@ function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, 
     <div style="font-size:12px;color:#78350F;margin:8px 0 6px;display:flex;flex-direction:column;gap:5px">
       <div>💰 Caixa: <strong>${brl(premCaixa.valor)}</strong> <span style="opacity:.75">${premCaixa.faixa}</span></div>
       <div>🧾 Boleto: <strong>${brl(premBoleto)}</strong> <span style="opacity:.75">(${contBoleto||0} boleto${(contBoleto||0)!==1?"s":""})</span></div>
+      <div>💳 Crédito (pool): <strong>${brl(parteCred)}</strong> <span style="opacity:.75">${credVig ? `(equipe ${pctCred}%)` : "(vigente a partir de Maio/2026)"}</span></div>
       <div>🔬 Lab: <strong>${brl(parteLab)}</strong> <span style="opacity:.75">(equipe ${pctLab}%)</span></div>
       <div>🩻 Imagem: <strong>${brl(parteImg)}</strong> <span style="opacity:.75">(equipe ${pctImg}%)</span></div>
       <div>🏥 Proc: <strong>${brl(parteProc)}</strong> <span style="opacity:.75">(equipe ${pctProc}%)</span></div>
@@ -5205,9 +5217,12 @@ function renderCardMetasEquipe() {
     const metaProc    = m.meta_proc_equipe         || 227500;
     const metaInj     = m.meta_injetaveis_equipe   || 60000;
 
+    // Pool de Crédito vigente apenas a partir do marco (Maio/2026).
+    const credVig  = mesAno >= MARCO_NOVO_MODELO;
     const poolLab  = calcPoolPremio(tot.lab,  metaLab,  FAIXAS_POOL_LAB);
     const poolImg  = calcPoolPremio(tot.img,  metaImg,  FAIXAS_POOL_IMG);
     const poolProc = calcPoolPremio(tot.proc, metaProc, FAIXAS_POOL_PROC);
+    const poolCred = credVig ? calcPoolPremio(tot.credito, metaCredito, FAIXAS_POOL_CRED) : 0;
 
     function parteExtra(pool, projPool) {
       const parte     = calcPartePool(usuario.nome, pool);
@@ -5218,16 +5233,17 @@ function renderCardMetasEquipe() {
       return `<div class="equipe-met-meta" style="margin-top:4px;color:#B45309">Sua parte: <strong>${brl(parte)}</strong></div>${projStr}`;
     }
 
-    let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc;
+    let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc, projPoolCred = poolCred;
     if(diasPassF > 0) {
-      projPoolLab  = calcPoolPremio((tot.lab  / diasPassF) * diasUteis, metaLab,  FAIXAS_POOL_LAB);
-      projPoolImg  = calcPoolPremio((tot.img  / diasPassF) * diasUteis, metaImg,  FAIXAS_POOL_IMG);
-      projPoolProc = calcPoolPremio((tot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
+      projPoolLab  = calcPoolPremio((tot.lab     / diasPassF) * diasUteis, metaLab,     FAIXAS_POOL_LAB);
+      projPoolImg  = calcPoolPremio((tot.img     / diasPassF) * diasUteis, metaImg,     FAIXAS_POOL_IMG);
+      projPoolProc = calcPoolPremio((tot.proc    / diasPassF) * diasUteis, metaProc,    FAIXAS_POOL_PROC);
+      projPoolCred = credVig ? calcPoolPremio((tot.credito / diasPassF) * diasUteis, metaCredito, FAIXAS_POOL_CRED) : 0;
     }
 
     el.innerHTML = fonteHtml + `<div class="equipe-metricas-grid">` +
       metrica("💰 Caixa",        tot.caixa,      metaCaixa)   +
-      metrica("💳 Crédito",      tot.credito,    metaCredito) +
+      metrica("💳 Crédito",      tot.credito,    metaCredito, parteExtra(poolCred, projPoolCred)) +
       metrica("📄 Boleto",       tot.boleto,     metaBoleto)  +
       metrica("🧪 Lab",          tot.lab,        metaLab,  parteExtra(poolLab,  projPoolLab))  +
       metrica("🩻 Imagem",       tot.img,        metaImg,  parteExtra(poolImg,  projPoolImg))  +
@@ -6344,9 +6360,12 @@ function renderDashPremiacao() {
   const metaLab    = m.meta_lab_equipe        || 273000;
   const metaImg    = m.meta_img_equipe        || 144000;
   const metaProc   = m.meta_proc_equipe       || 227500;
+  const metaCredEq = m.meta_credito_equipe    || METAS_EQUIPE_PADRAO.meta_credito_equipe;
   const metaEquipeCC = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
   const diasUteis  = m.dias_uteis || 22;
   const diasPassF  = diasUteisPassadosFloat();
+  // Pool de Crédito vigente apenas a partir do marco (Maio/2026).
+  const credVig    = (typeof dashMesAno !== "undefined" ? dashMesAno : mesAno) >= MARCO_NOVO_MODELO;
 
   // Agrupa lançamentos por colaboradora
   const por = {};
@@ -6355,22 +6374,25 @@ function renderDashPremiacao() {
     por[l.usuario_nome].push(l);
   });
 
-  // ── Recepção: pool lab/img/proc ────────────────────────────
+  // ── Recepção: pool lab/img/proc/cred ───────────────────────
   const recLancs   = dashLancs.filter(l => { const p=PERFIS[l.usuario_nome]||""; return p==="recepcionista"||p==="lider"; });
   const teamRecTot = calcTotaisDetalhados(recLancs);
-  const poolLab    = calcPoolPremio(teamRecTot.lab,  metaLab,  FAIXAS_POOL_LAB);
-  const poolImg    = calcPoolPremio(teamRecTot.img,  metaImg,  FAIXAS_POOL_IMG);
-  const poolProc   = calcPoolPremio(teamRecTot.proc, metaProc, FAIXAS_POOL_PROC);
-  const pctLabStr  = metaLab  > 0 ? (teamRecTot.lab  / metaLab  * 100).toFixed(1)+"%" : "—";
-  const pctImgStr  = metaImg  > 0 ? (teamRecTot.img  / metaImg  * 100).toFixed(1)+"%" : "—";
-  const pctProcStr = metaProc > 0 ? (teamRecTot.proc / metaProc * 100).toFixed(1)+"%" : "—";
+  const poolLab    = calcPoolPremio(teamRecTot.lab,     metaLab,  FAIXAS_POOL_LAB);
+  const poolImg    = calcPoolPremio(teamRecTot.img,     metaImg,  FAIXAS_POOL_IMG);
+  const poolProc   = calcPoolPremio(teamRecTot.proc,    metaProc, FAIXAS_POOL_PROC);
+  const poolCred   = credVig ? calcPoolPremio(teamRecTot.credito, metaCredEq, FAIXAS_POOL_CRED) : 0;
+  const pctLabStr  = metaLab    > 0 ? (teamRecTot.lab     / metaLab    * 100).toFixed(1)+"%" : "—";
+  const pctImgStr  = metaImg    > 0 ? (teamRecTot.img     / metaImg    * 100).toFixed(1)+"%" : "—";
+  const pctProcStr = metaProc   > 0 ? (teamRecTot.proc    / metaProc   * 100).toFixed(1)+"%" : "—";
+  const pctCredStr = metaCredEq > 0 ? (teamRecTot.credito / metaCredEq * 100).toFixed(1)+"%" : "—";
 
   // Pool projeção
-  let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc;
+  let projPoolLab = poolLab, projPoolImg = poolImg, projPoolProc = poolProc, projPoolCred = poolCred;
   if(diasPassF > 0) {
-    projPoolLab  = calcPoolPremio((teamRecTot.lab  / diasPassF) * diasUteis, metaLab,  FAIXAS_POOL_LAB);
-    projPoolImg  = calcPoolPremio((teamRecTot.img  / diasPassF) * diasUteis, metaImg,  FAIXAS_POOL_IMG);
-    projPoolProc = calcPoolPremio((teamRecTot.proc / diasPassF) * diasUteis, metaProc, FAIXAS_POOL_PROC);
+    projPoolLab  = calcPoolPremio((teamRecTot.lab     / diasPassF) * diasUteis, metaLab,    FAIXAS_POOL_LAB);
+    projPoolImg  = calcPoolPremio((teamRecTot.img     / diasPassF) * diasUteis, metaImg,    FAIXAS_POOL_IMG);
+    projPoolProc = calcPoolPremio((teamRecTot.proc    / diasPassF) * diasUteis, metaProc,   FAIXAS_POOL_PROC);
+    projPoolCred = credVig ? calcPoolPremio((teamRecTot.credito / diasPassF) * diasUteis, metaCredEq, FAIXAS_POOL_CRED) : 0;
   }
 
   // ── Linhas recepção ────────────────────────────────────────
@@ -6385,7 +6407,8 @@ function renderDashPremiacao() {
       const parteLab  = calcPartePool(nome, poolLab);
       const parteImg  = calcPartePool(nome, poolImg);
       const parteProc = calcPartePool(nome, poolProc);
-      const total     = premCaixa.valor + premBol + parteLab + parteImg + parteProc;
+      const parteCred = calcPartePool(nome, poolCred);
+      const total     = premCaixa.valor + premBol + parteLab + parteImg + parteProc + parteCred;
       let totalProj   = total;
       if(diasPassF > 0) {
         const projC    = (tot.caixa   / diasPassF) * diasUteis;
@@ -6395,10 +6418,11 @@ function renderDashPremiacao() {
                   + calcPremBoleto(projCont)
                   + calcPartePool(nome, projPoolLab)
                   + calcPartePool(nome, projPoolImg)
-                  + calcPartePool(nome, projPoolProc);
+                  + calcPartePool(nome, projPoolProc)
+                  + calcPartePool(nome, projPoolCred);
       }
       const pctC = metaRec > 0 ? (tot.caixa / metaRec * 100).toFixed(1) : "—";
-      return { nome, perfil, tot, contBol, premCaixa, premBol, parteLab, parteImg, parteProc, total, totalProj, pctC };
+      return { nome, perfil, tot, contBol, premCaixa, premBol, parteLab, parteImg, parteProc, parteCred, total, totalProj, pctC };
     })
     .sort((a,b) => b.total - a.total);
 
@@ -6469,6 +6493,7 @@ function renderDashPremiacao() {
       <td class="num">${brl(r.tot.caixa)}<div style="font-size:11px;color:${+r.pctC>=100?"var(--success)":"var(--primary)"};">${r.pctC !== "—" ? r.pctC+"%" : "—"}</div></td>
       <td class="num" style="font-weight:700;${cor(r.premCaixa.valor)}">${brl(r.premCaixa.valor)}<div style="margin-top:2px"><span class="prem-faixa ${fc}" style="font-size:10px">${r.premCaixa.faixa}</span></div></td>
       <td class="num" style="${cor(r.premBol)}">${brl(r.premBol)}<div style="font-size:11px;color:var(--text2)">${r.contBol} bol.</div></td>
+      <td class="num" style="${cor(r.parteCred)}">${brl(r.parteCred)}</td>
       <td class="num" style="${cor(r.parteLab)}">${brl(r.parteLab)}</td>
       <td class="num" style="${cor(r.parteImg)}">${brl(r.parteImg)}</td>
       <td class="num" style="${cor(r.parteProc)}">${brl(r.parteProc)}</td>
@@ -6515,6 +6540,7 @@ function renderDashPremiacao() {
     <th class="num">Caixa</th>
     <th class="num">Prêm. Caixa</th>
     <th class="num">Boleto</th>
+    <th class="num">Crédito</th>
     <th class="num">Lab</th>
     <th class="num">Imagem</th>
     <th class="num">Proc</th>
@@ -6534,6 +6560,7 @@ function renderDashPremiacao() {
       <div class="prem-resumo-card"><div class="prc-label">🔬 Lab equipe</div><div class="prc-val">${brl(teamRecTot.lab)}</div><div class="prc-sub">Meta: ${brl(metaLab)} · ${pctLabStr} · Pool: ${brl(poolLab)}</div></div>
       <div class="prem-resumo-card"><div class="prc-label">🩻 Img equipe</div><div class="prc-val">${brl(teamRecTot.img)}</div><div class="prc-sub">Meta: ${brl(metaImg)} · ${pctImgStr} · Pool: ${brl(poolImg)}</div></div>
       <div class="prem-resumo-card"><div class="prc-label">🏥 Proc equipe</div><div class="prc-val">${brl(teamRecTot.proc)}</div><div class="prc-sub">Meta: ${brl(metaProc)} · ${pctProcStr} · Pool: ${brl(poolProc)}</div></div>
+      <div class="prem-resumo-card"><div class="prc-label">💳 Crédito equipe</div><div class="prc-val">${brl(teamRecTot.credito)}</div><div class="prc-sub">${credVig ? `Meta: ${brl(metaCredEq)} · ${pctCredStr} · Pool: ${brl(poolCred)}` : "Vigente a partir de Maio/2026"}</div></div>
     </div>`;
 
   if(verCC) {
@@ -6542,16 +6569,16 @@ function renderDashPremiacao() {
         <table class="prem-table">
           ${tblHead}
           <tbody>
-            <tr class="prem-grupo-sep"><td colspan="9">🩺 Grupo 1 — Recepção Médica · Lab equipe ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr}</td></tr>
+            <tr class="prem-grupo-sep"><td colspan="10">🩺 Grupo 1 — Recepção Médica · Lab ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr} · Cred ${credVig?pctCredStr:"—"}</td></tr>
             ${linhasRec.map(rowRec).join("")}
-            <tr class="prem-grupo-sep"><td colspan="9">📞 Grupo 2 — Call Center Individual</td></tr>
+            <tr class="prem-grupo-sep"><td colspan="10">📞 Grupo 2 — Call Center Individual</td></tr>
             ${linhasCC.map(rowCC).join("")}
-            <tr class="prem-grupo-sep"><td colspan="9">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
+            <tr class="prem-grupo-sep"><td colspan="10">🏅 Grupo 3 — Liderança CC (Andrielli) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
             ${rowLid("Andrielli","lider_callcenter",totalCaixaCC,metaEquipeCC,premLider,premLiderProj,faixaLiderLabel,fLiderProjLabel)}
-            <tr class="prem-grupo-sep"><td colspan="9">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
+            <tr class="prem-grupo-sep"><td colspan="10">🏆 Grupo 4 — Coordenação CC (Paola) · Meta equipe CC: ${brl(metaEquipeCC)}</td></tr>
             ${rowLid("Paola","coordenadora",totalCaixaCC,metaEquipeCC,premCoord,premCoordProj,faixaCoordLabel,fCoordProjLabel)}
           </tbody>
-          <tfoot><tr><td colspan="7">Total Geral</td><td class="num">${brl(totalGeral)}</td><td class="num">${brl(totalProj)}</td></tr></tfoot>
+          <tfoot><tr><td colspan="8">Total Geral</td><td class="num">${brl(totalGeral)}</td><td class="num">${brl(totalProj)}</td></tr></tfoot>
         </table>
       </div>`;
   } else {
@@ -6560,10 +6587,10 @@ function renderDashPremiacao() {
         <table class="prem-table">
           ${tblHead}
           <tbody>
-            <tr class="prem-grupo-sep"><td colspan="9">🩺 Recepção Médica · Lab equipe ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr}</td></tr>
+            <tr class="prem-grupo-sep"><td colspan="10">🩺 Recepção Médica · Lab ${pctLabStr} · Img ${pctImgStr} · Proc ${pctProcStr} · Cred ${credVig?pctCredStr:"—"}</td></tr>
             ${linhasRec.map(rowRec).join("")}
           </tbody>
-          <tfoot><tr><td colspan="7">Total Recepção</td><td class="num">${brl(totalRec)}</td><td class="num">${brl(totalProjRec)}</td></tr></tfoot>
+          <tfoot><tr><td colspan="8">Total Recepção</td><td class="num">${brl(totalRec)}</td><td class="num">${brl(totalProjRec)}</td></tr></tfoot>
         </table>
       </div>`;
   }
