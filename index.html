@@ -10073,7 +10073,7 @@ async function salvarEdicaoLanc() {
     if(antes !== depois) mudancas.push({ campo: c, de: docOrig[c] ?? null, para: updates[c] ?? null });
   });
   // Mudança de saída-irmã/saida_pendente (rastreamento simplificado)
-  const tinhaDesc = !!docOrig.id_par || (docOrig.saida_pendente && Number(docOrig.saida_pendente.valor) > 0);
+  const tinhaDesc = !!docOrig.id_par || !!(docOrig.saida_pendente && Number(docOrig.saida_pendente.valor) > 0);
   if(tinhaDesc !== !!temSaida) {
     mudancas.push({ campo: "desconto_presenca", de: tinhaDesc, para: !!temSaida });
   } else if(temSaida && descSaida) {
