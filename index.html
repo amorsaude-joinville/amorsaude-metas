@@ -319,6 +319,29 @@
     .prem-prox strong { color:#B45309; }
     .prem-pleno { font-size:13px; color:var(--success); font-weight:600; margin-top:4px; }
 
+    /* ── RESUMO DO DIA (Dashboard — Etapa 6) ── */
+    #card-resumo-dia .rd-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+    #card-resumo-dia input[type="date"] { padding:8px 12px; border:1.5px solid var(--border); border-radius:var(--r2); font-family:'Inter',sans-serif; font-size:14px; outline:none; }
+    .rd-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .rd-table th, .rd-table td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; }
+    .rd-table th { background:#F9FAFB; font-weight:700; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+    .rd-table th.num, .rd-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .rd-table tbody tr:hover { background:#FAFAFA; }
+    .rd-cor-verde    { color:#047857; font-weight:700; }
+    .rd-cor-azul     { color:#1D4ED8; font-weight:600; }
+    .rd-cor-amarelo  { color:#B45309; font-weight:600; }
+    .rd-cor-vermelho { color:#B91C1C; font-weight:700; }
+    .rd-legenda { font-size:11px; color:var(--text2); margin-top:8px; line-height:1.5; }
+    .rd-bloco { margin-top:16px; padding:12px 14px; background:#F9FAFB; border-radius:var(--r2); }
+    .rd-bloco-tit { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; margin-bottom:10px; letter-spacing:.4px; }
+    .rd-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; }
+    .rd-grid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text2); font-weight:600; }
+    .rd-grid input { padding:7px 10px; border:1.5px solid var(--border); border-radius:var(--r2); font-family:'Inter',sans-serif; font-size:14px; outline:none; background:#fff; }
+    .rd-grid input:disabled { background:#F3F4F6; cursor:not-allowed; }
+    .rd-derivados { display:flex; flex-wrap:wrap; gap:18px 24px; font-size:13px; color:var(--text2); }
+    .rd-derivados strong { color:var(--text); font-size:14px; }
+    .rd-aviso-edicao { font-size:11px; color:var(--text2); margin-top:8px; font-style:italic; }
+
     /* ── TABELA DE PREMIAÇÃO (recep + lider) ── */
     .tab-prem-cat { padding:14px 18px; border:1px solid var(--border); border-radius:var(--r2); margin-bottom:10px; background:#fff; }
     .tab-prem-cat-titulo { font-weight:700; font-size:14px; color:var(--text); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -1012,6 +1035,60 @@
 
       <!-- Indicador discreto da fonte ativa (Fase F) -->
       <div id="dash-fonte-mensal" style="text-align:right;font-size:11px;color:var(--text2);margin-bottom:6px;height:14px"></div>
+
+      <!-- Resumo do Dia (Etapa 6) — visível só pra VE_DASHBOARD em mês >= MARCO -->
+      <div class="card" id="card-resumo-dia" style="margin-bottom:20px;display:none">
+        <div class="rd-head">
+          <div class="card-title" style="margin-bottom:0">📅 Resumo do Dia</div>
+          <input type="date" id="resumo-dia-data" onchange="onMudarDataResumoDia()" />
+        </div>
+        <div class="tbl-wrap" style="margin-top:14px;overflow-x:auto">
+          <table class="rd-table">
+            <thead>
+              <tr>
+                <th>Segmento</th>
+                <th class="num">Meta Dia</th>
+                <th class="num">Alcançado</th>
+                <th class="num">Diferença Dia</th>
+                <th class="num">Meta Mês*</th>
+                <th class="num">Acumulado</th>
+                <th class="num">Diferença Mês*</th>
+              </tr>
+            </thead>
+            <tbody id="rd-tbody"></tbody>
+          </table>
+        </div>
+        <div class="rd-legenda">* Meta Dia (dinâmica: o que falta ÷ dias úteis restantes) e Meta Mês (proporcional aos dias úteis passados).<br>🟢 ≥ 100% &nbsp;·&nbsp; 🔵 90-99% &nbsp;·&nbsp; 🟡 80-89% &nbsp;·&nbsp; 🔴 &lt; 80%</div>
+
+        <div class="rd-bloco">
+          <div class="rd-bloco-tit">📝 Manuais</div>
+          <div class="rd-grid">
+            <label>Consultas hoje<input type="number" id="rd-consultas" min="0" disabled /></label>
+            <label>Sessões hoje<input type="number" id="rd-sessoes" min="0" disabled /></label>
+            <label>Meta sim. crédito<input type="number" id="rd-meta-simul" min="0" disabled /></label>
+            <label>Alcanç. sim. crédito<input type="number" id="rd-alc-simul" min="0" disabled /></label>
+            <label>Meta líquida (R$)<input type="text" id="rd-meta-liquida" placeholder="0,00" disabled /></label>
+          </div>
+          <div class="rd-aviso-edicao">📝 Edição habilitada após Commit 2 (deploy das Firestore Rules).</div>
+        </div>
+
+        <div class="rd-bloco">
+          <div class="rd-bloco-tit">📊 Derivados (auto)</div>
+          <div class="rd-derivados">
+            <div>Faturamento (caixa + crédito): <strong id="rd-faturamento">R$ 0,00</strong></div>
+            <div>Caixa do dia: <strong id="rd-caixa-dia">R$ 0,00</strong></div>
+          </div>
+        </div>
+
+        <div class="rd-bloco">
+          <div class="rd-bloco-tit">🎯 Meta Líquida × Alcançado</div>
+          <div class="rd-derivados">
+            <div>Meta líquida: <strong id="rd-liq-meta">R$ 0,00</strong></div>
+            <div>Alcançado (caixa do dia): <strong id="rd-liq-alc">R$ 0,00</strong></div>
+            <div>Diferença: <strong id="rd-liq-diff">R$ 0,00</strong></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Cards resumo equipe -->
       <div class="dash-equipe-grid" id="dash-cards-equipe"></div>
@@ -2679,17 +2756,32 @@ function escolherFonteDashboard(mesAnoStr) {
   return "lancamentos";
 }
 
+// Soma o valor de boleto em um doc novo (forma_pagamento_1/2 === "boleto").
+// Schema novo: boleto vai para CAIXA agregado, mas o valor original está nos
+// campos forma_pagamento_*. Usado pra reconstruir "Boleto" como linha informativa.
+function _somarBoletoDoDoc(l) {
+  if(!l) return 0;
+  let total = 0;
+  if(l.forma_pagamento_1 === "boleto") total += Number(l.valor_1) || 0;
+  if(l.forma_pagamento_2 === "boleto") total += Number(l.valor_2) || 0;
+  return total;
+}
+
 // Agrega lancamentos pagos do mês (+ saídas vinculadas via id_par) nas mesmas
 // categorias do dashboard. Reusa calcTotaisDetalhados (Fase A — já trata schema novo).
+// Boleto é extraído de forma_pagamento_* (campo `boleto` do doc é sempre 0
+// desde Abril/2026 — regra que joga boleto pra caixa).
 function getTotaisLancamentosPagosMes(mesAnoStr) {
   const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
   const pagos     = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "entrada" && l.status === "pago");
   const saidasPar = fonte.filter(l => l.mes_ano === mesAnoStr && l.tipo === "saida"   && l.id_par);
   const t = calcTotaisDetalhados([...pagos, ...saidasPar]);
+  // Reconstrói boleto via forma_pagamento_* (campo agregado boleto está sempre 0)
+  const boletoExtraido = pagos.reduce((s, l) => s + _somarBoletoDoDoc(l), 0);
   return {
     caixa:         Number(t.caixa)      || 0,
     credito:       Number(t.credito)    || 0,
-    boleto:        Number(t.boleto)     || 0,
+    boleto:        boletoExtraido,
     laboratorio:   Number(t.lab)        || 0,
     imagem:        Number(t.img)        || 0,
     procedimentos: Number(t.proc)       || 0,
@@ -2787,10 +2879,12 @@ function getTotaisPorDia(dataStr) {
     });
     if(lancsDoDia.length >= MIN_DOCS_LANCAMENTOS_FALLBACK) {
       const t = calcTotaisDetalhados([...lancsDoDia, ...saidasDoDia]);
+      // Boleto: extrai via forma_pagamento_* (campo agregado é sempre 0).
+      const boletoExtraido = lancsDoDia.reduce((s, l) => s + _somarBoletoDoDoc(l), 0);
       return {
         caixa:         Number(t.caixa)      || 0,
         credito:       Number(t.credito)    || 0,
-        boleto:        Number(t.boleto)     || 0,
+        boleto:        boletoExtraido,
         laboratorio:   Number(t.lab)        || 0,
         imagem:        Number(t.img)        || 0,
         procedimentos: Number(t.proc)       || 0,
@@ -6558,6 +6652,7 @@ function renderDashboard() {
     return;
   }
   const lista = getDashLancsFiltrados();
+  renderResumoDia();
   renderDashEquipe(lista);
   renderDashRanking(lista);
   renderDashPremiacao();
@@ -6883,6 +6978,230 @@ function renderDashSaidasAvulsas() {
       <span style="font-weight:800;font-size:16px;color:#B91C1C">${brl(total)}</span>
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RESUMO DO DIA (Etapa 6 — visível pra lider/subgestora/gestor)
+// ═══════════════════════════════════════════════════════════
+// Helper: dias úteis passados ATÉ dataStr (incluindo o dia).
+// Considera feriados, sábados=0.5, domingos=0. Espelha calcularDiasUteisMes
+// mas com pivô em dataStr em vez de mês inteiro.
+function calcularDiasUteisPassadosAteData(dataStr) {
+  if(!dataStr) return 0;
+  const [ano, mes, dia] = dataStr.split("-").map(Number);
+  let total = 0;
+  for(let d = 1; d <= dia; d++) {
+    const dow = new Date(ano, mes - 1, d).getDay();
+    if(dow === 0) continue;
+    const iso = `${ano}-${String(mes).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(ehFeriado(iso)) continue;
+    total += (dow === 6) ? 0.5 : 1;
+  }
+  return total;
+}
+
+// Helper: dias úteis restantes A PARTIR de dataStr (incluindo o dia) até fim do mês.
+function calcularDiasUteisRestantesAPartirDe(dataStr) {
+  if(!dataStr) return 0;
+  const [ano, mes, dia] = dataStr.split("-").map(Number);
+  const ultimo = new Date(ano, mes, 0).getDate();
+  let total = 0;
+  for(let d = dia; d <= ultimo; d++) {
+    const dow = new Date(ano, mes - 1, d).getDay();
+    if(dow === 0) continue;
+    const iso = `${ano}-${String(mes).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(ehFeriado(iso)) continue;
+    total += (dow === 6) ? 0.5 : 1;
+  }
+  return total;
+}
+
+// Agrega totais do mês ATÉ dataLimite (inclusive). Usado para "Acumulado" no Resumo.
+// Inclui boleto reconstruído via forma_pagamento_*.
+function getTotaisAcumuladosAteData(mesAnoStr, dataLimite) {
+  const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
+  function isoDoc(l) {
+    if(!l.data_hora) return "";
+    const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  const pagos = fonte.filter(l =>
+    l.mes_ano === mesAnoStr && l.tipo === "entrada" && l.status === "pago"
+    && isoDoc(l) <= dataLimite
+  );
+  const saidasPar = fonte.filter(l =>
+    l.mes_ano === mesAnoStr && l.tipo === "saida" && l.id_par
+    && isoDoc(l) <= dataLimite
+  );
+  const t = calcTotaisDetalhados([...pagos, ...saidasPar]);
+  const boleto = pagos.reduce((s, l) => s + _somarBoletoDoDoc(l), 0);
+  return {
+    caixa:         Number(t.caixa)      || 0,
+    credito:       Number(t.credito)    || 0,
+    boleto,
+    laboratorio:   Number(t.lab)        || 0,
+    imagem:        Number(t.img)        || 0,
+    procedimentos: Number(t.proc)       || 0,
+    injetaveis:    Number(t.injetaveis) || 0,
+  };
+}
+
+// Cor da diferença com base em % atingido (real / meta).
+function rdCorPorPct(real, meta) {
+  if(meta <= 0) return "";
+  const pct = (real / meta) * 100;
+  if(pct >= 100) return "rd-cor-verde";
+  if(pct >= 90)  return "rd-cor-azul";
+  if(pct >= 80)  return "rd-cor-amarelo";
+  return "rd-cor-vermelho";
+}
+
+// Listener Firestore — coleção `resumo_diario` doc YYYY-MM-DD.
+let unsubResumoDia = null;
+function pararListenerResumoDia() {
+  if(unsubResumoDia) { unsubResumoDia(); unsubResumoDia = null; }
+}
+function carregarResumoDia(dataStr) {
+  pararListenerResumoDia();
+  unsubResumoDia = db.collection("resumo_diario").doc(dataStr)
+    .onSnapshot(doc => {
+      const dados = doc.exists ? doc.data() : {};
+      atualizarInputsResumoDia(dados);
+      renderResumoDia();
+    }, e => console.warn("[resumo_diario] listener:", e?.code || e?.message || e));
+}
+
+// Popula inputs sem disparar evento (read-only nesta fase).
+function atualizarInputsResumoDia(dados) {
+  const fmt = v => Number(v) > 0 ? brl(v).replace("R$ ", "") : "0,00";
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+  set("rd-consultas",      Number(dados.consultas)                     || 0);
+  set("rd-sessoes",        Number(dados.sessoes)                       || 0);
+  set("rd-meta-simul",     Number(dados.meta_simulacoes_credito)       || 0);
+  set("rd-alc-simul",      Number(dados.alcancado_simulacoes_credito)  || 0);
+  set("rd-meta-liquida",   fmt(Number(dados.meta_liquida)              || 0));
+}
+
+// Handler de mudança de data: re-renderiza tudo + re-conecta listener.
+function onMudarDataResumoDia() {
+  const dataStr = document.getElementById("resumo-dia-data")?.value;
+  if(!dataStr) return;
+  carregarResumoDia(dataStr);
+}
+
+// Render principal — chamada por renderDashboard().
+function renderResumoDia() {
+  const card = document.getElementById("card-resumo-dia");
+  if(!card) return;
+
+  const podeVer = VE_DASHBOARD.includes(usuario?.perfil) && (dashMesAno || mesAno) >= MARCO_NOVO_MODELO;
+  if(!podeVer) {
+    card.style.display = "none";
+    pararListenerResumoDia();
+    return;
+  }
+  card.style.display = "";
+
+  // Configurar seletor de data (min/max do mês visualizado)
+  const mesAnoStr = dashMesAno || mesAno;
+  const [anoSel, mesSel] = mesAnoStr.split("-").map(Number);
+  const ultimo = new Date(anoSel, mesSel, 0).getDate();
+  const minStr = `${mesAnoStr}-01`;
+  const maxStr = `${mesAnoStr}-${String(ultimo).padStart(2,"0")}`;
+  const inputData = document.getElementById("resumo-dia-data");
+  if(inputData) {
+    inputData.min = minStr;
+    inputData.max = maxStr;
+    // Default: hoje (se pertence ao mês) senão dia 1
+    if(!inputData.value || inputData.value < minStr || inputData.value > maxStr) {
+      const hoje = new Date();
+      const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}-${String(hoje.getDate()).padStart(2,"0")}`;
+      inputData.value = (hojeStr >= minStr && hojeStr <= maxStr) ? hojeStr : minStr;
+      // Primeira chamada: conecta listener
+      carregarResumoDia(inputData.value);
+    }
+  }
+  const dataStr = inputData?.value || minStr;
+
+  // Metas (override via dashMetasMes)
+  const m = dashMetasMes || {};
+  const metaCaixa   = Number(m.meta_caixa_equipe)   || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
+  const metaCredito = Number(m.meta_credito_equipe) || METAS_EQUIPE_PADRAO.meta_credito_equipe;
+  const metaBoleto  = Number(m.meta_boleto_equipe)  || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
+  const metaLab     = Number(m.meta_lab_equipe)     || METAS_EQUIPE_PADRAO.meta_lab_equipe;
+  const metaImg     = Number(m.meta_img_equipe)     || METAS_EQUIPE_PADRAO.meta_img_equipe;
+  const metaProc    = Number(m.meta_proc_equipe)    || METAS_EQUIPE_PADRAO.meta_proc_equipe;
+
+  // Totais do dia + acumulado mês até a data
+  const dia = getTotaisPorDia(dataStr);
+  const acu = getTotaisAcumuladosAteData(mesAnoStr, dataStr);
+
+  // Dias úteis (passados clamp em total)
+  const totalDU    = calcularDiasUteisMes(anoSel, mesSel);
+  const passadosDU = Math.min(calcularDiasUteisPassadosAteData(dataStr), totalDU);
+  const restantesDU = calcularDiasUteisRestantesAPartirDe(dataStr);
+
+  // Helpers locais
+  function metaDia(metaMensal, acumulado) {
+    if(restantesDU <= 0) return 0;
+    return Math.max(0, (metaMensal - acumulado) / restantesDU);
+  }
+  function metaMesProporcional(metaMensal) {
+    if(totalDU <= 0) return 0;
+    return metaMensal * (passadosDU / totalDU);
+  }
+
+  // Linhas da tabela — ordem do spec: Caixa / Crédito / Boleto / Lab / Proc / Img
+  const segmentos = [
+    { key:"caixa",   label:"Caixa",          metaMes: metaCaixa,   alcDia: dia.caixa,         acumMes: acu.caixa         },
+    { key:"credito", label:"Crédito",        metaMes: metaCredito, alcDia: dia.credito,       acumMes: acu.credito       },
+    { key:"boleto",  label:"Boleto",         metaMes: metaBoleto,  alcDia: dia.boleto,        acumMes: acu.boleto        },
+    { key:"lab",     label:"Lab",            metaMes: metaLab,     alcDia: dia.laboratorio,   acumMes: acu.laboratorio   },
+    { key:"proc",    label:"Procedimentos",  metaMes: metaProc,    alcDia: dia.procedimentos, acumMes: acu.procedimentos },
+    { key:"img",     label:"Imagem",         metaMes: metaImg,     alcDia: dia.imagem,        acumMes: acu.imagem        },
+  ];
+
+  const tbody = document.getElementById("rd-tbody");
+  if(tbody) {
+    tbody.innerHTML = segmentos.map(s => {
+      const md   = metaDia(s.metaMes, s.acumMes);
+      const mm   = metaMesProporcional(s.metaMes);
+      const dDia = s.alcDia - md;
+      const dMes = s.acumMes - mm;
+      const corDia = rdCorPorPct(s.alcDia, md);
+      const corMes = rdCorPorPct(s.acumMes, mm);
+      const sinal = v => v >= 0 ? "+" : "";
+      return `<tr>
+        <td><strong>${s.label}</strong></td>
+        <td class="num">${brl(md)}</td>
+        <td class="num">${brl(s.alcDia)}</td>
+        <td class="num ${corDia}">${sinal(dDia)}${brl(dDia)}</td>
+        <td class="num">${brl(mm)}</td>
+        <td class="num">${brl(s.acumMes)}</td>
+        <td class="num ${corMes}">${sinal(dMes)}${brl(dMes)}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Derivados auto
+  const faturamento = dia.caixa + dia.credito;
+  const setText = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  setText("rd-faturamento", brl(faturamento));
+  setText("rd-caixa-dia",   brl(dia.caixa));
+
+  // Meta Líquida × Alcançado
+  const inpMetaLiq = document.getElementById("rd-meta-liquida");
+  const metaLiq    = inpMetaLiq ? parseBRL(inpMetaLiq.value) : 0;
+  const alcLiq     = dia.caixa;
+  const diffLiq    = alcLiq - metaLiq;
+  const corLiq     = rdCorPorPct(alcLiq, metaLiq);
+  setText("rd-liq-meta",  brl(metaLiq));
+  setText("rd-liq-alc",   brl(alcLiq));
+  const elDiff = document.getElementById("rd-liq-diff");
+  if(elDiff) {
+    elDiff.textContent = (diffLiq >= 0 ? "+" : "") + brl(diffLiq);
+    elDiff.className   = corLiq;
+  }
 }
 
 function renderDashPremiacao() {
