@@ -181,14 +181,24 @@
     .orc-proc-linha .btn-rm:hover { background:#DC2626; color:#fff; }
     .orc-filtros { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px; }
     .orc-filtros .fg { margin:0; }
-    .orc-kanban { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
-    .orc-col { background:#FAFAFA; border:1px solid var(--border); border-radius:var(--r); padding:12px; min-height:200px; }
+    .orc-kanban { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+    .orc-col { background:#FAFAFA; border:1px solid var(--border); border-radius:var(--r); padding:12px; min-height:200px; min-width:200px; }
     .orc-col-head { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:6px 8px 12px; display:flex; align-items:center; justify-content:space-between; }
     .orc-col-head .orc-count { background:#fff; color:var(--text2); padding:2px 8px; border-radius:10px; font-size:11px; }
     .orc-col[data-status="lancar"]      .orc-col-head { color:#DC2626; }
     .orc-col[data-status="link_enviado"].orc-col-head, .orc-col[data-status="link_enviado"] .orc-col-head { color:#2563EB; }
     .orc-col[data-status="acompanhar"] .orc-col-head { color:#D97706; }
     .orc-col[data-status="pago"]       .orc-col-head { color:#047857; border-bottom:2px solid #10B981; padding-bottom:6px; }
+    /* Etapa 5: coluna e cards de RECUSADOS */
+    .orc-col[data-status="recusado"]              { background:#FEF2F2; border-color:#FCA5A5; }
+    .orc-col[data-status="recusado"] .orc-col-head { color:#7F1D1D; border-bottom:2px solid #FCA5A5; padding-bottom:6px; }
+    .orc-card.orc-card-recusado                    { background:#FEE2E2; border-color:#FCA5A5; }
+    .orc-card.orc-card-recusado:hover              { border-color:#DC2626; box-shadow:0 2px 8px rgba(220,38,38,.18); }
+    .orc-card.orc-card-recusado .orc-tot           { color:#9CA3AF; text-decoration:line-through; opacity:.85; }
+    .orc-recusa-tag                                { font-size:11px; color:#7F1D1D; background:#FECACA; padding:5px 8px; border-radius:6px; margin-top:6px; line-height:1.4; }
+    .orc-recusa-tag strong                         { color:#7F1D1D; }
+    /* Etapa 5: 4º card "Recusados" no mini-dashboard */
+    .kb-mini-card.kb-mini-recusados .kb-mini-titulo { color:#B91C1C; }
     /* Card de pago do dia — diferenciado visualmente (Fase D3.4) */
     .orc-card.orc-card-pago { background:#D1FAE5; border-color:#10B981; }
     .orc-card.orc-card-pago:hover { border-color:#047857; box-shadow:0 2px 8px rgba(16,185,129,.18); }
@@ -768,6 +778,10 @@
             <span class="kb-mini-titulo">Pagos</span>
             <span class="kb-mini-valor" id="kb-mini-dia-pagos">0 · R$ 0,00</span>
           </button>
+          <div class="kb-mini-card kb-mini-recusados">
+            <span class="kb-mini-titulo">Recusados</span>
+            <span class="kb-mini-valor" id="kb-mini-dia-recusados">0</span>
+          </div>
           <div class="kb-mini-card kb-mini-taxa">
             <span class="kb-mini-titulo">Conversão</span>
             <span class="kb-mini-valor" id="kb-mini-dia-taxa">0%</span>
@@ -783,6 +797,10 @@
             <span class="kb-mini-titulo">Pagos</span>
             <span class="kb-mini-valor" id="kb-mini-mes-pagos">0 · R$ 0,00</span>
           </button>
+          <div class="kb-mini-card kb-mini-recusados">
+            <span class="kb-mini-titulo">Recusados</span>
+            <span class="kb-mini-valor" id="kb-mini-mes-recusados">0</span>
+          </div>
           <div class="kb-mini-card kb-mini-taxa">
             <span class="kb-mini-titulo">Conversão</span>
             <span class="kb-mini-valor" id="kb-mini-mes-taxa">0%</span>
@@ -821,6 +839,7 @@
               <option value="link_enviado">Link Enviado</option>
               <option value="lancar">Lançar</option>
               <option value="pago">Pagos do dia</option>
+              <option value="recusado">Recusados</option>
             </select>
           </div>
         </div>
@@ -845,6 +864,12 @@
         <div class="orc-col" data-status="pago">
           <div class="orc-col-head">🟢 Pagos do dia <span class="orc-count" id="orc-cnt-pago">0</span></div>
           <div id="orc-col-pago"></div>
+        </div>
+        <!-- Etapa 5: coluna "Recusados" — mostra orçamentos com status "recusado".
+             Em meses < MARCO_NOVO_MODELO aparece vazia (recep não pode marcar retroativo). -->
+        <div class="orc-col" data-status="recusado">
+          <div class="orc-col-head">❌ Recusados <span class="orc-count" id="orc-cnt-recusado">0</span></div>
+          <div id="orc-col-recusado"></div>
         </div>
       </div>
 
@@ -9107,6 +9132,7 @@ function calcularKanbanStats(docs, periodo) {
 
   const pendentes = filtrados.filter(l => STATUS_KANBAN.includes(l.status));
   const pagos     = filtrados.filter(l => l.status === "pago");
+  const recusados = filtrados.filter(l => l.status === "recusado");
 
   // Pendentes: bruto (saida_pendente é informativa, desconto não foi aplicado).
   const sumBruto = arr => arr.reduce((s,l) => s + (Number(l.total) || Number(l.valor) || 0), 0);
@@ -9116,10 +9142,13 @@ function calcularKanbanStats(docs, periodo) {
 
   const cPend  = pendentes.length;
   const cPagos = pagos.length;
-  const taxa = (cPend + cPagos) > 0 ? (cPagos / (cPend + cPagos)) * 100 : 0;
+  const cRec   = recusados.length;
+  // Etapa 5: taxa de conversão considera recusados no denominador (cai quando há recusas).
+  const taxa = (cPend + cPagos + cRec) > 0 ? (cPagos / (cPend + cPagos + cRec)) * 100 : 0;
   return {
     pendentes: { count: cPend,  total: sumBruto(pendentes)  },
     pagos:     { count: cPagos, total: sumLiquido(pagos)    },
+    recusados: { count: cRec,   total: sumBruto(recusados)  },
     taxa,
   };
 }
@@ -9133,9 +9162,10 @@ function renderKanbanMiniDashboard() {
 
   ["dia","mes"].forEach(periodo => {
     const stats = calcularKanbanStats(visiveis, periodo);
-    setText(`kb-mini-${periodo}-pend`,  fmt(stats.pendentes.count, stats.pendentes.total));
-    setText(`kb-mini-${periodo}-pagos`, fmt(stats.pagos.count, stats.pagos.total));
-    setText(`kb-mini-${periodo}-taxa`,  `${stats.taxa.toFixed(0)}%`);
+    setText(`kb-mini-${periodo}-pend`,      fmt(stats.pendentes.count, stats.pendentes.total));
+    setText(`kb-mini-${periodo}-pagos`,     fmt(stats.pagos.count,     stats.pagos.total));
+    setText(`kb-mini-${periodo}-recusados`, String(stats.recusados.count));
+    setText(`kb-mini-${periodo}-taxa`,      `${stats.taxa.toFixed(0)}%`);
   });
 
   // Estado dos botões + aviso de filtro ativo
@@ -9194,20 +9224,22 @@ function renderKanbanOrcamentos() {
   });
 
   // Ao escolher um status, ESCONDE as outras colunas (kanban com 1 coluna em foco).
-  // D3.7: filtro mini-dashboard se sobrepõe — pendentes esconde "pago", pagos esconde os 3 não-pagos.
+  // D3.7: filtro mini-dashboard se sobrepõe — pendentes esconde "pago"+"recusado",
+  // pagos esconde os 3 não-pagos + "recusado".
   const naoPagas = ["lancar","link_enviado","acompanhar"];
-  const todasCols = [...naoPagas, "pago"];
+  const todasCols = [...naoPagas, "pago", "recusado"];
   todasCols.forEach(s => {
     const col = document.querySelector(`.orc-col[data-status="${s}"]`);
     if(!col) return;
     let visivel = !stat || stat === s; // base: filtro do select
-    if(kanbanFiltroAtivo === "pendentes" && s === "pago") visivel = false;
+    if(kanbanFiltroAtivo === "pendentes" && (s === "pago" || s === "recusado")) visivel = false;
     if(kanbanFiltroAtivo === "pagos"     && s !== "pago") visivel = false;
     col.style.display = visivel ? "" : "none";
   });
 
-  // Distribui em 4 colunas. "pago" só aceita docs com data===hoje (D3.4).
-  const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[] };
+  // Distribui em 5 colunas. "pago" só aceita docs com data===hoje (D3.4).
+  // "recusado" mostra todos os do mês (sem filtro de data extra).
+  const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[], recusado:[] };
   const hojeStr = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -9233,8 +9265,10 @@ function renderKanbanOrcamentos() {
       wrap.innerHTML = `<div class="orc-empty">Nenhum lançamento</div>`;
       return;
     }
-    // Card pago tem layout próprio (sem dropdown, com botão Reverter)
-    const renderer = (s === "pago") ? cardPagoHTML : cardOrcamentoHTML;
+    // Card pago/recusado têm layouts próprios; demais usam o card padrão.
+    const renderer = (s === "pago") ? cardPagoHTML
+                   : (s === "recusado") ? cardRecusadoHTML
+                   : cardOrcamentoHTML;
     wrap.innerHTML = colunas[s].map(o => renderer(o)).join("");
   });
 
@@ -9335,6 +9369,43 @@ function btnEditarHTML(l) {
     return `<button class="btn-editar-lanc" onclick="abrirModalEdicao('${l.id}')" title="Editar lançamento">✏️ Editar</button>`;
   }
   return `<button class="btn-editar-lanc" disabled title="Apenas líder/gestora/coordenadora pode editar pagamentos">✏️ Editar</button>`;
+}
+
+// HTML de um card na coluna "❌ Recusados" (Etapa 5).
+// Mostra valor desbotado/riscado + tag com motivo + obs truncada (60 chars).
+// Dropdown permite reverter para outro status (Pago abre modal de pagamento).
+function cardRecusadoHTML(o) {
+  const ts = o.data_hora || o.criado_em;
+  const d  = ts?.toDate ? ts.toDate() : null;
+  const dataCurta = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
+  const paciente = o.paciente_nome || o.paciente   || "—";
+  const medico   = o.prescritor    || o.medico     || "";
+  const quemFez  = o.usuario_nome  || o.criado_por || "—";
+  const total    = Number(o.total) || Number(o.valor) || 0;
+  const motivo   = o.motivo_recusa || "—";
+  const obs      = o.obs_recusa    || "";
+  const obsTrunc = obs.length > 60 ? obs.slice(0, 60) + "…" : obs;
+
+  // Dropdown completo (5 status). Pode reverter para outro status.
+  const statusList = ["acompanhar","link_enviado","lancar","pago","recusado"];
+  const opts = statusList
+    .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
+
+  return `
+    <div class="orc-card orc-card-recusado" onclick="abrirModalOrcDet('${o.id}')">
+      <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
+      <div class="orc-tot">${brl(total)}</div>
+      <div class="orc-meta-info">
+        ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
+        🕒 ${dataCurta} · ${escHTML(quemFez)}
+      </div>
+      <div class="orc-recusa-tag">
+        ❌ <strong>${escHTML(motivo)}</strong>${obsTrunc ? `: ${escHTML(obsTrunc)}` : ""}
+      </div>
+      <div class="orc-card-acao" onclick="event.stopPropagation()">
+        <select onchange="mudarStatusOrcamento('${o.id}', this.value)">${opts}</select>
+      </div>
+    </div>`;
 }
 
 // HTML de um card no kanban
