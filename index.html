@@ -4835,6 +4835,8 @@ function atualizarResumoDia() {
 
   // ── Abate: Caixa primeiro, depois Crédito (para ambas as categorias de saída) ──
   // Saída embutida = desconto em venda. Saída avulsa = despesa do dia (presume dinheiro).
+  // A partir de Maio/2026 (>= MARCO_NOVO_MODELO), saída avulsa é informativa: NÃO abate.
+  const saidaAvulsaInformativa = mesAno >= MARCO_NOVO_MODELO;
   let totalCaixa = caixaBruto, totalCredito = creditoBruto;
   function abater(valor) {
     if(valor <= 0) return;
@@ -4847,7 +4849,7 @@ function atualizarResumoDia() {
     }
   }
   abater(totalSaidasEmbutidas);
-  abater(totalSaidasAvulsas);
+  if(!saidaAvulsaInformativa) abater(totalSaidasAvulsas);
   totalCaixa   = Math.max(0, totalCaixa);
   totalCredito = Math.max(0, totalCredito);
 
@@ -4943,7 +4945,10 @@ function atualizarResumoDia() {
     ? `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas embutidas</span><span style="font-weight:600">−${brl(totalSaidasEmbutidas)}</span></div>`
     : "";
   const saidaAvulsaHtml = totalSaidasAvulsas > 0
-    ? `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas avulsas</span><span style="font-weight:600">−${brl(totalSaidasAvulsas)}</span></div>`
+    ? (saidaAvulsaInformativa
+        ? `<div class="resumo-tot" style="margin-top:6px;color:#0369A1"><span>📋 Saídas avulsas <span style="font-size:10px;font-weight:700;background:#E0F2FE;padding:2px 7px;border-radius:999px;margin-left:6px">informativo</span></span><span style="font-weight:600">${brl(totalSaidasAvulsas)}</span></div>`
+        : `<div class="resumo-tot" style="margin-top:6px;color:#B91C1C"><span>🔴 Saídas avulsas</span><span style="font-weight:600">−${brl(totalSaidasAvulsas)}</span></div>`
+      )
     : "";
 
   // ── D3.7 — Oportunidades do dia (orçamentos cadastrados hoje em status≠pago) ──
