@@ -1844,6 +1844,44 @@
   </div>
 </div>
 
+<!-- Modal: Registrar Recusa de Orçamento (Etapa 5) -->
+<div class="overlay hidden" id="modal-recusa">
+  <div class="modal" style="width:520px;max-height:92vh;overflow-y:auto">
+    <h3 style="margin-top:0">❌ Registrar Recusa</h3>
+    <p id="modal-recusa-info" style="margin-bottom:16px;font-size:13px;color:var(--text2)"></p>
+
+    <div class="fg">
+      <label>Motivo *</label>
+      <select id="rec-motivo" onchange="onMotivoRecusaChange()">
+        <option value="" disabled selected>Selecione...</option>
+      </select>
+    </div>
+
+    <div class="fg" id="rec-outro-wrap" style="display:none">
+      <label>Especificar (qual outro motivo?) *</label>
+      <input type="text" id="rec-outro" maxlength="80" placeholder="Descreva..." />
+    </div>
+
+    <div class="fg full">
+      <label>Observação (250 caracteres) *</label>
+      <textarea id="rec-obs" rows="4" maxlength="250"
+        oninput="document.getElementById('rec-obs-cnt').textContent = this.value.length"
+        placeholder="Detalhe a conversa com a paciente..."></textarea>
+      <div style="font-size:11px;color:var(--text2);text-align:right;margin-top:4px">
+        <span id="rec-obs-cnt">0</span>/250
+      </div>
+    </div>
+
+    <input type="hidden" id="rec-doc-id" value="" />
+    <input type="hidden" id="rec-status-anterior" value="" />
+
+    <div class="modal-btns" style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="cancelarModalRecusa()">Cancelar</button>
+      <button class="btn btn-primary btn-red" onclick="salvarRecusa()">Salvar Recusa</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Importar Faturamento Histórico -->
 <div class="overlay hidden" id="modal-fat-import">
   <div class="modal" style="width:500px;max-height:92vh;overflow-y:auto">
@@ -2313,7 +2351,24 @@ const ORC_STATUS_LABEL = {
   link_enviado: "📨 Link Enviado",
   lancar:       "⏰ Lançar",
   pago:         "✅ Pago",
+  recusado:     "❌ Recusou",
 };
+
+// Motivos pré-definidos de recusa de orçamento (Etapa 5).
+// "Outro" abre input livre obrigatório; persiste como "Outro: <texto>".
+const MOTIVOS_RECUSA = [
+  "Valor acima do orçamento",
+  "Sem condição de pagamento agora",
+  "Procura convênio/SUS",
+  "Vai pesquisar em outro lugar",
+  "Sem disponibilidade na agenda preferida",
+  "Vai conversar com a família/acompanhante",
+  "Outro",
+];
+
+// Helpers de "recusado" (Etapa 5)
+function ehRecusado(l)        { return l && l.status === "recusado"; }
+function podeMarcarRecusa()   { return mesAno >= MARCO_NOVO_MODELO; }
 // Perfis com dashboard próprio de coordenação (painel Call Center)
 const VE_COORD = ["coordenadora","lider_callcenter"];
 
@@ -8774,7 +8829,7 @@ function iniciarListenerOrcamentos() {
   // aparece no console do Firestore se o índice faltar.
   unsubOrcamentos = db.collection("lancamentos")
     .where("mes_ano", "==", getMesAno())
-    .where("status",  "in", [...STATUS_KANBAN, "pago"])
+    .where("status",  "in", [...STATUS_KANBAN, "pago", "recusado"])
     .onSnapshot(snap => {
       acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.excluido !== true);
       const sec = document.getElementById("sec-orcamentos");
@@ -9288,8 +9343,11 @@ function cardOrcamentoHTML(o) {
   const ts = o.data_hora || o.criado_em;
   const d  = ts?.toDate ? ts.toDate() : null;
   const dataCurta = d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : "—";
-  // Status disponíveis no dropdown: 3 do kanban + "pago" (que tira do kanban).
-  const opts = ["acompanhar","link_enviado","lancar","pago"]
+  // Status disponíveis no dropdown: 3 do kanban + "pago" + (recusado se mês >= MARCO).
+  // Em meses históricos, "Recusou" não aparece — recep não pode marcar retroativo.
+  const statusList = ["acompanhar","link_enviado","lancar","pago"];
+  if(podeMarcarRecusa() || o.status === "recusado") statusList.push("recusado");
+  const opts = statusList
     .map(s => `<option value="${s}" ${o.status===s?"selected":""}>${ORC_STATUS_LABEL[s]}</option>`).join("");
   // Schema novo: paciente_nome / prescritor / usuario_nome.
   // Fallbacks para compat caso algum doc velho de orcamentos apareça.
@@ -9319,7 +9377,7 @@ function cardOrcamentoHTML(o) {
 // - Status idêntico: no-op.
 // TODO D3.3: edge case "Pago → não-pago" (rebote) — deletar saída-doc-irmã, zerar pagamento.
 async function mudarStatusOrcamento(id, novoStatus) {
-  if(!["acompanhar","link_enviado","lancar","pago"].includes(novoStatus)) return;
+  if(!["acompanhar","link_enviado","lancar","pago","recusado"].includes(novoStatus)) return;
   if(!usuario) { toast("Sessão expirada.","err"); return; }
 
   // Pega o doc do cache (acompLancs) — se não tiver, busca no Firestore
@@ -9340,6 +9398,40 @@ async function mudarStatusOrcamento(id, novoStatus) {
   // validação do form (forma + valor obrigatórios), não quem clica.
   if(novoStatus === "pago") {
     abrirModalPagamento(doc, statusAtual);
+    return;
+  }
+
+  // Caso 2 (Etapa 5): virando RECUSADO → abre modal de recusa.
+  // Cancelar mantém status anterior; salvar grava motivo/obs + status="recusado".
+  if(novoStatus === "recusado") {
+    if(!podeMarcarRecusa()) {
+      toast("Recusas só podem ser registradas a partir de Maio/2026.", "err");
+      renderKanbanOrcamentos(); // reverte dropdown visual
+      return;
+    }
+    abrirModalRecusa(doc, statusAtual);
+    return;
+  }
+
+  // Caso 2b (Etapa 5): SAINDO de Recusado → outro não-pago (acompanhar/link/lancar).
+  // Confirm simples; motivo_recusa/obs_recusa permanecem no doc como histórico.
+  if(statusAtual === "recusado") {
+    const ok = confirm("Tem certeza? Vai voltar para " + (ORC_STATUS_LABEL[novoStatus] || novoStatus) + ".");
+    if(!ok) {
+      renderKanbanOrcamentos(); // reverte dropdown visual
+      return;
+    }
+    try {
+      await db.collection("lancamentos").doc(id).update({
+        status: novoStatus,
+        atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      toast(`Status revertido para "${ORC_STATUS_LABEL[novoStatus] || novoStatus}".`, "ok");
+    } catch(e) {
+      console.error("[reverterRecusa]", e);
+      toast("Erro ao reverter: " + (e.message || e.code), "err");
+      renderKanbanOrcamentos();
+    }
     return;
   }
 
@@ -10207,6 +10299,109 @@ function fecharModalPagamento() {
   document.getElementById("modal-pag").classList.add("hidden");
   // Re-renderiza kanban pra reverter o dropdown visualmente (status no banco não mudou)
   renderKanbanOrcamentos();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL DE RECUSA (Etapa 5)
+// ═══════════════════════════════════════════════════════════
+// Popula o select de motivos da recusa a partir de MOTIVOS_RECUSA.
+function popularSelectMotivosRecusa() {
+  const sel = document.getElementById("rec-motivo");
+  if(!sel) return;
+  // Preserva placeholder e remove opções anteriores (idempotente)
+  const phs = sel.querySelector('option[disabled]');
+  sel.innerHTML = "";
+  if(phs) sel.appendChild(phs);
+  MOTIVOS_RECUSA.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+}
+
+// Mostra/esconde input "Outro" conforme seleção do motivo.
+function onMotivoRecusaChange() {
+  const motivo = document.getElementById("rec-motivo")?.value || "";
+  const wrap   = document.getElementById("rec-outro-wrap");
+  const input  = document.getElementById("rec-outro");
+  const ehOutro = motivo === "Outro";
+  if(wrap) wrap.style.display = ehOutro ? "" : "none";
+  if(!ehOutro && input) input.value = "";
+}
+
+// Abre o modal pré-populado pra um doc específico.
+function abrirModalRecusa(doc, statusAnterior) {
+  if(!doc) return;
+  popularSelectMotivosRecusa();
+
+  const paciente = doc.paciente_nome || doc.paciente || "—";
+  const total    = Number(doc.total) || Number(doc.valor) || 0;
+  const info     = document.getElementById("modal-recusa-info");
+  if(info) info.innerHTML = `Paciente <strong>${escHTML(paciente)}</strong> · valor <strong>${brl(total)}</strong>`;
+
+  // Reset campos
+  const sel = document.getElementById("rec-motivo");          if(sel) sel.value = "";
+  const out = document.getElementById("rec-outro");           if(out) out.value = "";
+  const obs = document.getElementById("rec-obs");             if(obs) obs.value = "";
+  const cnt = document.getElementById("rec-obs-cnt");         if(cnt) cnt.textContent = "0";
+  const wrap = document.getElementById("rec-outro-wrap");     if(wrap) wrap.style.display = "none";
+
+  document.getElementById("rec-doc-id").value          = doc.id;
+  document.getElementById("rec-status-anterior").value = statusAnterior || "";
+
+  document.getElementById("modal-recusa").classList.remove("hidden");
+}
+
+// Cancela: fecha sem mudar status; re-renderiza kanban pra restaurar dropdown.
+function cancelarModalRecusa() {
+  fecharModalRecusa();
+  renderKanbanOrcamentos();
+}
+
+function fecharModalRecusa() {
+  document.getElementById("modal-recusa").classList.add("hidden");
+}
+
+// Valida + grava no Firestore.
+// Persistência: motivo "Outro" → "Outro: <texto digitado>" (clareza no histórico).
+async function salvarRecusa() {
+  const docId  = document.getElementById("rec-doc-id")?.value || "";
+  const motivo = (document.getElementById("rec-motivo")?.value || "").trim();
+  const outro  = (document.getElementById("rec-outro")?.value || "").trim();
+  const obs    = (document.getElementById("rec-obs")?.value   || "").trim();
+
+  if(!docId)  { toast("Doc inválido.","err"); return; }
+  if(!usuario){ toast("Sessão expirada.","err"); return; }
+  if(!motivo) { toast("Selecione o motivo.","err"); return; }
+  if(motivo === "Outro" && !outro) { toast("Especifique qual outro motivo.","err"); return; }
+  if(!obs)    { toast("Informe a observação.","err"); return; }
+
+  // Motivo final: "Outro: <texto>" se Outro; senão o próprio motivo
+  const motivoFinal = motivo === "Outro" ? `Outro: ${outro}` : motivo;
+
+  const btn = document.querySelector("#modal-recusa .btn-primary");
+  if(btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+
+  try {
+    await db.collection("lancamentos").doc(docId).update({
+      status:              "recusado",
+      motivo_recusa:       motivoFinal,
+      obs_recusa:          obs.slice(0, 250),
+      recusado_em:         firebase.firestore.FieldValue.serverTimestamp(),
+      recusado_por:        usuario.nome   || "",
+      recusado_por_uid:    usuario.uid    || null,
+      recusado_por_perfil: usuario.perfil || "",
+      atualizado_em:       firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    fecharModalRecusa();
+    toast("Recusa registrada.","ok");
+  } catch(e) {
+    console.error("[salvarRecusa]", e);
+    toast("Erro ao salvar recusa: " + (e.message || e.code), "err");
+    renderKanbanOrcamentos();
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = "Salvar Recusa"; }
+  }
 }
 
 // Toggles do modal (espelho dos do form principal)
