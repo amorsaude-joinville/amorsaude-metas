@@ -2371,7 +2371,27 @@ let unsubLanc = null;        // listener tempo real
 let lancMes   = [];          // todos lançamentos do mês do usuário
 let lancHoje  = [];          // filtrado para hoje
 let delId     = null;        // id para modal de exclusão
-let marcosMostrados = new Set(); // marcos de % já exibidos
+// Marcos avisados — persistido em localStorage por mês × categoria × marco.
+// Estrutura: { "2026-05": { _init: true, caixa: {0.8:true}, lab: {...}, img: {...}, proc: {...}, credito: {...} } }
+// _init é setado na primeira chamada de verificarMarcos do mês — usado pra suprimir
+// disparo retroativo dos banners de pool.
+let marcosAvisados = (function loadMarcos() {
+  try { return JSON.parse(localStorage.getItem("amorsaude:marcosAvisados") || "{}"); }
+  catch(e) { return {}; }
+})();
+function _salvarMarcos() {
+  try { localStorage.setItem("amorsaude:marcosAvisados", JSON.stringify(marcosAvisados)); }
+  catch(e) { console.warn("[marcos] localStorage falhou:", e); }
+}
+function _marcoAvisado(mesAno, categoria, pct) {
+  return !!(marcosAvisados[mesAno]?.[categoria]?.[pct]);
+}
+function _marcarAvisado(mesAno, categoria, pct) {
+  if(!marcosAvisados[mesAno]) marcosAvisados[mesAno] = {};
+  if(!marcosAvisados[mesAno][categoria]) marcosAvisados[mesAno][categoria] = {};
+  marcosAvisados[mesAno][categoria][pct] = true;
+  _salvarMarcos();
+}
 
 // Dashboard gestão
 let dashLancs           = [];    // lançamentos carregados no dashboard
@@ -3104,7 +3124,6 @@ function iniciarApp() {
   const ehLiderCC    = perfil === "lider_callcenter";
   const ehCoord      = VE_COORD.includes(perfil);
 
-  marcosMostrados = new Set();
   fecharBanner();
 
   const ehRec = perfil === "recepcionista";
@@ -3655,7 +3674,19 @@ function atualizarCards() {
   atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto);
   atualizarMetaDiaria(caixa, metaCaixa);
   atualizarResumoDia();
-  if(metaCaixa > 0) verificarMarcos(caixa / metaCaixa, caixa, credito, metaCaixa, metaCredito, perfil);
+  if(metaCaixa > 0) {
+    const mm = metas || {};
+    const teamTot = historicoEquipeAtual.length > 0
+      ? calcTotaisFromHistoricoDocs(historicoEquipeAtual.filter(d => ["recepcionista","lider"].includes(d.perfil)))
+      : calcTotaisDetalhados(equipeLancs);
+    const metasEquipe = {
+      lab:     mm.meta_lab_equipe     || 273000,
+      img:     mm.meta_img_equipe     || 144000,
+      proc:    mm.meta_proc_equipe    || 227500,
+      credito: mm.meta_credito_equipe || METAS_EQUIPE_PADRAO.meta_credito_equipe,
+    };
+    verificarMarcos(caixa / metaCaixa, caixa, credito, metaCaixa, metaCredito, perfil, teamTot, metasEquipe);
+  }
 }
 
 function cardMeta(titulo, ico, atingido, meta) {
@@ -4955,7 +4986,25 @@ function atualizarResumoDia() {
 // ═══════════════════════════════════════════════════════════
 //  BANNER DE MARCO
 // ═══════════════════════════════════════════════════════════
-function verificarMarcos(pctCaixa, caixa, credito, metaCaixa, metaCredito, perfil) {
+// Formata lista em pt-BR — "X" / "X e Y" / "X, Y e Z" / "X, Y, Z e W"
+function formatarListaPt(items) {
+  if(items.length === 0) return "";
+  if(items.length === 1) return items[0];
+  if(items.length === 2) return `${items[0]} e ${items[1]}`;
+  return `${items.slice(0,-1).join(", ")} e ${items[items.length-1]}`;
+}
+
+// Monta a mensagem do banner combinado de pools (1+ categorias num mesmo nível).
+// Conector "de" para 1 categoria, "em" para 2+. "Meta" sempre singular ("batida").
+function montarMsgCombinada(pct, cats) {
+  const lista = formatarListaPt(cats.map(c => c.label));
+  const conn  = cats.length === 1 ? "de" : "em";
+  if(pct === 1.0) return `🏆 Meta ${conn} ${lista} batida! Parabéns!`;
+  if(pct === 0.9) return `🔥 90% da meta ${conn} ${lista}!`;
+  return `🎉 Equipe atingiu 80% ${conn} ${lista}!`;
+}
+
+function verificarMarcos(pctCaixa, caixa, credito, metaCaixa, metaCredito, perfil, teamTot, metasEquipe) {
   const isRec = perfil === "recepcionista" || perfil === "lider";
   function premStr(pct100, pct90, pct80) {
     if(!isRec || !metaCaixa) return "";
@@ -4972,16 +5021,65 @@ function verificarMarcos(pctCaixa, caixa, credito, metaCaixa, metaCredito, perfi
     }
     return v > 0 ? ` — prêmio caixa: ${brl(v)}` : "";
   }
-  const marcos = [
+
+  // ── FASE 1: Banner de CAIXA (audiência atual: qualquer FAZ_LANC; recep/lider ganha premStr)
+  const marcosCaixa = [
     { pct:1.0, cls:"bm-100", msg:`🏆 Meta de caixa batida! Parabéns!${premStr(true,false,false)}` },
     { pct:0.9, cls:"bm-90",  msg:`🔥 90% da meta de caixa!${premStr(false,true,false)}` },
     { pct:0.8, cls:"bm-80",  msg:`🎉 80% da meta de caixa!${premStr(false,false,true)}` },
   ];
-  for(const m of marcos) {
-    if(pctCaixa >= m.pct && !marcosMostrados.has(m.pct)) {
-      marcosMostrados.add(m.pct);
+  for(const m of marcosCaixa) {
+    if(pctCaixa >= m.pct && !_marcoAvisado(mesAno, "caixa", m.pct)) {
+      _marcarAvisado(mesAno, "caixa", m.pct);
       mostrarBanner(m.msg, m.cls);
-      break;
+      return;
+    }
+  }
+
+  // ── FASE 2: pools só para Recepção (recepcionista/lider)
+  if(!isRec) return;
+  if(!teamTot || !metasEquipe) return;
+
+  const credVig = mesAno >= MARCO_NOVO_MODELO;
+  const safe = (n, d) => d > 0 ? (n || 0) / d : 0;
+  const categorias = [
+    { key:"lab",  label:"Lab",            pct: safe(teamTot.lab,     metasEquipe.lab)  },
+    { key:"img",  label:"Imagem",         pct: safe(teamTot.img,     metasEquipe.img)  },
+    { key:"proc", label:"Procedimentos",  pct: safe(teamTot.proc,    metasEquipe.proc) },
+  ];
+  if(credVig) {
+    categorias.push({ key:"credito", label:"Crédito", pct: safe(teamTot.credito, metasEquipe.credito) });
+  }
+
+  const niveis = [
+    { pct:1.0, cls:"bm-100" },
+    { pct:0.9, cls:"bm-90"  },
+    { pct:0.8, cls:"bm-80"  },
+  ];
+
+  // ── FASE 2.5: primeira execução do mês para pools — marca tudo que já cruzou (silencioso)
+  if(!marcosAvisados[mesAno]?._init) {
+    if(!marcosAvisados[mesAno]) marcosAvisados[mesAno] = {};
+    marcosAvisados[mesAno]._init = true;
+    for(const cat of categorias) {
+      for(const nivel of niveis) {
+        if(cat.pct >= nivel.pct) {
+          if(!marcosAvisados[mesAno][cat.key]) marcosAvisados[mesAno][cat.key] = {};
+          marcosAvisados[mesAno][cat.key][nivel.pct] = true;
+        }
+      }
+    }
+    _salvarMarcos();
+    return;
+  }
+
+  // ── FASE 3: agrupa categorias que cruzaram um mesmo nível (de cima pra baixo)
+  for(const nivel of niveis) {
+    const cruzaram = categorias.filter(c => c.pct >= nivel.pct && !_marcoAvisado(mesAno, c.key, nivel.pct));
+    if(cruzaram.length > 0) {
+      cruzaram.forEach(c => _marcarAvisado(mesAno, c.key, nivel.pct));
+      mostrarBanner(montarMsgCombinada(nivel.pct, cruzaram), nivel.cls);
+      return;
     }
   }
 }
