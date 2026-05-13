@@ -7375,7 +7375,13 @@ function carregarResumoDia(dataStr) {
 
 // Popula inputs com dados do Firestore. Edição habilitada para VE_DASHBOARD.
 function atualizarInputsResumoDia(dados) {
-  const fmt = v => Number(v) > 0 ? brl(v).replace("R$ ", "") : "0,00";
+  // Formata um número como "43.043,46" SEM o prefixo "R$".
+  // Importante: NÃO usar `brl(v).replace("R$ ", "")` porque o Intl em pt-BR insere
+  // NBSP (U+00A0) entre "R$" e o número, e o replace com espaço normal não casa —
+  // o input ficaria "R$ 43.043,46" e o parseBRL retornaria 0 (bug da Diferença).
+  const fmt = v => Number(v) > 0
+    ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 })
+    : "0,00";
   const set = (id, v) => { const el = document.getElementById(id); if(el && document.activeElement !== el) el.value = v; };
   set("rd-consultas",    Number(dados.consultas)                     || 0);
   set("rd-sessoes",      Number(dados.sessoes)                       || 0);
@@ -7587,13 +7593,18 @@ function renderResumoDia() {
   // Linha 5 (tripla): Meta líquido (input) | Alcançado (auto) | Diferença (auto, verde/vermelho)
   // Meta líquido vive agora num <input> nessa mesma linha — não há mais display
   // separado pra Meta líquido, então só atualizamos Alcançado e Diferença.
+  // Limpa "R$", NBSP (U+00A0) e espaços antes de parsear, pra blindar contra
+  // valores formatados que possam ter sido colados no input.
+  const limparPrefixo = s => (s || "").replace(/R\$/gi, "").replace(/[\s ]/g, "");
   const inpMetaLiq = document.getElementById("rd-meta-liquida");
-  const metaLiq    = inpMetaLiq ? parseBRL(inpMetaLiq.value) : 0;
+  const metaLiq    = inpMetaLiq ? parseBRL(limparPrefixo(inpMetaLiq.value)) : 0;
   const alcLiq     = totalPixDinDebBol; // Alcançado = Total em PIX/Dinheiro/Débito/Boleto
   const diffLiq    = alcLiq - metaLiq;
   setText("rd-liq-alc",  brl(alcLiq));
   const elDiff = document.getElementById("rd-liq-diff");
   if(elDiff) {
+    // brl() já inclui o sinal negativo no formato pt-BR ("-R$ 9.800,00"), então
+    // só prefixa "+" pra valores positivos pra não duplicar o "-".
     elDiff.textContent = (diffLiq >= 0 ? "+" : "") + brl(diffLiq);
     elDiff.className   = "pl-valor " + (diffLiq >= 0 ? "pl-cor-verde" : "pl-cor-vermelho");
   }
