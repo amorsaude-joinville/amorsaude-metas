@@ -1166,7 +1166,7 @@
           <!-- Linha 2: Meta simulações crédito (auto 30%) | Alcançado simulações crédito (input) -->
           <div class="pl-row cols-2">
             <div class="pl-campo">
-              <div class="pl-label">Meta simulações crédito<br><span style="font-weight:500;font-size:11px;text-transform:none">(30% × Consultas + Sessões)</span></div>
+              <div class="pl-label">Meta simulações crédito<br><span style="font-weight:500;font-size:11px;text-transform:none">(15% × Consultas + Sessões)</span></div>
               <div class="pl-valor" id="rd-meta-simul-auto">0</div>
             </div>
             <div class="pl-campo">
@@ -7703,8 +7703,8 @@ function renderResumoDia() {
   const consultas = Number(document.getElementById("rd-consultas")?.value) || 0;
   const sessoes   = Number(document.getElementById("rd-sessoes")?.value)   || 0;
 
-  // Meta simulações crédito = 30% × (Consultas + Sessões), arredondado pra inteiro
-  const metaSimul = Math.round((consultas + sessoes) * 0.3);
+  // Meta simulações crédito = 15% × (Consultas + Sessões), arredondado pra inteiro
+  const metaSimul = Math.round((consultas + sessoes) * 0.15);
   setText("rd-meta-simul-auto", metaSimul.toString());
 
   // Valor total produzido = Caixa Alcançado + Crédito Alcançado (apenas)
