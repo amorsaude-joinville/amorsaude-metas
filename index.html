@@ -347,22 +347,22 @@
     .pl-bolinha { display:inline-block; margin-left:6px; font-size:14px; line-height:1; }
     .pl-legenda { font-size:12px; color:var(--text); margin:10px 0 16px; }
 
-    /* Bloco 3 — campos manuais estilo planilha (empilhados) */
-    .pl-manuais { display:flex; flex-direction:column; gap:0; max-width:520px; margin-top:6px; }
-    .pl-campo { display:grid; grid-template-columns:1fr; border:1px solid #000; border-top:none; }
-    .pl-campo:first-child { border-top:1px solid #000; }
-    .pl-campo .pl-label { background:#EA9999; color:#fff; padding:8px 12px; font-weight:700; font-size:13px; text-align:center; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid #000; }
-    .pl-campo .pl-valor { background:#fff; padding:8px 12px; text-align:center; font-size:14px; font-weight:600; }
-    .pl-campo input { width:100%; border:none; outline:none; background:transparent; text-align:center; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; padding:0; }
+    /* Bloco 3 — campos manuais estilo planilha (grid responsivo).
+       .pl-manuais agrupa "linhas" (.pl-row). Cada linha define qts colunas usar
+       (.cols-1, .cols-2, .cols-3). No mobile (<600px) colapsa pra 1 coluna. */
+    .pl-manuais { display:flex; flex-direction:column; gap:10px; max-width:820px; margin-top:6px; }
+    .pl-row { display:grid; gap:10px; }
+    .pl-row.cols-1 { grid-template-columns:1fr; }
+    .pl-row.cols-2 { grid-template-columns:1fr 1fr; }
+    .pl-row.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+    .pl-campo { display:flex; flex-direction:column; border:1px solid #000; }
+    .pl-campo .pl-label { background:#EA9999; color:#fff; padding:8px 12px; font-weight:700; font-size:12px; text-align:center; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid #000; line-height:1.3; }
+    .pl-campo .pl-valor { background:#fff; padding:10px 12px; text-align:center; font-size:14px; font-weight:700; }
+    .pl-campo input { width:100%; border:none; outline:none; background:transparent; text-align:center; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; padding:0; color:var(--text); }
     .pl-campo input:disabled { background:#F3F4F6; cursor:not-allowed; color:var(--text2); }
-
-    /* Linha tripla final (Meta liquido | Alcançado | Diferença) */
-    .pl-tripla { display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #000; }
-    .pl-tripla > div { border-right:1px solid #000; }
-    .pl-tripla > div:last-child { border-right:none; }
-    .pl-tripla .pl-label { background:#EA9999; color:#fff; padding:8px 12px; font-weight:700; font-size:12px; text-align:center; text-transform:uppercase; border-bottom:1px solid #000; }
-    .pl-tripla .pl-valor { background:#fff; padding:10px 12px; text-align:center; font-size:14px; font-weight:700; }
-    .pl-tripla .pl-valor input { width:100%; border:none; outline:none; background:transparent; text-align:center; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; padding:0; }
+    @media (max-width:600px) {
+      .pl-row.cols-2, .pl-row.cols-3 { grid-template-columns:1fr; }
+    }
     .rd-table { width:100%; border-collapse:collapse; font-size:13px; }
     .rd-table th, .rd-table td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; }
     .rd-table th { background:#F9FAFB; font-weight:700; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
@@ -1129,51 +1129,63 @@
         <!-- Bloco 2 — Legenda das bolinhas (mantida) -->
         <div class="pl-legenda">🟢 ≥ 100% &nbsp;·&nbsp; 🔵 90-99% &nbsp;·&nbsp; 🟡 80-89% &nbsp;·&nbsp; 🔴 &lt; 80% (aplicado em Diferença Mês com base em Acumulativo ÷ Meta Mês)</div>
 
-        <!-- Bloco 3 — Campos manuais estilo planilha (empilhados) -->
+        <!-- Bloco 3 — Campos manuais estilo planilha (grid responsivo, 5 linhas) -->
         <div class="pl-manuais">
-          <div class="pl-campo">
-            <div class="pl-label">Consultas</div>
-            <div class="pl-valor"><input type="number" id="rd-consultas" min="0" step="1" placeholder="0" /></div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Sessões</div>
-            <div class="pl-valor"><input type="number" id="rd-sessoes" min="0" step="1" placeholder="0" /></div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Meta simulações crédito (30% × Consultas + Sessões)</div>
-            <div class="pl-valor" id="rd-meta-simul-auto">0</div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Alcançado simulações crédito</div>
-            <div class="pl-valor"><input type="number" id="rd-alc-simul" min="0" step="1" placeholder="0" /></div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Valor total produzido</div>
-            <div class="pl-valor" id="rd-valor-produzido">R$ 0,00</div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Total em PIX, Dinheiro, Débito e Boleto</div>
-            <div class="pl-valor" id="rd-total-pix-din-deb-bol">R$ 0,00</div>
-          </div>
-          <div class="pl-campo">
-            <div class="pl-label">Meta líquido (R$)</div>
-            <div class="pl-valor"><input type="text" id="rd-meta-liquida" placeholder="0,00" /></div>
-          </div>
-        </div>
 
-        <!-- Linha tripla final: Meta líquido | Alcançado | Diferença -->
-        <div class="pl-tripla" style="max-width:520px;margin-top:14px">
-          <div>
-            <div class="pl-label">Meta líquido</div>
-            <div class="pl-valor" id="rd-liq-meta">R$ 0,00</div>
+          <!-- Linha 1: Consultas | Sessões -->
+          <div class="pl-row cols-2">
+            <div class="pl-campo">
+              <div class="pl-label">Consultas</div>
+              <div class="pl-valor"><input type="number" id="rd-consultas" min="0" step="1" placeholder="0" /></div>
+            </div>
+            <div class="pl-campo">
+              <div class="pl-label">Sessões</div>
+              <div class="pl-valor"><input type="number" id="rd-sessoes" min="0" step="1" placeholder="0" /></div>
+            </div>
           </div>
-          <div>
-            <div class="pl-label">Alcançado</div>
-            <div class="pl-valor" id="rd-liq-alc">R$ 0,00</div>
+
+          <!-- Linha 2: Meta simulações crédito (auto 30%) | Alcançado simulações crédito (input) -->
+          <div class="pl-row cols-2">
+            <div class="pl-campo">
+              <div class="pl-label">Meta simulações crédito<br><span style="font-weight:500;font-size:11px;text-transform:none">(30% × Consultas + Sessões)</span></div>
+              <div class="pl-valor" id="rd-meta-simul-auto">0</div>
+            </div>
+            <div class="pl-campo">
+              <div class="pl-label">Alcançado simulações crédito</div>
+              <div class="pl-valor"><input type="number" id="rd-alc-simul" min="0" step="1" placeholder="0" /></div>
+            </div>
           </div>
-          <div>
-            <div class="pl-label">Diferença</div>
-            <div class="pl-valor" id="rd-liq-diff">R$ 0,00</div>
+
+          <!-- Linha 3: Valor total produzido (auto) -->
+          <div class="pl-row cols-1">
+            <div class="pl-campo">
+              <div class="pl-label">Valor total produzido</div>
+              <div class="pl-valor" id="rd-valor-produzido">R$ 0,00</div>
+            </div>
+          </div>
+
+          <!-- Linha 4: Total em PIX, Dinheiro, Débito e Boleto (auto) -->
+          <div class="pl-row cols-1">
+            <div class="pl-campo">
+              <div class="pl-label">Total em PIX, Dinheiro, Débito e Boleto</div>
+              <div class="pl-valor" id="rd-total-pix-din-deb-bol">R$ 0,00</div>
+            </div>
+          </div>
+
+          <!-- Linha 5: Meta líquido (input) | Alcançado (auto) | Diferença (auto, verde/vermelho) -->
+          <div class="pl-row cols-3">
+            <div class="pl-campo">
+              <div class="pl-label">Meta líquido</div>
+              <div class="pl-valor"><input type="text" id="rd-meta-liquida" placeholder="0,00" /></div>
+            </div>
+            <div class="pl-campo">
+              <div class="pl-label">Alcançado</div>
+              <div class="pl-valor" id="rd-liq-alc">R$ 0,00</div>
+            </div>
+            <div class="pl-campo">
+              <div class="pl-label">Diferença</div>
+              <div class="pl-valor" id="rd-liq-diff">R$ 0,00</div>
+            </div>
           </div>
         </div>
       </div>
@@ -7490,8 +7502,9 @@ function renderResumoDia() {
   }
 
   // Linhas da tabela — ordem do spec novo: Caixa / Crédito / Boleto / Laboratório / Procedimento / Exames de Imagem / Proc + Imagem
-  // Obs.: a partir do refacto, Meta Mês é FIXA (não mais proporcional aos dias úteis passados),
-  // conforme o gestor pediu — bate exatamente com a planilha.
+  // Meta Mês é PROPORCIONAL aos dias úteis passados ATÉ A DATA SELECIONADA
+  // (inclusive) — usa a função `metaMesProporcional` já definida acima neste mesmo
+  // escopo, que reaproveita calcularDiasUteisPassadosAteData (sábado 0,5 e feriados).
   const segBase = [
     { key:"caixa",   label:"Caixa",             metaMes: metaCaixa,   alcDia: dia.caixa,         acumMes: acu.caixa         },
     { key:"credito", label:"Crédito",           metaMes: metaCredito, alcDia: dia.credito,       acumMes: acu.credito       },
@@ -7528,11 +7541,14 @@ function renderResumoDia() {
       // Mantém a fórmula original do sistema. Acumulado até ontem = acumMes − alcDia.
       const acumAteOntem = Math.max(0, s.acumMes - s.alcDia);
       const md   = metaDia(s.metaMes, acumAteOntem);
-      const dDia = s.alcDia  - md;        // Diferença Dia = Alcançado − Meta Dia
-      const dMes = s.acumMes - s.metaMes; // Diferença Mês = Acumulativo − Meta Mês
+      // Meta Mês exibida = proporcional aos dias úteis passados até a data selecionada (incluída)
+      const mmProp = metaMesProporcional(s.metaMes);
+      const dDia   = s.alcDia  - md;                  // Diferença Dia = Alcançado − Meta Dia
+      const dMes   = s.acumMes - mmProp;              // Diferença Mês = Acumulativo − Meta Mês proporcional
       const corDia = dDia >= 0 ? "pl-cor-verde" : "pl-cor-vermelho";
       const corMes = dMes >= 0 ? "pl-cor-verde" : "pl-cor-vermelho";
-      const bolinha = rdBolinhaPorPct(s.acumMes, s.metaMes);
+      // Bolinha colorida usa a Meta Mês proporcional (mesma base da diferença)
+      const bolinha = rdBolinhaPorPct(s.acumMes, mmProp);
       const sinal = v => v >= 0 ? "+" : "";
       const isTotal = s.key === "proc_img";
       return `<tr${isTotal ? ' class="pl-row-total"' : ""}>
@@ -7540,7 +7556,7 @@ function renderResumoDia() {
         <td class="num">${brl(md)}</td>
         <td class="num">${brl(s.alcDia)}</td>
         <td class="num ${corDia}">${sinal(dDia)}${brl(dDia)}</td>
-        <td class="num">${brl(s.metaMes)}</td>
+        <td class="num">${brl(mmProp)}</td>
         <td class="num">${brl(s.acumMes)}</td>
         <td class="num ${corMes}">${sinal(dMes)}${brl(dMes)}<span class="pl-bolinha">${bolinha}</span></td>
       </tr>`;
@@ -7566,12 +7582,13 @@ function renderResumoDia() {
   const totalPixDinDebBol = dia.caixa + dia.boleto;
   setText("rd-total-pix-din-deb-bol", brl(totalPixDinDebBol));
 
-  // Linha tripla final: Meta líquido | Alcançado | Diferença
+  // Linha 5 (tripla): Meta líquido (input) | Alcançado (auto) | Diferença (auto, verde/vermelho)
+  // Meta líquido vive agora num <input> nessa mesma linha — não há mais display
+  // separado pra Meta líquido, então só atualizamos Alcançado e Diferença.
   const inpMetaLiq = document.getElementById("rd-meta-liquida");
   const metaLiq    = inpMetaLiq ? parseBRL(inpMetaLiq.value) : 0;
   const alcLiq     = totalPixDinDebBol; // Alcançado = Total em PIX/Dinheiro/Débito/Boleto
   const diffLiq    = alcLiq - metaLiq;
-  setText("rd-liq-meta", brl(metaLiq));
   setText("rd-liq-alc",  brl(alcLiq));
   const elDiff = document.getElementById("rd-liq-diff");
   if(elDiff) {
