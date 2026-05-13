@@ -9,6 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS para exportação de Relatórios para Excel (.xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -543,8 +545,8 @@
     .rank-grupo-sep td { background:#F3F4F6; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); padding:5px 12px; border-top:2px solid var(--border); }
     .colab-grupo-header { background:#F3F4F6; padding:8px 14px; border-radius:var(--r2); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); margin:14px 0 8px; }
 
-    /* ── ABAS LIDER / REC / CC — sticky abaixo do header ── */
-    #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav, #gestor-nav {
+    /* ── ABAS LIDER / REC / CC / FINANCEIRO / COORD — sticky abaixo do header ── */
+    #lider-nav, #lider-cc-nav, #rec-nav, #cc-nav, #gestor-nav, #fin-nav, #coord-nav {
       display:none;
       position:sticky;
       top:64px;          /* altura exata do header */
@@ -557,7 +559,7 @@
       overflow-x:auto;   /* scroll horizontal em mobile */
       -webkit-overflow-scrolling:touch;
     }
-    #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show, #gestor-nav.show { display:flex; }
+    #lider-nav.show, #lider-cc-nav.show, #rec-nav.show, #cc-nav.show, #gestor-nav.show, #fin-nav.show, #coord-nav.show { display:flex; }
     .lider-tab {
       padding:14px 28px; font-size:14px; font-weight:600; cursor:pointer;
       border:none; background:transparent; color:var(--text2);
@@ -697,6 +699,10 @@
           <option value="Erielly">Erielly</option>
           <option value="Júlia">Júlia</option>
         </optgroup>
+        <optgroup label="Financeiro">
+          <option value="Thifani">Thifani</option>
+          <option value="Leila">Leila</option>
+        </optgroup>
       </select>
     </div>
 
@@ -739,14 +745,15 @@
     </div>
   </div>
 
-  <!-- Navegação por abas — líderes de recepção (4 abas) -->
-  <!-- Aba padrão: metas; ordem: Meta e Premiação | Orçamentos | Lançamentos | Equipe | Dashboard -->
+  <!-- Navegação por abas — líderes de recepção (5 abas + Relatórios) -->
+  <!-- Aba padrão: metas; ordem: Meta e Premiação | Orçamentos | Lançamentos | Equipe | Dashboard | Relatórios -->
   <div id="lider-nav">
     <button class="lider-tab active" id="lider-tab-metas"  onclick="mudarAbaLider('metas')">🎯 Meta e Premiação</button>
     <button class="lider-tab"        id="lider-tab-orc"    onclick="mudarAbaLider('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="lider-tab-lanc"   onclick="mudarAbaLider('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="lider-tab-equipe" onclick="mudarAbaLider('equipe')">📊 Equipe</button>
     <button class="lider-tab"        id="lider-tab-dash"   onclick="mudarAbaLider('dashboard')">🏢 Dashboard</button>
+    <button class="lider-tab"        id="lider-tab-rel"    onclick="mudarAbaLider('relatorios')">📊 Relatórios</button>
   </div>
 
   <!-- Navegação por abas — recepcionistas (4 abas) -->
@@ -765,17 +772,30 @@
     <button class="lider-tab"        id="cc-tab-equipe" onclick="mudarAbaCC('equipe')">📊 Metas Equipe</button>
   </div>
 
-  <!-- Navegação por abas — líder de call center (Andrielli) -->
+  <!-- Navegação por abas — líder de call center (Andrielli) + Relatórios -->
   <div id="lider-cc-nav">
     <button class="lider-tab active" id="lider-cc-tab-lanc" onclick="mudarAbaLiderCC('lancamentos')">📝 Orçamento</button>
     <button class="lider-tab"        id="lider-cc-tab-orc"  onclick="mudarAbaLiderCC('orcamentos')">📋 Acompanhamento</button>
     <button class="lider-tab"        id="lider-cc-tab-cc"   onclick="mudarAbaLiderCC('callcenter')">📊 Call Center</button>
+    <button class="lider-tab"        id="lider-cc-tab-rel"  onclick="mudarAbaLiderCC('relatorios')">📊 Relatórios</button>
   </div>
 
-  <!-- Navegação por abas — gestora/subgestora (Dashboard | Orçamentos) -->
+  <!-- Navegação por abas — gestora/subgestora (Dashboard | Orçamentos | Relatórios) -->
   <div id="gestor-nav">
     <button class="lider-tab active" id="gestor-tab-dash" onclick="mudarAbaGestor('dashboard')">🏢 Dashboard</button>
     <button class="lider-tab"        id="gestor-tab-orc"  onclick="mudarAbaGestor('orcamentos')">📋 Acompanhamento</button>
+    <button class="lider-tab"        id="gestor-tab-rel"  onclick="mudarAbaGestor('relatorios')">📊 Relatórios</button>
+  </div>
+
+  <!-- Navegação por abas — financeiro (Thifani, Leila): SÓ Relatórios -->
+  <div id="fin-nav">
+    <button class="lider-tab active" id="fin-tab-rel" onclick="mudarAbaFinanceiro('relatorios')">📊 Relatórios</button>
+  </div>
+
+  <!-- Navegação por abas — coordenadora pura (Paola): Call Center | Relatórios -->
+  <div id="coord-nav">
+    <button class="lider-tab active" id="coord-tab-cc"  onclick="mudarAbaCoord('callcenter')">📊 Call Center</button>
+    <button class="lider-tab"        id="coord-tab-rel" onclick="mudarAbaCoord('relatorios')">📊 Relatórios</button>
   </div>
 
   <div id="app">
@@ -1547,6 +1567,113 @@
       </div>
     </div>
 
+    <!-- ══════════ RELATÓRIOS DE LANÇAMENTOS (gestão/coord/líderes/financeiro) ══════════ -->
+    <div id="sec-relatorios" style="display:none">
+
+      <!-- Filtros -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">📊 Relatório de Lançamentos</div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+          <div class="fg" style="margin:0">
+            <label>📅 Data início *</label>
+            <input type="date" id="rel-data-ini" />
+          </div>
+          <div class="fg" style="margin:0">
+            <label>📅 Data fim *</label>
+            <input type="date" id="rel-data-fim" />
+          </div>
+          <div class="fg" style="margin:0">
+            <label>👤 Recepcionista</label>
+            <select id="rel-recep"><option value="">Todas</option></select>
+          </div>
+          <div class="fg" style="margin:0">
+            <label>💳 Forma de pagamento</label>
+            <select id="rel-forma">
+              <option value="">Todas</option>
+              <option value="caixa">Caixa</option>
+              <option value="credito">Crédito</option>
+              <option value="boleto">Boleto</option>
+            </select>
+          </div>
+          <div class="fg" style="margin:0">
+            <label>🏷️ Categoria</label>
+            <select id="rel-categoria">
+              <option value="">Todas</option>
+              <option value="exames">Exames</option>
+              <option value="procedimentos">Procedimentos</option>
+              <option value="imagem">Imagem</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" style="width:auto" onclick="gerarRelatorio()">Gerar Relatório</button>
+          <button class="btn btn-ghost"   style="width:auto" onclick="limparFiltrosRelatorio()">Limpar Filtros</button>
+        </div>
+
+        <div id="rel-aviso-area" style="font-size:12px;color:var(--text2);margin-top:10px;display:none">
+          ℹ️ Você visualiza apenas lançamentos da sua área.
+        </div>
+      </div>
+
+      <!-- Resumo + Tabela (aparece após gerar) -->
+      <div id="rel-resultado" style="display:none">
+
+        <!-- Card resumo total -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Lançamentos</div>
+              <div style="font-size:24px;font-weight:700;color:var(--text);margin-top:4px" id="rel-tot-qtd">0</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Total</div>
+              <div style="font-size:24px;font-weight:700;color:var(--primary);margin-top:4px" id="rel-tot-val">R$ 0,00</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Médio</div>
+              <div style="font-size:24px;font-weight:700;color:var(--text);margin-top:4px" id="rel-tot-med">R$ 0,00</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end">
+              <button class="btn btn-primary" style="width:auto" onclick="exportarRelatorioExcel()">📥 Exportar Excel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Recepcionista</th>
+                  <th>Categoria</th>
+                  <th>Forma Pagto</th>
+                  <th style="text-align:right">Valor</th>
+                </tr>
+              </thead>
+              <tbody id="rel-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mensagem quando não há resultado -->
+      <div class="card" id="rel-vazio" style="display:none">
+        <div class="empty">
+          <div class="ei">🔍</div>
+          Nenhum lançamento encontrado para os filtros selecionados.
+        </div>
+      </div>
+
+      <!-- Loading enquanto busca -->
+      <div class="card" id="rel-loading" style="display:none">
+        <div class="loading"><div class="spinner"></div>Buscando lançamentos...</div>
+      </div>
+    </div>
+
     <!-- ── HISTÓRICO DO MÊS ── -->
     <div id="sec-historico">
       <div class="hist-toggle" onclick="toggleHistorico()">
@@ -2125,6 +2252,7 @@ const auth = firebase.auth();
 // - coordenadora:     gerencia callcenter (Paola) — mesmas permissões de lider_callcenter
 // - recepcionista:    atende e lança (recepcionistas comuns)
 // - callcenter:       atende e lança (Erielly, Júlia)
+// - financeiro:       só visualiza/exporta relatórios (Thifani, Leila) — sem aba de lançamento
 const USUARIOS = {
   "laudi.rmj@gmail.com":               { nome: "Laudenir",  perfil: "gestor"           },
   "eduardaaraujo1502@gmail.com":       { nome: "Eduarda",   perfil: "subgestora"       },
@@ -2140,6 +2268,8 @@ const USUARIOS = {
   "leticiaac.r.eis@gmail.com":         { nome: "Leticia",   perfil: "recepcionista"    },
   "eriellypachecodossantos@gmail.com": { nome: "Erielly",   perfil: "callcenter"       },
   "juluise2005@gmail.com":             { nome: "Júlia",     perfil: "callcenter"       },
+  "thifani.financeiro@amorsaude.com":  { nome: "Thifani",   perfil: "financeiro"       },
+  "leila.financeiro@amorsaude.com":    { nome: "Leila",     perfil: "financeiro"       },
 };
 
 // Mapa derivado: nome → perfil (para lookups internos por nome de exibição)
@@ -2163,7 +2293,8 @@ function ehAfastada(nome) { return statusPorNome(nome) === "afastada"; }
 const PERFIL_LABEL = {
   gestor:"Gestor", subgestora:"Sub-Gestora", coordenadora:"Coordenadora",
   lider:"Líder", lider_callcenter:"Líder Call Center",
-  recepcionista:"Recepcionista Médica", callcenter:"Call Center"
+  recepcionista:"Recepcionista Médica", callcenter:"Call Center",
+  financeiro:"Financeiro"
 };
 
 // Atendentes de Call Center supervisionadas pela coordenadora
@@ -2192,6 +2323,15 @@ const FAZ_LANC = ["recepcionista","callcenter","lider","lider_callcenter"];
 const VE_DASHBOARD = ["gestor","subgestora","lider"];
 // Perfis que SÓ vêem o dashboard geral (sem aba de lançamento)
 const SO_DASHBOARD = ["gestor","subgestora"];
+// Perfis financeiros — só veem a aba Relatórios (sem lançamentos, sem dashboard)
+const SO_RELATORIOS = ["financeiro"];
+// Perfis que podem acessar a aba Relatórios:
+//   - gestão (gestor/subgestora): vê todos os lançamentos
+//   - coordenadora: vê todos
+//   - líder de recepção: vê apenas recepção
+//   - líder de call center: vê apenas call center
+//   - financeiro: vê todos
+const VE_RELATORIOS = ["gestor","subgestora","coordenadora","lider","lider_callcenter","financeiro"];
 
 // ─────────────────────────────────────────────────────────────
 //  REESTRUTURAÇÃO — Fase A: foundation do novo modelo unificado
@@ -3087,6 +3227,7 @@ const SENHAS_LOCAL = {
   "Suélen":    "amor2026", "Graziele":  "amor2026",
   "Raiane":    "amor2026", "Leticia":   "amor2026",
   "Erielly":   "amor2026", "Júlia":     "amor2026",
+  "Thifani":   "amor2026", "Leila":     "amor2026",
 };
 
 // Login: tenta Firebase Auth; se não configurado, usa senha local como fallback
@@ -3330,17 +3471,21 @@ function iniciarApp() {
   const ehLider      = perfil === "lider";
   const ehLiderCC    = perfil === "lider_callcenter";
   const ehCoord      = VE_COORD.includes(perfil);
+  const ehFinanceiro = SO_RELATORIOS.includes(perfil);
+  // Coordenadora "pura" (Paola) — sem nav de líder CC. Ganha nav próprio
+  // (Call Center | Relatórios). Andrielli (lider_callcenter) continua no nav dela.
+  const ehCoordPura  = perfil === "coordenadora";
 
   fecharBanner();
 
   const ehRec = perfil === "recepcionista";
   const ehCC  = perfil === "callcenter";
 
-  // Barra de abas — líder de recepção (Dara, Bianca): 5 abas (inclui Orçamentos)
+  // Barra de abas — líder de recepção (Dara, Bianca): 5 abas + Relatórios
   document.getElementById("lider-nav").classList.toggle("show", ehLider);
   if(ehLider) {
     const saved = localStorage.getItem("as_aba_lider");
-    abaLider = ["lancamentos","metas","equipe","dashboard","orcamentos"].includes(saved) ? saved : "metas";
+    abaLider = ["lancamentos","metas","equipe","dashboard","orcamentos","relatorios"].includes(saved) ? saved : "metas";
     aplicarAbaLider();
   }
 
@@ -3360,25 +3505,50 @@ function iniciarApp() {
     aplicarAbaCC();
   }
 
-  // Barra de abas — líder de call center (Andrielli): 3 abas (inclui Orçamentos)
+  // Barra de abas — líder de call center (Andrielli): 3 abas + Relatórios
   document.getElementById("lider-cc-nav").classList.toggle("show", ehLiderCC);
   if(ehLiderCC) {
     const saved = localStorage.getItem("as_aba_lider_cc");
-    abaLiderCC = ["callcenter","lancamentos","orcamentos"].includes(saved) ? saved : "lancamentos";
+    abaLiderCC = ["callcenter","lancamentos","orcamentos","relatorios"].includes(saved) ? saved : "lancamentos";
     aplicarAbaLiderCC();
   }
 
-  // Barra de abas — gestora/subgestora: Dashboard | Orçamentos
+  // Barra de abas — gestora/subgestora: Dashboard | Orçamentos | Relatórios
   const ehGestoraOuSub = SO_DASHBOARD.includes(perfil);
   document.getElementById("gestor-nav").classList.toggle("show", ehGestoraOuSub);
   if(ehGestoraOuSub) {
     const saved = localStorage.getItem("as_aba_gestor");
-    abaGestor = ["dashboard","orcamentos"].includes(saved) ? saved : "dashboard";
+    abaGestor = ["dashboard","orcamentos","relatorios"].includes(saved) ? saved : "dashboard";
     aplicarAbaGestor();
   }
 
-  // Seção coordenadora — coordenadora fixa + líder CC quando em aba CC
-  if(!ehLiderCC) {
+  // Barra de abas — coordenadora pura (Paola): Call Center | Relatórios
+  document.getElementById("coord-nav").classList.toggle("show", ehCoordPura);
+  if(ehCoordPura) {
+    const saved = localStorage.getItem("as_aba_coord");
+    abaCoord = ["callcenter","relatorios"].includes(saved) ? saved : "callcenter";
+    aplicarAbaCoord();
+  }
+
+  // Barra de abas — financeiro (Thifani, Leila): só Relatórios
+  document.getElementById("fin-nav").classList.toggle("show", ehFinanceiro);
+  if(ehFinanceiro) {
+    // Esconde TODAS as outras seções; deixa só Relatórios.
+    // Financeiro não tem listeners (busca sob demanda no Gerar Relatório)
+    // nem auto-refresh, nem botões de importação/feriado.
+    ["sec-orcamentos","sec-coord","sec-dashboard","sec-card-equipe",
+     "sec-metas","sec-lanc","sec-resumo","sec-tabela","sec-historico"]
+      .forEach(id => { const el = document.getElementById(id); if(el) el.style.display = "none"; });
+    document.getElementById("sec-relatorios").style.display = "";
+    iniciarRelatorios();
+    // Encerra fluxo aqui — sem listeners de lançamento/dashboard/orçamentos.
+    document.getElementById("tela-login").classList.add("hidden");
+    document.getElementById("tela-app").classList.remove("hidden");
+    return;
+  }
+
+  // Seção coordenadora — só seta visibilidade aqui se NÃO há nav próprio (líderCC ou coord pura)
+  if(!ehLiderCC && !ehCoordPura) {
     document.getElementById("sec-coord").style.display = ehCoord ? "" : "none";
   }
 
@@ -3577,18 +3747,19 @@ async function tickAutoRefresh() {
   }
 }
 
-// Aplica visibilidade das seções conforme aba ativa da líder (4 abas)
+// Aplica visibilidade das seções conforme aba ativa da líder (5 abas + Relatórios)
 function aplicarAbaLider() {
   const emLanc   = abaLider === "lancamentos";
   const emMetas  = abaLider === "metas";
   const emEquipe = abaLider === "equipe";
   const emDash   = abaLider === "dashboard";
   const emOrc    = abaLider === "orcamentos";
+  const emRel    = abaLider === "relatorios";
 
-  ["lanc","metas","equipe","dash","orc"].forEach(t => {
+  ["lanc","metas","equipe","dash","orc","rel"].forEach(t => {
     const el = document.getElementById(`lider-tab-${t}`);
     if(!el) return;
-    const aba = t==="dash"?"dashboard":t==="lanc"?"lancamentos":t==="orc"?"orcamentos":t;
+    const aba = t==="dash"?"dashboard":t==="lanc"?"lancamentos":t==="orc"?"orcamentos":t==="rel"?"relatorios":t;
     el.classList.toggle("active", abaLider === aba);
   });
 
@@ -3600,8 +3771,10 @@ function aplicarAbaLider() {
   document.getElementById("sec-tabela").style.display      = emLanc   ? "" : "none";
   document.getElementById("sec-historico").style.display   = emLanc   ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
+  document.getElementById("sec-relatorios").style.display  = emRel    ? "" : "none";
 
   if(emOrc) renderKanbanOrcamentos();
+  if(emRel) iniciarRelatorios();
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
 }
 
@@ -3678,11 +3851,14 @@ function aplicarAbaLiderCC() {
   const emCC   = abaLiderCC === "callcenter";
   const emOrc  = abaLiderCC === "orcamentos";
   const emLanc = abaLiderCC === "lancamentos";
+  const emRel  = abaLiderCC === "relatorios";
 
   document.getElementById("lider-cc-tab-lanc").classList.toggle("active", emLanc);
   document.getElementById("lider-cc-tab-cc").classList.toggle("active",   emCC);
   const tabOrc = document.getElementById("lider-cc-tab-orc");
   if(tabOrc) tabOrc.classList.toggle("active", emOrc);
+  const tabRel = document.getElementById("lider-cc-tab-rel");
+  if(tabRel) tabRel.classList.toggle("active", emRel);
 
   // Aba Lançamentos: mesma interface de callcenter
   document.getElementById("sec-card-equipe").style.display = emLanc ? "" : "none";
@@ -3694,8 +3870,10 @@ function aplicarAbaLiderCC() {
   // Aba Call Center: visão da coordenadora (dados de Erielly e Júlia)
   document.getElementById("sec-coord").style.display       = emCC   ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc  ? "" : "none";
+  document.getElementById("sec-relatorios").style.display  = emRel  ? "" : "none";
 
   if(emOrc) renderKanbanOrcamentos();
+  if(emRel) iniciarRelatorios();
   // Inicia listener equipe CC na primeira vez
   if(emLanc && !unsubEquipe) iniciarListenerEquipe();
 }
@@ -3710,20 +3888,53 @@ function mudarAbaLiderCC(aba) {
 function aplicarAbaGestor() {
   const emDash = abaGestor === "dashboard";
   const emOrc  = abaGestor === "orcamentos";
+  const emRel  = abaGestor === "relatorios";
 
   document.getElementById("gestor-tab-dash").classList.toggle("active", emDash);
   document.getElementById("gestor-tab-orc").classList.toggle("active",  emOrc);
+  const tabRel = document.getElementById("gestor-tab-rel");
+  if(tabRel) tabRel.classList.toggle("active", emRel);
 
   document.getElementById("sec-dashboard").style.display  = emDash ? "" : "none";
   document.getElementById("sec-orcamentos").style.display = emOrc  ? "" : "none";
+  document.getElementById("sec-relatorios").style.display = emRel  ? "" : "none";
 
   if(emOrc) renderKanbanOrcamentos();
+  if(emRel) iniciarRelatorios();
 }
 
 function mudarAbaGestor(aba) {
   abaGestor = aba;
   localStorage.setItem("as_aba_gestor", aba);
   aplicarAbaGestor();
+}
+
+// ── Coordenadora (Paola): Call Center | Relatórios
+let abaCoord = "callcenter";
+function aplicarAbaCoord() {
+  const emCC  = abaCoord === "callcenter";
+  const emRel = abaCoord === "relatorios";
+
+  document.getElementById("coord-tab-cc").classList.toggle("active",  emCC);
+  document.getElementById("coord-tab-rel").classList.toggle("active", emRel);
+
+  document.getElementById("sec-coord").style.display      = emCC  ? "" : "none";
+  document.getElementById("sec-relatorios").style.display = emRel ? "" : "none";
+
+  if(emRel) iniciarRelatorios();
+}
+function mudarAbaCoord(aba) {
+  abaCoord = aba;
+  localStorage.setItem("as_aba_coord", aba);
+  aplicarAbaCoord();
+}
+
+// ── Financeiro (Thifani, Leila): SÓ Relatórios
+function mudarAbaFinanceiro(/* aba */) {
+  // Só há uma aba — garante visibilidade
+  document.getElementById("fin-tab-rel").classList.add("active");
+  document.getElementById("sec-relatorios").style.display = "";
+  iniciarRelatorios();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -11126,6 +11337,376 @@ function editarOrcamentoFromModal() {
   if(body && !body.classList.contains("show")) toggleOrcForm();
   // Scroll até o formulário
   document.getElementById("sec-orcamentos")?.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RELATÓRIOS DE LANÇAMENTOS (gestão / coord / líderes / financeiro)
+// ═══════════════════════════════════════════════════════════
+
+// Estado do relatório (em memória, não persiste)
+let _relInicializado = false;
+let _relLancamentosBuscados = [];   // último resultado da busca (pra exportar)
+
+// Áreas por perfil — define quem aparece no filtro "Recepcionista" e quais
+// docs entram na busca para perfis com escopo restrito (líderes).
+const PERFIS_RECEPCAO   = ["recepcionista","lider"];
+const PERFIS_CALLCENTER = ["callcenter","lider_callcenter","coordenadora"];
+
+// Inicializa a tela (idempotente — só roda 1× por sessão)
+function iniciarRelatorios() {
+  if(_relInicializado) return;
+  _relInicializado = true;
+
+  // Pré-preenche datas com o mês corrente
+  const hoje = new Date();
+  const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const ymd  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  document.getElementById("rel-data-ini").value = ymd(ini);
+  document.getElementById("rel-data-fim").value = ymd(hoje);
+
+  // Popula select de recepcionistas conforme o perfil logado
+  preencherSelectRecepRelatorio();
+
+  // Aviso de área (visível só pra líderes)
+  const perfil = usuario?.perfil;
+  const ehLiderArea = (perfil === "lider" || perfil === "lider_callcenter");
+  const aviso = document.getElementById("rel-aviso-area");
+  if(aviso) {
+    if(ehLiderArea) {
+      aviso.textContent = perfil === "lider"
+        ? "ℹ️ Você visualiza apenas lançamentos da Recepção."
+        : "ℹ️ Você visualiza apenas lançamentos do Call Center.";
+      aviso.style.display = "";
+    } else {
+      aviso.style.display = "none";
+    }
+  }
+}
+
+// Decide quais nomes aparecem no filtro "Recepcionista".
+// Para líderes: só a área deles. Demais (gestão/coord/financeiro): todos.
+function preencherSelectRecepRelatorio() {
+  const sel = document.getElementById("rel-recep");
+  if(!sel) return;
+  const perfil = usuario?.perfil;
+  let nomes = Object.values(USUARIOS)
+    .filter(u => u.status !== "afastada")
+    .filter(u => {
+      if(perfil === "lider")            return PERFIS_RECEPCAO.includes(u.perfil);
+      if(perfil === "lider_callcenter") return PERFIS_CALLCENTER.includes(u.perfil);
+      // Demais (gestão/coord/financeiro): inclui todos os que fazem lançamento
+      return FAZ_LANC.includes(u.perfil);
+    })
+    .map(u => u.nome)
+    .sort((a,b) => a.localeCompare(b,"pt-BR"));
+
+  sel.innerHTML = `<option value="">Todas</option>` +
+    nomes.map(n => `<option value="${n}">${n}</option>`).join("");
+}
+
+function limparFiltrosRelatorio() {
+  document.getElementById("rel-recep").value     = "";
+  document.getElementById("rel-forma").value     = "";
+  document.getElementById("rel-categoria").value = "";
+  const hoje = new Date();
+  const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const ymd  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  document.getElementById("rel-data-ini").value = ymd(ini);
+  document.getElementById("rel-data-fim").value = ymd(hoje);
+  document.getElementById("rel-resultado").style.display = "none";
+  document.getElementById("rel-vazio").style.display     = "none";
+  document.getElementById("rel-loading").style.display   = "none";
+}
+
+// Converte um doc do Firestore em um objeto "linha do relatório"
+// com Data (Date), Recepcionista, Categoria (label), Forma Pagto (label) e Valor.
+function _normalizarLancamentoParaRelatorio(l) {
+  const dt = l.data_hora
+    ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+    : (l.criado_em
+        ? (l.criado_em.toDate ? l.criado_em.toDate() : new Date(l.criado_em))
+        : null);
+
+  // Categoria — usa as inferências já existentes do sistema
+  let categoriaLabel;
+  try { categoriaLabel = inferirProdutoLabel(l); } catch(e) { categoriaLabel = l.produto || "—"; }
+
+  // Forma de pagamento (label amigável)
+  let formaLabel;
+  try { formaLabel = inferirPagamentoLabel(l); } catch(e) { formaLabel = l.forma_pagamento || "—"; }
+
+  return {
+    data:           dt,
+    recepcionista:  l.usuario_nome || "—",
+    perfilOrigem:   l.perfil || "",
+    categoriaLabel: categoriaLabel || "—",
+    formaLabel:     formaLabel || "—",
+    valor:          Number(l.valor) || 0,
+    _raw:           l,
+  };
+}
+
+// Verifica se um doc atende ao filtro "categoria" (exames/procedimentos/imagem)
+function _matchCategoria(l, cat) {
+  if(!cat) return true;
+  if(cat === "imagem")        return (Number(l.imagem)      || 0) > 0;
+  if(cat === "exames")        return (Number(l.laboratorio) || 0) > 0;
+  if(cat === "procedimentos") return Array.isArray(l.procedimentos)
+                                      && l.procedimentos.some(p => (Number(p.valor) || 0) > 0);
+  return true;
+}
+
+// Verifica forma_pagamento (caixa/credito/boleto) — usa campos pré-computados
+// `caixa`/`credito` quando disponíveis e detecta boleto pelas formas detalhadas.
+function _matchFormaPagamento(l, forma) {
+  if(!forma) return true;
+  if(forma === "caixa")   return (Number(l.caixa)   || 0) > 0;
+  if(forma === "credito") return (Number(l.credito) || 0) > 0;
+  if(forma === "boleto") {
+    // Boleto é detectado pelo forma_pagamento_1/2 (regra Abr/2026: campo `boleto` é sempre 0)
+    if(l.forma_pagamento_1 === "boleto") return true;
+    if(l.forma_pagamento_2 === "boleto") return true;
+    // Schema legacy: forma_pagamento string
+    if((l.forma_pagamento || "").toLowerCase() === "boleto") return true;
+    return false;
+  }
+  return true;
+}
+
+// Calcula o conjunto de mes_ano cobertos pelo intervalo [iniStr, fimStr] (YYYY-MM-DD)
+function _mesesNoIntervalo(iniStr, fimStr) {
+  const [yi, mi] = iniStr.split("-").map(Number);
+  const [yf, mf] = fimStr.split("-").map(Number);
+  const out = [];
+  let y = yi, m = mi;
+  // Limite de segurança (60 meses = 5 anos)
+  for(let i = 0; i < 60; i++) {
+    out.push(`${y}-${String(m).padStart(2,"0")}`);
+    if(y === yf && m === mf) break;
+    m++;
+    if(m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+async function gerarRelatorio() {
+  const iniStr = document.getElementById("rel-data-ini").value;
+  const fimStr = document.getElementById("rel-data-fim").value;
+  const recep  = document.getElementById("rel-recep").value || "";
+  const forma  = document.getElementById("rel-forma").value || "";
+  const cat    = document.getElementById("rel-categoria").value || "";
+
+  if(!iniStr || !fimStr) { alert("Preencha data início e data fim."); return; }
+  if(iniStr > fimStr)    { alert("Data início precisa ser menor ou igual à data fim."); return; }
+
+  const loading = document.getElementById("rel-loading");
+  const resultado = document.getElementById("rel-resultado");
+  const vazio = document.getElementById("rel-vazio");
+  loading.style.display = "";
+  resultado.style.display = "none";
+  vazio.style.display = "none";
+
+  try {
+    const meses = _mesesNoIntervalo(iniStr, fimStr);
+    const perfil = usuario?.perfil;
+
+    // Busca em paralelo por mes_ano (índices existentes do Firestore)
+    const snaps = await Promise.all(
+      meses.map(ma => db.collection("lancamentos").where("mes_ano","==",ma).get())
+    );
+
+    // Junta todos os docs
+    let docs = [];
+    snaps.forEach(s => s.forEach(d => docs.push({ id:d.id, ...d.data() })));
+
+    // Aplica filtros base — só lançamentos não excluídos e "pagos" (visíveis)
+    docs = docs.filter(l => l.excluido !== true);
+    docs = docs.filter(ehDocPago);
+    docs = docs.filter(l => l.tipo !== "saida"); // relatório foca em receita
+
+    // Recorta pelo intervalo exato em data_hora (mes_ano cobre mês inteiro)
+    const dtIni = new Date(iniStr + "T00:00:00");
+    const dtFim = new Date(fimStr + "T23:59:59");
+    docs = docs.filter(l => {
+      const dt = l.data_hora
+        ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+        : null;
+      if(!dt) return false;
+      return dt >= dtIni && dt <= dtFim;
+    });
+
+    // Filtro por área (líderes)
+    if(perfil === "lider") {
+      docs = docs.filter(l => PERFIS_RECEPCAO.includes(l.perfil));
+    } else if(perfil === "lider_callcenter") {
+      docs = docs.filter(l => PERFIS_CALLCENTER.includes(l.perfil));
+    }
+
+    // Filtros da UI
+    if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
+    if(cat)   docs = docs.filter(l => _matchCategoria(l, cat));
+    if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma));
+
+    // Normaliza pra exibição
+    let linhas = docs.map(_normalizarLancamentoParaRelatorio);
+
+    // Ordena por data desc
+    linhas.sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
+
+    _relLancamentosBuscados = linhas;
+    loading.style.display = "none";
+
+    if(linhas.length === 0) {
+      vazio.style.display = "";
+      return;
+    }
+
+    // Resumo
+    const total = linhas.reduce((s,l) => s + (l.valor || 0), 0);
+    const media = total / linhas.length;
+    document.getElementById("rel-tot-qtd").textContent = linhas.length.toString();
+    document.getElementById("rel-tot-val").textContent = _relFmtBRL(total);
+    document.getElementById("rel-tot-med").textContent = _relFmtBRL(media);
+
+    // Tabela
+    const tbody = document.getElementById("rel-tbody");
+    tbody.innerHTML = linhas.map(l => `
+      <tr>
+        <td>${_relFmtData(l.data)}</td>
+        <td>${l.recepcionista}</td>
+        <td>${l.categoriaLabel}</td>
+        <td>${l.formaLabel}</td>
+        <td style="text-align:right;font-weight:600">${_relFmtBRL(l.valor)}</td>
+      </tr>
+    `).join("");
+
+    resultado.style.display = "";
+  } catch(e) {
+    console.error("[Relatório] erro ao gerar:", e);
+    loading.style.display = "none";
+    alert("Erro ao gerar relatório: " + (e.message || e));
+  }
+}
+
+function _relFmtBRL(v) {
+  return (Number(v) || 0).toLocaleString("pt-BR", {
+    style:"currency", currency:"BRL", minimumFractionDigits:2
+  });
+}
+function _relFmtData(d) {
+  if(!d) return "—";
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+}
+function _relFmtDataArquivo(yyyymmdd) {
+  // "2026-05-13" → "13052026"
+  const [y,m,d] = yyyymmdd.split("-");
+  return `${d}${m}${y}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORTAÇÃO EXCEL (.xlsx) — SheetJS
+// ═══════════════════════════════════════════════════════════
+function exportarRelatorioExcel() {
+  if(typeof XLSX === "undefined") { alert("Biblioteca de exportação não carregou. Recarregue a página."); return; }
+  const linhas = _relLancamentosBuscados || [];
+  if(linhas.length === 0) { alert("Nenhum dado para exportar."); return; }
+
+  const iniStr = document.getElementById("rel-data-ini").value;
+  const fimStr = document.getElementById("rel-data-fim").value;
+
+  // ── Aba 1: "Lançamentos"
+  const dadosLanc = [
+    ["Data", "Recepcionista", "Categoria", "Forma de Pagamento", "Valor (R$)"],
+    ...linhas.map(l => [
+      _relFmtData(l.data),
+      l.recepcionista,
+      l.categoriaLabel,
+      l.formaLabel,
+      Number(l.valor) || 0,
+    ])
+  ];
+  const wsLanc = XLSX.utils.aoa_to_sheet(dadosLanc);
+  // Formato de moeda na coluna Valor (E)
+  for(let r = 1; r < dadosLanc.length; r++) {
+    const cell = wsLanc[XLSX.utils.encode_cell({ c:4, r })];
+    if(cell) cell.z = 'R$ #,##0.00';
+  }
+  // Largura das colunas
+  wsLanc["!cols"] = [{ wch:12 },{ wch:18 },{ wch:24 },{ wch:22 },{ wch:14 }];
+  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito
+  _relAplicarEstiloCabecalho(wsLanc, 5);
+
+  // ── Aba 2: "Resumo"
+  // Totais por recepcionista
+  const porRec = {};
+  linhas.forEach(l => { porRec[l.recepcionista] = (porRec[l.recepcionista] || 0) + (l.valor || 0); });
+  // Totais por categoria (usa a label já calculada)
+  const porCat = {};
+  linhas.forEach(l => { porCat[l.categoriaLabel] = (porCat[l.categoriaLabel] || 0) + (l.valor || 0); });
+  // Totais por forma de pagamento (label)
+  const porFp = {};
+  linhas.forEach(l => { porFp[l.formaLabel] = (porFp[l.formaLabel] || 0) + (l.valor || 0); });
+
+  const dadosResumo = [];
+  dadosResumo.push(["Período", `${_relFmtData(new Date(iniStr+"T12:00:00"))} a ${_relFmtData(new Date(fimStr+"T12:00:00"))}`]);
+  dadosResumo.push(["Total de Lançamentos", linhas.length]);
+  dadosResumo.push(["Valor Total (R$)", linhas.reduce((s,l)=>s+(l.valor||0),0)]);
+  dadosResumo.push([]);
+  dadosResumo.push(["Por Recepcionista", "Valor (R$)"]);
+  Object.entries(porRec).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
+  dadosResumo.push([]);
+  dadosResumo.push(["Por Categoria", "Valor (R$)"]);
+  Object.entries(porCat).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
+  dadosResumo.push([]);
+  dadosResumo.push(["Por Forma de Pagamento", "Valor (R$)"]);
+  Object.entries(porFp).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
+
+  const wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
+  wsResumo["!cols"] = [{ wch:30 },{ wch:18 }];
+  // Aplica formato moeda na coluna B em qualquer linha numérica
+  for(let r = 0; r < dadosResumo.length; r++) {
+    const cellRef = XLSX.utils.encode_cell({ c:1, r });
+    const cell = wsResumo[cellRef];
+    if(cell && typeof cell.v === "number" && r !== 1) cell.z = 'R$ #,##0.00';
+  }
+  // Aplica estilo de cabeçalho nas 3 linhas de seção
+  [4, 5+Object.keys(porRec).length+1, 5+Object.keys(porRec).length+1 + Object.keys(porCat).length+2].forEach(rowIdx => {
+    ["A","B"].forEach(col => {
+      const ref = `${col}${rowIdx+1}`;
+      if(wsResumo[ref]) {
+        wsResumo[ref].s = {
+          font: { bold:true, color:{ rgb:"FFFFFFFF" } },
+          fill: { fgColor:{ rgb:"FFE8003D" } },
+          alignment:{ horizontal:"left", vertical:"center" }
+        };
+      }
+    });
+  });
+
+  // ── Monta workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsLanc,   "Lançamentos");
+  XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+
+  const nomeArq = `relatorio_lancamentos_${_relFmtDataArquivo(iniStr)}_a_${_relFmtDataArquivo(fimStr)}.xlsx`;
+  XLSX.writeFile(wb, nomeArq);
+}
+
+// Aplica estilo (negrito, fundo #E8003D, texto branco) na linha 0 (cabeçalho)
+// para `nCols` colunas. Nota: SheetJS Community não escreve estilos por padrão —
+// mantemos a marcação no objeto pro caso de alguma versão/extensão suportar; a
+// largura das colunas é o garantido.
+function _relAplicarEstiloCabecalho(ws, nCols) {
+  for(let c = 0; c < nCols; c++) {
+    const ref = XLSX.utils.encode_cell({ c, r:0 });
+    const cell = ws[ref];
+    if(!cell) continue;
+    cell.s = {
+      font: { bold:true, color:{ rgb:"FFFFFFFF" } },
+      fill: { fgColor:{ rgb:"FFE8003D" } },
+      alignment:{ horizontal:"center", vertical:"center" }
+    };
+  }
 }
 </script>
 </body>
