@@ -362,9 +362,26 @@
     .pl-campo .pl-valor { background:#fff; padding:6px 10px; text-align:center; font-size:13px; font-weight:700; }
     .pl-campo input { width:100%; border:none; outline:none; background:transparent; text-align:center; font-family:'Inter',sans-serif; font-size:13px; font-weight:700; padding:0; color:var(--text); }
     .pl-campo input:disabled { background:#F3F4F6; cursor:not-allowed; color:var(--text2); }
+    /* Borda amarela quando o input tem valor diferente do salvo no Firestore */
+    .pl-campo.pl-dirty { outline:2px solid #F59E0B; outline-offset:-2px; }
     @media (max-width:600px) {
       .pl-row.cols-2, .pl-row.cols-3 { grid-template-columns:1fr; }
     }
+
+    /* Bloco Salvar (botão + mensagens) — só visível para VE_DASHBOARD */
+    .rd-save-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:12px; }
+    .rd-save-btn {
+      background:#EA9999; color:#fff; font-weight:700; padding:10px 28px;
+      border:1px solid #000; border-radius:6px; font-family:'Inter',sans-serif;
+      font-size:14px; cursor:pointer; transition:background .15s, transform .05s;
+    }
+    .rd-save-btn:hover  { background:#D87878; }
+    .rd-save-btn:active { transform:translateY(1px); }
+    .rd-save-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .rd-save-msg { font-size:12px; min-height:16px; }
+    .rd-save-msg.ok  { color:#047857; font-weight:600; }
+    .rd-save-msg.err { color:#B91C1C; font-weight:600; }
+    .rd-save-ult { font-size:11px; color:var(--text2); }
     .rd-table { width:100%; border-collapse:collapse; font-size:13px; }
     .rd-table th, .rd-table td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; }
     .rd-table th { background:#F9FAFB; font-weight:700; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
@@ -1189,6 +1206,13 @@
               <div class="pl-valor" id="rd-liq-diff">R$ 0,00</div>
             </div>
           </div>
+        </div>
+
+        <!-- Salvar Alterações — só aparece para VE_DASHBOARD (gestor, subgestora, lider) -->
+        <div class="rd-save-wrap" id="rd-save-wrap" style="display:none">
+          <button type="button" class="rd-save-btn" id="rd-save-btn" onclick="salvarResumoDiaBotao()">💾 Salvar Alterações</button>
+          <div class="rd-save-msg" id="rd-save-msg"></div>
+          <div class="rd-save-ult" id="rd-save-ult"></div>
         </div>
       </div>
 
@@ -7359,16 +7383,36 @@ function rdBolinhaPorPct(real, meta) {
 }
 
 // Listener Firestore — coleção `resumo_diario` doc YYYY-MM-DD.
+// Os dados salvos ficam em memória para comparar com os inputs (dirty state)
+// e para alimentar o popup de confirmação no botão "Salvar Alterações".
 let unsubResumoDia = null;
+let _resumoDiaDadosSalvos   = null;   // último data() lido do Firestore (null = não existe)
+let _resumoDiaDocExiste     = false;  // true se o doc da data atual existe
+let _resumoDiaAtualizadoEm  = null;   // Date da última gravação
+let _resumoDiaAtualizadoPor = "";     // nome de quem gravou
+
 function pararListenerResumoDia() {
   if(unsubResumoDia) { unsubResumoDia(); unsubResumoDia = null; }
 }
 function carregarResumoDia(dataStr) {
   pararListenerResumoDia();
+  _setMsgSave("", ""); // limpa mensagem anterior ao trocar de data
   unsubResumoDia = db.collection("resumo_diario").doc(dataStr)
     .onSnapshot(doc => {
-      const dados = doc.exists ? doc.data() : {};
-      atualizarInputsResumoDia(dados);
+      _resumoDiaDocExiste = doc.exists;
+      if(doc.exists) {
+        _resumoDiaDadosSalvos = doc.data();
+        const ts = _resumoDiaDadosSalvos.atualizado_em;
+        _resumoDiaAtualizadoEm  = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+        _resumoDiaAtualizadoPor = _resumoDiaDadosSalvos.atualizado_por || "";
+      } else {
+        _resumoDiaDadosSalvos   = null;
+        _resumoDiaAtualizadoEm  = null;
+        _resumoDiaAtualizadoPor = "";
+      }
+      atualizarInputsResumoDia(_resumoDiaDadosSalvos || {});
+      _atualizarUltimaAtualizacao();
+      _atualizarDirtyBordas();
       renderResumoDia();
     }, e => console.warn("[resumo_diario] listener:", e?.code || e?.message || e));
 }
@@ -7394,30 +7438,112 @@ function atualizarInputsResumoDia(dados) {
     const el = document.getElementById(id);
     if(el) el.disabled = !podeEditar;
   });
+
+  // Visibilidade do bloco de salvar (botão + mensagens) — só para VE_DASHBOARD
+  const wrap = document.getElementById("rd-save-wrap");
+  if(wrap) wrap.style.display = podeEditar ? "" : "none";
 }
 
-// Salva campos manuais no Firestore (debounce evita escrita por tecla).
-let _resumoDiaSaveTimer = null;
-function salvarResumoDiaCampo() {
-  if(!VE_DASHBOARD.includes(usuario?.perfil)) return; // permissão extra-segura
+// Lê os valores atuais dos inputs normalizados (mesmo formato gravado no Firestore).
+function _lerCamposManuaisResumoDia() {
+  const limparPrefixo = s => (s || "").replace(/R\$/gi, "").replace(/[\s ]/g, "");
+  return {
+    consultas:                    Number(document.getElementById("rd-consultas")?.value) || 0,
+    sessoes:                      Number(document.getElementById("rd-sessoes")?.value)   || 0,
+    alcancado_simulacoes_credito: Number(document.getElementById("rd-alc-simul")?.value) || 0,
+    meta_liquida:                 parseBRL(limparPrefixo(document.getElementById("rd-meta-liquida")?.value || "")),
+  };
+}
+
+// Compara campo a campo input × salvo e marca borda amarela nos diferentes.
+// Tolerância de 0,005 em meta_liquida pra evitar falso positivo por arredondamento.
+function _atualizarDirtyBordas() {
+  const salvos = _resumoDiaDadosSalvos || {};
+  const atuais = _lerCamposManuaisResumoDia();
+  const eqNum  = (a, b, tol=0) => Math.abs((Number(a)||0) - (Number(b)||0)) <= tol;
+  const checks = [
+    { id:"rd-consultas",    dirty: !eqNum(atuais.consultas,                    salvos.consultas) },
+    { id:"rd-sessoes",      dirty: !eqNum(atuais.sessoes,                      salvos.sessoes) },
+    { id:"rd-alc-simul",    dirty: !eqNum(atuais.alcancado_simulacoes_credito, salvos.alcancado_simulacoes_credito) },
+    { id:"rd-meta-liquida", dirty: !eqNum(atuais.meta_liquida,                 salvos.meta_liquida, 0.005) },
+  ];
+  checks.forEach(c => {
+    const inp = document.getElementById(c.id);
+    if(!inp) return;
+    const campo = inp.closest(".pl-campo");
+    if(campo) campo.classList.toggle("pl-dirty", c.dirty);
+  });
+}
+
+// Mostra "📅 Última atualização: DD/MM/AAAA às HH:MM por NOME" abaixo do botão.
+function _atualizarUltimaAtualizacao() {
+  const el = document.getElementById("rd-save-ult");
+  if(!el) return;
+  if(!_resumoDiaDocExiste || !_resumoDiaAtualizadoEm) {
+    el.textContent = "";
+    return;
+  }
+  el.textContent = `📅 Última atualização: ${_fmtDataHoraPtBR(_resumoDiaAtualizadoEm)}`
+                 + (_resumoDiaAtualizadoPor ? ` por ${_resumoDiaAtualizadoPor}` : "");
+}
+
+// Atualiza a mensagem abaixo do botão (info / ok / err).
+function _setMsgSave(texto, tipo) {
+  const el = document.getElementById("rd-save-msg");
+  if(!el) return;
+  el.textContent = texto || "";
+  el.classList.remove("ok","err");
+  if(tipo === "ok")  el.classList.add("ok");
+  if(tipo === "err") el.classList.add("err");
+}
+
+// Formata Date como "DD/MM/AAAA às HH:MM" (pt-BR).
+function _fmtDataHoraPtBR(d) {
+  if(!d) return "";
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mi = String(d.getMinutes()).padStart(2,"0");
+  return `${dd}/${mm}/${yy} às ${hh}:${mi}`;
+}
+
+// Click do botão "Salvar Alterações" — fluxo com confirmação se já existe doc.
+async function salvarResumoDiaBotao() {
+  if(!VE_DASHBOARD.includes(usuario?.perfil)) return;
   const dataStr = document.getElementById("resumo-dia-data")?.value;
   if(!dataStr) return;
-  clearTimeout(_resumoDiaSaveTimer);
-  _resumoDiaSaveTimer = setTimeout(async () => {
-    try {
-      const dados = {
-        consultas:                    Number(document.getElementById("rd-consultas")?.value) || 0,
-        sessoes:                      Number(document.getElementById("rd-sessoes")?.value)   || 0,
-        alcancado_simulacoes_credito: Number(document.getElementById("rd-alc-simul")?.value) || 0,
-        meta_liquida:                 parseBRL(document.getElementById("rd-meta-liquida")?.value || ""),
-        atualizado_em:                firebase.firestore.FieldValue.serverTimestamp(),
-        atualizado_por:               usuario?.nome || "",
-      };
-      await db.collection("resumo_diario").doc(dataStr).set(dados, { merge: true });
-    } catch(e) {
-      console.warn("[resumo_diario] save falhou:", e?.code || e?.message || e);
-    }
-  }, 500);
+
+  // Se já existe doc salvo pra essa data, pede confirmação antes de sobrescrever
+  if(_resumoDiaDocExiste) {
+    const [y,m,d] = dataStr.split("-");
+    const ok = window.confirm(`Já existe valor salvo para ${d}/${m}/${y}. Deseja sobrescrever?`);
+    if(!ok) return; // Cancelou → não faz nada
+  }
+
+  const btn = document.getElementById("rd-save-btn");
+  if(btn) btn.disabled = true;
+  _setMsgSave("Salvando…", "");
+
+  try {
+    const campos = _lerCamposManuaisResumoDia();
+    const dados = {
+      ...campos,
+      atualizado_em:  firebase.firestore.FieldValue.serverTimestamp(),
+      atualizado_por: usuario?.nome || "",
+    };
+    await db.collection("resumo_diario").doc(dataStr).set(dados, { merge: true });
+
+    // Sucesso: a borda amarela some quando o onSnapshot reflete os novos valores.
+    const agora = new Date();
+    _setMsgSave(`✅ Salvo em ${_fmtDataHoraPtBR(agora)}`, "ok");
+  } catch(e) {
+    const msg = e?.message || String(e);
+    _setMsgSave(`❌ Erro ao salvar: ${msg}`, "err");
+    console.warn("[resumo_diario] save falhou:", e?.code || msg);
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 
 // Handler de mudança de data: re-renderiza tudo + re-conecta listener.
@@ -7428,8 +7554,8 @@ function onMudarDataResumoDia() {
 }
 
 // Atacha event listeners aos inputs manuais (idempotente — só roda 1×).
-// oninput → recalcula derivados na hora (Meta sim. crédito, totais).
-// onchange → dispara save no Firestore (debounced).
+// oninput → recalcula derivados na hora (Meta sim. crédito, totais) +
+// atualiza borda amarela de "modificado". O SAVE é via botão (sem auto-save).
 let _resumoDiaListenersAtachados = false;
 function _atacharListenersResumoDia() {
   if(_resumoDiaListenersAtachados) return;
@@ -7437,9 +7563,10 @@ function _atacharListenersResumoDia() {
   ids.forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
-    el.addEventListener("input",  renderResumoDia);
-    el.addEventListener("change", salvarResumoDiaCampo);
-    el.addEventListener("blur",   salvarResumoDiaCampo);
+    el.addEventListener("input", () => {
+      renderResumoDia();
+      _atualizarDirtyBordas();
+    });
   });
   _resumoDiaListenersAtachados = true;
 }
