@@ -74,6 +74,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
     }
 
+    // Resumo do Dia (planilha do gestor): doc por data YYYY-MM-DD.
+    // Leitura e escrita pra gestor, subgestora e líder de recepção (VE_DASHBOARD).
+    match /resumo_diario/{docId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider'];
+    }
+
     // Orçamentos (Fase 1): todos os perfis autenticados leem (filtro de visibilidade
     // é aplicado no cliente). Criação só com criado_por_uid == auth.uid.
     // Edição/exclusão pelo dono ou pela liderança (lider, lider_callcenter, gestor, subgestora).
