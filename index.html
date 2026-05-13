@@ -1605,6 +1605,11 @@
               <option value="imagem">Imagem</option>
             </select>
           </div>
+          <!-- Busca opcional por nome de paciente (case-insensitive, substring) -->
+          <div class="fg" style="margin:0">
+            <label>🔍 Buscar paciente</label>
+            <input type="text" id="rel-paciente" placeholder="Nome ou parte do nome" />
+          </div>
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -1641,13 +1646,16 @@
           </div>
         </div>
 
-        <!-- Tabela -->
+        <!-- Tabela — ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma Pagto | Valor.
+             CPF sem mask de privacidade (é relatório financeiro) -->
         <div class="card">
           <div class="tbl-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Data</th>
+                  <th>Paciente</th>
+                  <th>CPF</th>
                   <th>Recepcionista</th>
                   <th>Categoria</th>
                   <th>Forma Pagto</th>
@@ -11408,6 +11416,8 @@ function limparFiltrosRelatorio() {
   document.getElementById("rel-recep").value     = "";
   document.getElementById("rel-forma").value     = "";
   document.getElementById("rel-categoria").value = "";
+  const inpPac = document.getElementById("rel-paciente");
+  if(inpPac) inpPac.value = "";
   const hoje = new Date();
   const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const ymd  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -11437,6 +11447,8 @@ function _normalizarLancamentoParaRelatorio(l) {
 
   return {
     data:           dt,
+    paciente:       l.paciente_nome || "",
+    cpf:            l.paciente_cpf  || "",
     recepcionista:  l.usuario_nome || "—",
     perfilOrigem:   l.perfil || "",
     categoriaLabel: categoriaLabel || "—",
@@ -11495,6 +11507,8 @@ async function gerarRelatorio() {
   const recep  = document.getElementById("rel-recep").value || "";
   const forma  = document.getElementById("rel-forma").value || "";
   const cat    = document.getElementById("rel-categoria").value || "";
+  // Busca por paciente: case-insensitive, substring. Vazia = ignora filtro.
+  const pacienteBusca = (document.getElementById("rel-paciente")?.value || "").trim().toLowerCase();
 
   if(!iniStr || !fimStr) { alert("Preencha data início e data fim."); return; }
   if(iniStr > fimStr)    { alert("Data início precisa ser menor ou igual à data fim."); return; }
@@ -11546,6 +11560,10 @@ async function gerarRelatorio() {
     if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
     if(cat)   docs = docs.filter(l => _matchCategoria(l, cat));
     if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma));
+    // Busca de paciente: case-insensitive, substring no campo paciente_nome
+    if(pacienteBusca) {
+      docs = docs.filter(l => (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
+    }
 
     // Normaliza pra exibição
     let linhas = docs.map(_normalizarLancamentoParaRelatorio);
@@ -11568,11 +11586,15 @@ async function gerarRelatorio() {
     document.getElementById("rel-tot-val").textContent = _relFmtBRL(total);
     document.getElementById("rel-tot-med").textContent = _relFmtBRL(media);
 
-    // Tabela
+    // Tabela — ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma Pagto | Valor.
+    // Lançamentos antigos sem paciente_nome/paciente_cpf mostram "—".
+    // CPF sem mask de privacidade (é relatório financeiro).
     const tbody = document.getElementById("rel-tbody");
     tbody.innerHTML = linhas.map(l => `
       <tr>
         <td>${_relFmtData(l.data)}</td>
+        <td>${l.paciente ? escHTML(l.paciente) : "—"}</td>
+        <td>${l.cpf      ? escHTML(l.cpf)      : "—"}</td>
         <td>${l.recepcionista}</td>
         <td>${l.categoriaLabel}</td>
         <td>${l.formaLabel}</td>
@@ -11615,10 +11637,14 @@ function exportarRelatorioExcel() {
   const fimStr = document.getElementById("rel-data-fim").value;
 
   // ── Aba 1: "Lançamentos"
+  // Ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma de Pagamento | Valor (R$)
+  // CPF como texto (preserva zeros à esquerda). Sem dados → célula vazia (não "—").
   const dadosLanc = [
-    ["Data", "Recepcionista", "Categoria", "Forma de Pagamento", "Valor (R$)"],
+    ["Data", "Paciente", "CPF", "Recepcionista", "Categoria", "Forma de Pagamento", "Valor (R$)"],
     ...linhas.map(l => [
       _relFmtData(l.data),
+      l.paciente || "",
+      l.cpf      || "",
       l.recepcionista,
       l.categoriaLabel,
       l.formaLabel,
@@ -11626,15 +11652,21 @@ function exportarRelatorioExcel() {
     ])
   ];
   const wsLanc = XLSX.utils.aoa_to_sheet(dadosLanc);
-  // Formato de moeda na coluna Valor (E)
+  // Coluna C (CPF) — força tipo string com formato texto pra preservar zeros à esquerda
   for(let r = 1; r < dadosLanc.length; r++) {
-    const cell = wsLanc[XLSX.utils.encode_cell({ c:4, r })];
+    const refCpf = XLSX.utils.encode_cell({ c:2, r });
+    const cellCpf = wsLanc[refCpf];
+    if(cellCpf) { cellCpf.t = "s"; cellCpf.z = "@"; }
+  }
+  // Coluna G (Valor) — formato moeda
+  for(let r = 1; r < dadosLanc.length; r++) {
+    const cell = wsLanc[XLSX.utils.encode_cell({ c:6, r })];
     if(cell) cell.z = 'R$ #,##0.00';
   }
-  // Largura das colunas
-  wsLanc["!cols"] = [{ wch:12 },{ wch:18 },{ wch:24 },{ wch:22 },{ wch:14 }];
-  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito
-  _relAplicarEstiloCabecalho(wsLanc, 5);
+  // Largura das colunas (Data | Paciente | CPF | Recepcionista | Categoria | Forma | Valor)
+  wsLanc["!cols"] = [{ wch:12 },{ wch:28 },{ wch:16 },{ wch:18 },{ wch:24 },{ wch:22 },{ wch:14 }];
+  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito (7 colunas)
+  _relAplicarEstiloCabecalho(wsLanc, 7);
 
   // ── Aba 2: "Resumo"
   // Totais por recepcionista
