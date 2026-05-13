@@ -2603,12 +2603,16 @@ function extrairCategoriasDoDocNovo(l) {
   out.consultas = +l.consultas   || 0;
 
   // Procedimentos: soma o total + breakdown por tipo
+  // CAMINHO B (duplicação consciente): Mounjaro, Vitaminas (tipo "Injetáveis") e
+  // Infiltração também somam em `out.injetaveis` — recorte informativo do card.
+  // Os 3 permanecem em `out.proc` (NÃO subtrair), portanto somar Procedimentos
+  // + Injetáveis nos cards duplica esses valores. Comportamento intencional.
   (l.procedimentos || []).forEach(p => {
     const v = +p.valor || 0;
     const tp = p.tipo || "";
     out.proc += v;
     if(tp) out.porProcTipo[tp] = (out.porProcTipo[tp] || 0) + v;
-    if(tp === "Injetáveis") out.injetaveis += v;
+    if(tp === "Injetáveis" || tp === "Mounjaro" || tp === "Infiltração") out.injetaveis += v;
   });
 
   return out;
@@ -5944,21 +5948,16 @@ function mudarFiltroCoordMes() {
 }
 
 // ── Card Metas da Equipe ────────────────────────────────────
+// Lê TODOS os lançamentos do mês (sem filtro de perfil) pra ficar idêntico
+// ao Dashboard. Gestão não lança, então o filtro antigo só causava divergência
+// quando algum doc vinha com perfil "incomum" (ex: string vazia). A separação
+// por área (recepção × CC) é feita no client em renderCardMetasEquipe via
+// l.perfil, então buscar tudo aqui não vaza nada visualmente.
 function iniciarListenerEquipe() {
   if(unsubEquipe) { unsubEquipe(); unsubEquipe=null; }
-  const perfil = usuario?.perfil;
-
-  // CC puro: busca TODOS os lancamentos (recepção + CC) para montar a aba Equipe completa
-  // Coord / lider_callcenter: idem (precisam ver CC)
-  // Recepção / lider: ouve apenas recepcionistas + líderes de recepção
-  const ehCCPuro = perfil === "callcenter";
-  const filtro   = (ehCCPuro || VE_COORD.includes(perfil))
-    ? ["callcenter","lider_callcenter","recepcionista","lider"]
-    : ["recepcionista","lider"];
 
   unsubEquipe = db.collection("lancamentos")
     .where("mes_ano","==",mesAno)
-    .where("perfil","in",filtro)
     .onSnapshot(snap => {
       equipeLancs = snap.docs.map(d => ({id:d.id,...d.data()})).filter(l => l.excluido !== true);
       renderCardMetasEquipe();
@@ -8566,14 +8565,18 @@ function getTotaisEquipeFatDiario(mesAnoStr) {
 // (entrada com status="pago" + saída-irmã via id_par). Usado a partir do
 // MARCO_NOVO_MODELO, quando equipe lança via formulário e fatDiario não é
 // mais importado.
+// Boleto: reconstruído via _somarBoletoDoDoc (forma_pagamento_1/2 === "boleto")
+// porque o campo agregado `t.boleto` é SEMPRE 0 desde Abr/2026 (boleto vai
+// pra caixa). Espelha exatamente o que o Dashboard faz em getTotaisLancamentosPagosMes.
 function agregarTotaisEquipeLancs(lancs) {
   const pagos     = lancs.filter(l => l.tipo === "entrada" && l.status === "pago");
   const saidasPar = lancs.filter(l => l.tipo === "saida"   && l.id_par);
   const t = calcTotaisDetalhados([...pagos, ...saidasPar]);
+  const boletoExtraido = pagos.reduce((s, l) => s + _somarBoletoDoDoc(l), 0);
   return {
     caixa:      Number(t.caixa)      || 0,
     credito:    Number(t.credito)    || 0,
-    boleto:     Number(t.boleto)     || 0,
+    boleto:     boletoExtraido,
     lab:        Number(t.lab)        || 0,
     img:        Number(t.img)        || 0,
     proc:       Number(t.proc)       || 0,
