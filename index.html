@@ -1704,11 +1704,18 @@
           </div>
           <div class="fg" style="margin:0">
             <label>🏷️ Categoria</label>
-            <select id="rel-categoria">
+            <select id="rel-categoria" onchange="_onMudarCategoriaRelatorio()">
               <option value="">Todas</option>
               <option value="exames">Exames</option>
               <option value="procedimentos">Procedimentos</option>
               <option value="imagem">Imagem</option>
+            </select>
+          </div>
+          <!-- Subtipo de procedimento (só aparece quando Categoria = Procedimentos) -->
+          <div class="fg" id="rel-subtipo-wrap" style="margin:0;display:none">
+            <label>🧪 Tipo de procedimento</label>
+            <select id="rel-subtipo">
+              <option value="">Todos</option>
             </select>
           </div>
           <!-- Busca opcional por nome de paciente (case-insensitive, substring) -->
@@ -1752,8 +1759,8 @@
           </div>
         </div>
 
-        <!-- Tabela — ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma Pagto | Valor.
-             CPF sem mask de privacidade (é relatório financeiro) -->
+        <!-- Tabela — ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma Pagto | Valor.
+             CPF sem mask de privacidade (é relatório financeiro). -->
         <div class="card">
           <div class="tbl-wrap">
             <table>
@@ -1762,8 +1769,10 @@
                   <th>Data</th>
                   <th>Paciente</th>
                   <th>CPF</th>
+                  <th>Médico</th>
                   <th>Recepcionista</th>
                   <th>Categoria</th>
+                  <th>Subtipo</th>
                   <th>Forma Pagto</th>
                   <th style="text-align:right">Valor</th>
                 </tr>
@@ -11697,6 +11706,15 @@ function iniciarRelatorios() {
   // Popula select de recepcionistas conforme o perfil logado
   preencherSelectRecepRelatorio();
 
+  // Popula select de Subtipo de Procedimento a partir de TIPOS_PROCEDIMENTO
+  const selSub = document.getElementById("rel-subtipo");
+  if(selSub) {
+    selSub.innerHTML = `<option value="">Todos</option>` +
+      TIPOS_PROCEDIMENTO.map(t => `<option value="${escHTML(t.value)}">${escHTML(t.label)}</option>`).join("");
+  }
+  // Aplica estado inicial (categoria vazia → subtipo escondido)
+  _onMudarCategoriaRelatorio();
+
   // Aviso de área (visível só pra líderes)
   const perfil = usuario?.perfil;
   const ehLiderArea = (perfil === "lider" || perfil === "lider_callcenter");
@@ -11740,6 +11758,10 @@ function limparFiltrosRelatorio() {
   document.getElementById("rel-categoria").value = "";
   const inpPac = document.getElementById("rel-paciente");
   if(inpPac) inpPac.value = "";
+  // Reseta o subtipo e re-aplica visibilidade (esconde o wrapper)
+  const selSub = document.getElementById("rel-subtipo");
+  if(selSub) selSub.value = "";
+  _onMudarCategoriaRelatorio();
   const hoje = new Date();
   const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   const ymd  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -11750,8 +11772,19 @@ function limparFiltrosRelatorio() {
   document.getElementById("rel-loading").style.display   = "none";
 }
 
+// Mostra/esconde o filtro "Tipo de procedimento" conforme a Categoria selecionada.
+// Só visível quando Categoria === "procedimentos". Reseta valor pra "Todos" ao esconder.
+function _onMudarCategoriaRelatorio() {
+  const cat   = document.getElementById("rel-categoria")?.value || "";
+  const wrap  = document.getElementById("rel-subtipo-wrap");
+  const sel   = document.getElementById("rel-subtipo");
+  const mostra = (cat === "procedimentos");
+  if(wrap) wrap.style.display = mostra ? "" : "none";
+  if(!mostra && sel) sel.value = "";
+}
+
 // Converte um doc do Firestore em um objeto "linha do relatório"
-// com Data (Date), Recepcionista, Categoria (label), Forma Pagto (label) e Valor.
+// com Data, Paciente, CPF, Médico, Recepcionista, Categoria, Subtipo, Forma Pagto e Valor.
 function _normalizarLancamentoParaRelatorio(l) {
   const dt = l.data_hora
     ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
@@ -11767,13 +11800,33 @@ function _normalizarLancamentoParaRelatorio(l) {
   let formaLabel;
   try { formaLabel = inferirPagamentoLabel(l); } catch(e) { formaLabel = l.forma_pagamento || "—"; }
 
+  // Médico solicitante — campo principal é `prescritor`. Aceita fallbacks
+  // legacy: `medico` / `medico_solicitante` (caso algum doc antigo use).
+  const medico = l.prescritor || l.medico || l.medico_solicitante || "";
+
+  // Subtipo — só faz sentido em lançamentos com array `procedimentos`.
+  // Quando há múltiplos subtipos, junta com vírgula (ex: "DIU, Mounjaro").
+  // Mapeia value→label via TIPOS_PROCEDIMENTO pra ficar amigável.
+  let subtipo = "";
+  if(Array.isArray(l.procedimentos) && l.procedimentos.length > 0) {
+    const tipos = l.procedimentos
+      .filter(p => (Number(p.valor) || 0) > 0 && p.tipo)
+      .map(p => {
+        const it = TIPOS_PROCEDIMENTO.find(t => t.value === p.tipo);
+        return it ? it.label : p.tipo;
+      });
+    subtipo = [...new Set(tipos)].join(", ");
+  }
+
   return {
     data:           dt,
     paciente:       l.paciente_nome || "",
     cpf:            l.paciente_cpf  || "",
+    medico:         medico || "",
     recepcionista:  l.usuario_nome || "—",
     perfilOrigem:   l.perfil || "",
     categoriaLabel: categoriaLabel || "—",
+    subtipo:        subtipo || "",
     formaLabel:     formaLabel || "—",
     valor:          Number(l.valor) || 0,
     _raw:           l,
@@ -11829,6 +11882,8 @@ async function gerarRelatorio() {
   const recep  = document.getElementById("rel-recep").value || "";
   const forma  = document.getElementById("rel-forma").value || "";
   const cat    = document.getElementById("rel-categoria").value || "";
+  // Subtipo de procedimento — só relevante quando cat === "procedimentos"
+  const subtipo = document.getElementById("rel-subtipo")?.value || "";
   // Busca por paciente: case-insensitive, substring. Vazia = ignora filtro.
   const pacienteBusca = (document.getElementById("rel-paciente")?.value || "").trim().toLowerCase();
 
@@ -11882,6 +11937,12 @@ async function gerarRelatorio() {
     if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
     if(cat)   docs = docs.filter(l => _matchCategoria(l, cat));
     if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma));
+    // Subtipo de procedimento — só vale se cat === "procedimentos" e subtipo selecionado.
+    // Filtra lançamentos cujo array procedimentos[] contém o tipo escolhido com valor > 0.
+    if(cat === "procedimentos" && subtipo) {
+      docs = docs.filter(l => Array.isArray(l.procedimentos)
+        && l.procedimentos.some(p => p?.tipo === subtipo && (Number(p.valor) || 0) > 0));
+    }
     // Busca de paciente: case-insensitive, substring no campo paciente_nome
     if(pacienteBusca) {
       docs = docs.filter(l => (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
@@ -11908,8 +11969,8 @@ async function gerarRelatorio() {
     document.getElementById("rel-tot-val").textContent = _relFmtBRL(total);
     document.getElementById("rel-tot-med").textContent = _relFmtBRL(media);
 
-    // Tabela — ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma Pagto | Valor.
-    // Lançamentos antigos sem paciente_nome/paciente_cpf mostram "—".
+    // Tabela — ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma Pagto | Valor.
+    // Campos vazios (Paciente / CPF / Médico / Subtipo) mostram "—" na tabela.
     // CPF sem mask de privacidade (é relatório financeiro).
     const tbody = document.getElementById("rel-tbody");
     tbody.innerHTML = linhas.map(l => `
@@ -11917,8 +11978,10 @@ async function gerarRelatorio() {
         <td>${_relFmtData(l.data)}</td>
         <td>${l.paciente ? escHTML(l.paciente) : "—"}</td>
         <td>${l.cpf      ? escHTML(l.cpf)      : "—"}</td>
+        <td>${l.medico   ? escHTML(l.medico)   : "—"}</td>
         <td>${l.recepcionista}</td>
         <td>${l.categoriaLabel}</td>
+        <td>${l.subtipo  ? escHTML(l.subtipo)  : "—"}</td>
         <td>${l.formaLabel}</td>
         <td style="text-align:right;font-weight:600">${_relFmtBRL(l.valor)}</td>
       </tr>
@@ -11959,36 +12022,48 @@ function exportarRelatorioExcel() {
   const fimStr = document.getElementById("rel-data-fim").value;
 
   // ── Aba 1: "Lançamentos"
-  // Ordem: Data | Paciente | CPF | Recepcionista | Categoria | Forma de Pagamento | Valor (R$)
+  // Ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma de Pagamento | Valor (R$)
   // CPF como texto (preserva zeros à esquerda). Sem dados → célula vazia (não "—").
   const dadosLanc = [
-    ["Data", "Paciente", "CPF", "Recepcionista", "Categoria", "Forma de Pagamento", "Valor (R$)"],
+    ["Data", "Paciente", "CPF", "Médico", "Recepcionista", "Categoria", "Subtipo", "Forma de Pagamento", "Valor (R$)"],
     ...linhas.map(l => [
       _relFmtData(l.data),
       l.paciente || "",
       l.cpf      || "",
+      l.medico   || "",
       l.recepcionista,
       l.categoriaLabel,
+      l.subtipo  || "",
       l.formaLabel,
       Number(l.valor) || 0,
     ])
   ];
   const wsLanc = XLSX.utils.aoa_to_sheet(dadosLanc);
-  // Coluna C (CPF) — força tipo string com formato texto pra preservar zeros à esquerda
+  // Coluna C (CPF, índice 2) — força tipo string com formato texto pra preservar zeros à esquerda
   for(let r = 1; r < dadosLanc.length; r++) {
     const refCpf = XLSX.utils.encode_cell({ c:2, r });
     const cellCpf = wsLanc[refCpf];
     if(cellCpf) { cellCpf.t = "s"; cellCpf.z = "@"; }
   }
-  // Coluna G (Valor) — formato moeda
+  // Coluna I (Valor, índice 8) — formato moeda
   for(let r = 1; r < dadosLanc.length; r++) {
-    const cell = wsLanc[XLSX.utils.encode_cell({ c:6, r })];
+    const cell = wsLanc[XLSX.utils.encode_cell({ c:8, r })];
     if(cell) cell.z = 'R$ #,##0.00';
   }
-  // Largura das colunas (Data | Paciente | CPF | Recepcionista | Categoria | Forma | Valor)
-  wsLanc["!cols"] = [{ wch:12 },{ wch:28 },{ wch:16 },{ wch:18 },{ wch:24 },{ wch:22 },{ wch:14 }];
-  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito (7 colunas)
-  _relAplicarEstiloCabecalho(wsLanc, 7);
+  // Largura das colunas (Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma | Valor)
+  wsLanc["!cols"] = [
+    { wch:12 },  // Data
+    { wch:28 },  // Paciente
+    { wch:16 },  // CPF
+    { wch:28 },  // Médico
+    { wch:18 },  // Recepcionista
+    { wch:18 },  // Categoria
+    { wch:26 },  // Subtipo
+    { wch:22 },  // Forma de Pagamento
+    { wch:14 },  // Valor
+  ];
+  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito (9 colunas)
+  _relAplicarEstiloCabecalho(wsLanc, 9);
 
   // ── Aba 2: "Resumo"
   // Totais por recepcionista
