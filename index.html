@@ -11785,7 +11785,9 @@ function _onMudarCategoriaRelatorio() {
 
 // Converte um doc do Firestore em um objeto "linha do relatório"
 // com Data, Paciente, CPF, Médico, Recepcionista, Categoria, Subtipo, Forma Pagto e Valor.
-function _normalizarLancamentoParaRelatorio(l) {
+// `filtroCategoria`/`filtroSubtipo` (opcionais) decompõem o valor em fatia da categoria
+// filtrada — quando ambos vazios, mantém l.valor cheio (comportamento "Todas").
+function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo) {
   const dt = l.data_hora
     ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
     : (l.criado_em
@@ -11828,7 +11830,7 @@ function _normalizarLancamentoParaRelatorio(l) {
     categoriaLabel: categoriaLabel || "—",
     subtipo:        subtipo || "",
     formaLabel:     formaLabel || "—",
-    valor:          Number(l.valor) || 0,
+    valor:          _calcularValorFatia(l, filtroCategoria, filtroSubtipo),
     _raw:           l,
   };
 }
@@ -11968,16 +11970,9 @@ async function gerarRelatorio() {
       docs = docs.filter(l => (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
     }
 
-    // Normaliza pra exibição
-    let linhas = docs.map(_normalizarLancamentoParaRelatorio);
-
-    // Decompõe valor por categoria: quando há filtro de Categoria (e/ou Subtipo),
-    // substitui valor cheio pela fatia daquela categoria. Cards, tabela e Excel
-    // todos consomem linha.valor, então isso propaga sem mais alterações.
-    linhas = linhas.map(linha => ({
-      ...linha,
-      valor: _calcularValorFatia(linha._raw, cat, subtipo),
-    }));
+    // Normaliza pra exibição. Passa cat/subtipo pro normalizador decompor o valor
+    // na fatia da categoria filtrada (Tabela/Cards/Excel todos consomem linha.valor).
+    let linhas = docs.map(l => _normalizarLancamentoParaRelatorio(l, cat, subtipo));
 
     // Ordena por data desc
     linhas.sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
