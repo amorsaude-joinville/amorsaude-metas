@@ -12,6 +12,18 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         request.resource.data.usuario_id == request.auth.uid &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil != 'financeiro';
+      // Update: dono do doc OU operadores do kanban (recep/callcenter mudam status
+      // link_enviado→pago/recusado) OU liderança/gestão (correções).
+      // Financeiro excluído propositalmente (read-only por design).
+      allow update: if request.auth != null && (
+        resource.data.usuario_id == request.auth.uid ||
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in [
+          'gestor', 'subgestor', 'subgestora',
+          'lider', 'lider_callcenter',
+          'coordenadora', 'coordenador',
+          'recepcionista', 'callcenter'
+        ]
+      );
       allow delete: if request.auth != null &&
         (resource.data.usuario_id == request.auth.uid ||
          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider']);
