@@ -1795,6 +1795,23 @@
       <div class="card" id="rel-loading" style="display:none">
         <div class="loading"><div class="spinner"></div>Buscando lançamentos...</div>
       </div>
+
+      <!-- ══════════ BACKUP COMPLETO DO SISTEMA ══════════
+           Só visível para perfis em VE_RELATORIOS (gestão/coord/líderes/financeiro).
+           Visibilidade controlada por iniciarRelatorios(). -->
+      <div class="card" id="sec-backup" style="display:none;margin-top:20px;background:#F9FAFB;border:1px solid #E5E7EB">
+        <div class="card-title">💾 Backup Completo do Sistema</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+          Baixe uma cópia de todos os dados do sistema. Recomendado fazer 1× por mês e guardar no Google Drive da clínica.
+        </div>
+        <button class="btn btn-primary" style="width:auto" id="btn-backup" onclick="baixarBackupCompleto()">
+          📥 Baixar Backup Completo
+        </button>
+        <div id="backup-ultimo" style="font-size:12px;color:var(--text2);margin-top:12px">
+          Última atualização do backup: <span id="backup-ultimo-info">—</span>
+        </div>
+        <div id="backup-msg" style="margin-top:12px;display:none"></div>
+      </div>
     </div>
 
     <!-- ── HISTÓRICO DO MÊS ── -->
@@ -2455,6 +2472,15 @@ const SO_RELATORIOS = ["financeiro"];
 //   - líder de call center: vê apenas call center
 //   - financeiro: vê todos
 const VE_RELATORIOS = ["gestor","subgestora","coordenadora","lider","lider_callcenter","financeiro"];
+
+// Perfis que podem baixar o backup completo do sistema (operação sensível —
+// arquivo contém TODOS os dados). Inclui variantes masculino/feminino dos cargos.
+const VE_BACKUP = [
+  "gestor", "subgestor", "subgestora",
+  "coordenador", "coordenadora",
+  "lider", "lider_callcenter",
+  "financeiro",
+];
 
 // ─────────────────────────────────────────────────────────────
 //  REESTRUTURAÇÃO — Fase A: foundation do novo modelo unificado
@@ -11729,6 +11755,18 @@ function iniciarRelatorios() {
       aviso.style.display = "none";
     }
   }
+
+  // Backup do Sistema — visível pra gestão/coord/líderes/financeiro (VE_BACKUP).
+  // Carrega timestamp do último backup (coleção config_backup, doc "ultimo").
+  const secBackup = document.getElementById("sec-backup");
+  if(secBackup) {
+    if(VE_BACKUP.includes(perfil)) {
+      secBackup.style.display = "";
+      _carregarUltimoBackup();
+    } else {
+      secBackup.style.display = "none";
+    }
+  }
 }
 
 // Decide quais nomes aparecem no filtro "Recepcionista".
@@ -12158,6 +12196,196 @@ function _relAplicarEstiloCabecalho(ws, nCols) {
       fill: { fgColor:{ rgb:"FFE8003D" } },
       alignment:{ horizontal:"center", vertical:"center" }
     };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BACKUP COMPLETO DO SISTEMA
+// ═══════════════════════════════════════════════════════════
+
+// Coleções incluídas no backup. Detectadas automaticamente do código
+// (grep por db.collection — vide commit message). Pra adicionar nova:
+// inclui o nome aqui — o restante (leitura, serialização, JSON) é genérico.
+const BACKUP_COLECOES = [
+  "lancamentos",
+  "metas",
+  "usuarios",
+  "resumo_diario",
+  "orcamentos",
+  "feriados",
+  "faturamentoDiario",
+];
+
+// Converte recursivamente Firestore Timestamps em ISO strings.
+// Também lida com Date e estruturas aninhadas (objetos/arrays). Outros tipos passam direto.
+function _serializarValorBackup(v) {
+  if(v == null) return v;
+  // Firestore Timestamp tem .toDate(); Date tem .toISOString()
+  if(typeof v === "object" && typeof v.toDate === "function") {
+    try { return v.toDate().toISOString(); } catch(_) { return null; }
+  }
+  if(v instanceof Date) return v.toISOString();
+  if(Array.isArray(v)) return v.map(_serializarValorBackup);
+  if(typeof v === "object") {
+    const out = {};
+    for(const k of Object.keys(v)) out[k] = _serializarValorBackup(v[k]);
+    return out;
+  }
+  return v;
+}
+
+// Lê o doc config_backup/ultimo e atualiza o texto "Última atualização do backup".
+async function _carregarUltimoBackup() {
+  const span = document.getElementById("backup-ultimo-info");
+  if(!span) return;
+  try {
+    const snap = await db.collection("config_backup").doc("ultimo").get();
+    if(!snap.exists) { span.textContent = "Nenhum backup ainda"; return; }
+    const d = snap.data() || {};
+    const ts = d.data_ultimo_backup;
+    const dt = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+    const quando = dt
+      ? `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`
+      : "—";
+    const quem = d.usuario_ultimo_backup ? ` por ${d.usuario_ultimo_backup}` : "";
+    const tot  = d.total_documentos != null ? ` · ${d.total_documentos} docs` : "";
+    span.textContent = `${quando}${quem}${tot}`;
+  } catch(e) {
+    console.warn("[backup] falha ao ler config_backup/ultimo:", e);
+    span.textContent = "—";
+  }
+}
+
+// Mostra/esconde overlay de loading do backup.
+function _toggleBackupOverlay(show, msg) {
+  let ov = document.getElementById("backup-overlay");
+  if(show) {
+    if(!ov) {
+      ov = document.createElement("div");
+      ov.id = "backup-overlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;color:#fff;font-family:'Inter',sans-serif";
+      ov.innerHTML = `
+        <div style="background:#fff;color:var(--text);padding:32px 40px;border-radius:12px;text-align:center;max-width:380px">
+          <div class="spinner" style="margin:0 auto 16px"></div>
+          <div id="backup-overlay-msg" style="font-weight:600">${escHTML(msg || "Gerando backup...")}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:8px">Pode demorar 1-2 minutos. Não feche a aba.</div>
+        </div>`;
+      document.body.appendChild(ov);
+    } else {
+      ov.style.display = "flex";
+      const m = document.getElementById("backup-overlay-msg");
+      if(m && msg) m.textContent = msg;
+    }
+  } else if(ov) {
+    ov.style.display = "none";
+  }
+}
+
+// Mostra mensagem dentro do card de backup (verde = ok, vermelho = erro).
+function _backupMensagem(texto, tipo) {
+  const box = document.getElementById("backup-msg");
+  if(!box) return;
+  const cor = tipo === "err" ? "#DC2626" : "#047857";
+  const bg  = tipo === "err" ? "#FEE2E2" : "#D1FAE5";
+  box.style.cssText = `margin-top:12px;padding:12px 16px;border-radius:8px;background:${bg};color:${cor};font-size:13px;font-weight:500`;
+  box.textContent = texto;
+  box.style.display = "";
+}
+
+// Gera o backup completo: lê todas as coleções, serializa, baixa JSON,
+// grava metadata no Firestore, mostra mensagem.
+async function baixarBackupCompleto() {
+  if(!usuario || !VE_BACKUP.includes(usuario.perfil)) {
+    _backupMensagem("Você não tem permissão para baixar o backup.", "err");
+    return;
+  }
+  const btn = document.getElementById("btn-backup");
+  if(btn) { btn.disabled = true; btn.textContent = "Gerando..."; }
+  _toggleBackupOverlay(true, "Gerando backup... aguarde, pode demorar 1-2 minutos");
+
+  const erros = [];
+  const dados = {};
+  let totalDocs = 0;
+
+  // Lê coleções em sequência (visibilidade do progresso + evita pico de leituras simultâneas)
+  for(const nome of BACKUP_COLECOES) {
+    try {
+      _toggleBackupOverlay(true, `Lendo ${nome}...`);
+      const snap = await db.collection(nome).get();
+      const docs = snap.docs.map(d => ({ id: d.id, ..._serializarValorBackup(d.data()) }));
+      dados[nome] = docs;
+      totalDocs += docs.length;
+    } catch(e) {
+      console.warn(`[backup] erro lendo ${nome}:`, e);
+      erros.push({ colecao: nome, mensagem: e.message || String(e) });
+      dados[nome] = [];
+    }
+  }
+
+  // Monta envelope
+  const agora = new Date();
+  const backup = {
+    data_backup:        agora.toISOString(),
+    versao:             "1.0",
+    usuario_que_baixou: usuario.nome  || "",
+    perfil:             usuario.perfil || "",
+    "coleções_incluídas": BACKUP_COLECOES,
+    total_documentos:   totalDocs,
+    ...dados,
+  };
+  if(erros.length > 0) backup.erros = erros;
+
+  // Download
+  try {
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const yyyy = agora.getFullYear();
+    const mm   = String(agora.getMonth()+1).padStart(2,"0");
+    const dd   = String(agora.getDate()).padStart(2,"0");
+    const hh   = String(agora.getHours()).padStart(2,"0");
+    const mi   = String(agora.getMinutes()).padStart(2,"0");
+    const nome = `amorsaude-backup-${yyyy}-${mm}-${dd}-${hh}${mi}.json`;
+    const a = document.createElement("a");
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(e) {
+    console.error("[backup] erro ao gerar download:", e);
+    _toggleBackupOverlay(false);
+    if(btn) { btn.disabled = false; btn.textContent = "📥 Baixar Backup Completo"; }
+    _backupMensagem("Erro ao gerar arquivo: " + (e.message || e), "err");
+    return;
+  }
+
+  // Grava metadata (não bloqueia o sucesso visual se falhar)
+  try {
+    await db.collection("config_backup").doc("ultimo").set({
+      data_ultimo_backup:    firebase.firestore.FieldValue.serverTimestamp(),
+      usuario_ultimo_backup: usuario.nome  || "",
+      perfil_ultimo_backup:  usuario.perfil || "",
+      total_lancamentos:     (dados.lancamentos || []).length,
+      total_documentos:      totalDocs,
+    }, { merge: true });
+    _carregarUltimoBackup();
+  } catch(e) {
+    console.warn("[backup] falha ao gravar metadata config_backup/ultimo:", e);
+    erros.push({ colecao: "config_backup", mensagem: "metadata: " + (e.message || e) });
+  }
+
+  _toggleBackupOverlay(false);
+  if(btn) { btn.disabled = false; btn.textContent = "📥 Baixar Backup Completo"; }
+
+  if(erros.length > 0) {
+    _backupMensagem(
+      `⚠️ Backup baixado com ${erros.length} aviso(s) — verifique chave "erros" no JSON. (${totalDocs} docs no total)`,
+      "err"
+    );
+  } else {
+    _backupMensagem(
+      `✅ Backup baixado com sucesso! Salve o arquivo em local seguro (Google Drive recomendado). ${totalDocs} documentos.`,
+      "ok"
+    );
   }
 }
 </script>
