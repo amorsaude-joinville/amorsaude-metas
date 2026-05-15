@@ -105,5 +105,18 @@ service cloud.firestore {
         (resource.data.criado_por_uid == request.auth.uid ||
          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora', 'lider', 'lider_callcenter']);
     }
+
+    // Config de backup: metadata do último backup completo (data, usuário, totais).
+    // Doc id = "ultimo". Acesso restrito a perfis que podem operar o backup
+    // (mesma lista do botão na UI — VE_BACKUP). Recepcionista/callcenter excluídos.
+    match /config_backup/{docId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in [
+          'gestor', 'subgestor', 'subgestora',
+          'lider', 'lider_callcenter',
+          'coordenadora', 'coordenador',
+          'financeiro'
+        ];
+    }
   }
 }
