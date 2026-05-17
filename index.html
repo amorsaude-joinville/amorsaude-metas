@@ -1471,6 +1471,17 @@
             <div class="fg">
               <label>🧪 Laboratoriais (R$)</label>
               <input type="text" id="e-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
+              <!-- Preventivo embutido no Laboratorial — checkbox revela campo extra.
+                   No save: e-preventivo-valor é SOMADO em laboratorio; tem_preventivo
+                   e preventivo_valor ficam gravados separados pra contagem futura. -->
+              <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-weight:500;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="e-tem-preventivo" onchange="togglePreventivoEntrada()" />
+                Tem preventivo incluso?
+              </label>
+              <div id="e-preventivo-wrap" style="display:none;margin-top:8px;padding-left:14px;border-left:2px solid var(--border)">
+                <label style="font-size:12px;color:var(--text2)">Valor do Preventivo (R$)</label>
+                <input type="text" id="e-preventivo-valor" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
+              </div>
             </div>
 
             <!-- Procedimentos (lista dinâmica) -->
@@ -1902,6 +1913,15 @@
       <div class="fg">
         <label>🧪 Laboratoriais (R$)</label>
         <input type="text" id="ed-lab" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
+        <!-- Preventivo embutido — mesmo padrão do form de Entrada. -->
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-weight:500;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="ed-tem-preventivo" onchange="togglePreventivoEdicao()" />
+          Tem preventivo incluso?
+        </label>
+        <div id="ed-preventivo-wrap" style="display:none;margin-top:8px;padding-left:14px;border-left:2px solid var(--border)">
+          <label style="font-size:12px;color:var(--text2)">Valor do Preventivo (R$)</label>
+          <input type="text" id="ed-preventivo-valor" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
+        </div>
       </div>
 
       <!-- Procedimentos (editáveis em E2) -->
@@ -2664,7 +2684,8 @@ const TIPOS_PROCEDIMENTO = [
   { value: "Infiltração",                           label: "Infiltração" },
   { value: "Sessão",                                label: "Sessão" },
   { value: "Procedimento Otorrinolaringológico",    label: "Procedimento Otorrinolaringológico" },
-  { value: "Preventivo",                            label: "Preventivo" },
+  // "Preventivo" migrado pra Laboratoriais (checkbox dedicado). Mantém retrocompat
+  // em docs antigos via `inferirProdutoLabel`, mas não aparece no dropdown novo.
   { value: "Eletrocardiograma",                     label: "Eletrocardiograma" },
   { value: "Taxa Parceiros",                        label: "Taxa Parceiros" },
   { value: "Testes Rápidos",                        label: "Testes Rápidos" },
@@ -4452,15 +4473,62 @@ function mudarAba(aba) {
 //  FORM ORÇAMENTO (modelo unificado — substitui form legacy)
 // ═══════════════════════════════════════════════════════════
 
-// Recalcula o total do formulário (Imagem + Consultas + Lab + soma de procedimentos)
+// Toggle do "Tem preventivo incluso?" no form de Entrada. Quando desmarca,
+// zera o campo de valor pra evitar resíduo invisível na soma do total.
+function togglePreventivoEntrada() {
+  const cb   = document.getElementById("e-tem-preventivo");
+  const wrap = document.getElementById("e-preventivo-wrap");
+  const inp  = document.getElementById("e-preventivo-valor");
+  if(!cb || !wrap) return;
+  if(cb.checked) {
+    wrap.style.display = "";
+  } else {
+    wrap.style.display = "none";
+    if(inp) inp.value = "";
+  }
+  recalcTotalEntrada();
+  atualizarLabelMedicoEntrada();
+}
+
+// Mesmo toggle, modal de Edição.
+function togglePreventivoEdicao() {
+  const cb   = document.getElementById("ed-tem-preventivo");
+  const wrap = document.getElementById("ed-preventivo-wrap");
+  const inp  = document.getElementById("ed-preventivo-valor");
+  if(!cb || !wrap) return;
+  if(cb.checked) {
+    wrap.style.display = "";
+  } else {
+    wrap.style.display = "none";
+    if(inp) inp.value = "";
+  }
+  recalcTotalEdicao();
+  atualizarLabelMedicoEdicao();
+}
+
+// Lê { tem, valor } do bloco Preventivo do form de Entrada.
+function lerPreventivoEntrada() {
+  const tem = !!document.getElementById("e-tem-preventivo")?.checked;
+  const valor = tem ? parseBRL(document.getElementById("e-preventivo-valor")?.value) : 0;
+  return { tem, valor };
+}
+// Lê { tem, valor } do bloco Preventivo do modal de Edição.
+function lerPreventivoEdicao() {
+  const tem = !!document.getElementById("ed-tem-preventivo")?.checked;
+  const valor = tem ? parseBRL(document.getElementById("ed-preventivo-valor")?.value) : 0;
+  return { tem, valor };
+}
+
+// Recalcula o total do formulário (Imagem + Consultas + Lab + Preventivo + soma de procedimentos)
 // e auto-preenche o valor da 1ª forma de pagamento se estiver vazio (UX).
 function recalcTotalEntrada() {
   const img  = parseBRL(document.getElementById("e-imagem")?.value);
   const cons = parseBRL(document.getElementById("e-consultas")?.value);
   const lab  = parseBRL(document.getElementById("e-lab")?.value);
+  const prev = lerPreventivoEntrada().valor;
   let procs = 0;
   document.querySelectorAll("#e-proc-lista .e-proc-valor").forEach(i => { procs += parseBRL(i.value); });
-  const total = img + cons + lab + procs;
+  const total = img + cons + lab + prev + procs;
   const inp = document.getElementById("e-total");
   if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
   validarSomaPagamentos();
@@ -4509,7 +4577,8 @@ function atualizarLabelMedicoEntrada() {
   if(!lbl) return;
   const imagem      = parseBRL(document.getElementById("e-imagem")?.value);
   const consultas   = parseBRL(document.getElementById("e-consultas")?.value);
-  const laboratorio = parseBRL(document.getElementById("e-lab")?.value);
+  // Preventivo entra na "fatia lab" pra fins de regra de médico (lab combinado)
+  const laboratorio = parseBRL(document.getElementById("e-lab")?.value) + lerPreventivoEntrada().valor;
   const procedimentos = [];
   document.querySelectorAll("#e-proc-lista .orc-proc-linha").forEach(div => {
     const tipo = div.querySelector(".e-proc-tipo")?.value || "";
@@ -4593,6 +4662,9 @@ function resetFormEntrada() {
   set("e-edit-id","");
   set("e-nome",""); set("e-cpf","");
   set("e-imagem",""); set("e-consultas",""); set("e-lab","");
+  // Reset preventivo embutido (checkbox + campo)
+  const cbPrev = document.getElementById("e-tem-preventivo");
+  if(cbPrev) { cbPrev.checked = false; togglePreventivoEntrada(); }
   document.getElementById("e-proc-lista").innerHTML = "";
   set("e-total","0,00");
   set("e-fp1",""); set("e-fp1-val","");
@@ -4629,7 +4701,11 @@ async function salvarEntrada() {
   // Categorias
   const imagem      = parseBRL(document.getElementById("e-imagem").value);
   const consultas   = parseBRL(document.getElementById("e-consultas").value);
-  const laboratorio = parseBRL(document.getElementById("e-lab").value);
+  const labPuro     = parseBRL(document.getElementById("e-lab").value);
+  // Preventivo (embutido no Laboratorial). O valor é SOMADO no campo laboratorio
+  // do doc, mas tem_preventivo/preventivo_valor ficam separados pra contagem futura.
+  const prev        = lerPreventivoEntrada();
+  const laboratorio = labPuro + (prev.valor || 0);
   const procedimentos = [];
   document.querySelectorAll("#e-proc-lista .orc-proc-linha").forEach(div => {
     const tipo = div.querySelector(".e-proc-tipo")?.value || "";
@@ -4764,6 +4840,10 @@ async function salvarEntrada() {
     imagem:      Number(imagem)      || 0,
     consultas:   Number(consultas)   || 0,
     laboratorio: Number(laboratorio) || 0,
+    // Preventivo embutido no Laboratorial (somado em `laboratorio`).
+    // Campos separados pra possibilitar contagem futura sem reprocessar.
+    tem_preventivo:   !!(prev.tem && prev.valor > 0),
+    preventivo_valor: Number(prev.valor) || 0,
     procedimentos: procedimentos,
     total: Number(total) || 0,
     // Campo `valor` = total se pago, 0 se não-pago (paciente ainda não pagou)
@@ -10648,7 +10728,17 @@ async function abrirModalEdicao(docId) {
   const fmtNum = v => Number(v) ? Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "";
   set("ed-imagem",    fmtNum(doc.imagem));
   set("ed-consultas", fmtNum(doc.consultas));
-  set("ed-lab",       fmtNum(doc.laboratorio));
+  // Lab no doc é o COMBINADO (lab puro + preventivo). No form mostra-se o lab PURO
+  // (lab combinado - preventivo_valor); o preventivo vai no campo dedicado.
+  const prevVal = Number(doc.preventivo_valor) || 0;
+  const labPuro = Math.max(0, (Number(doc.laboratorio) || 0) - prevVal);
+  set("ed-lab", fmtNum(labPuro));
+  const cbPrev   = document.getElementById("ed-tem-preventivo");
+  const inpPrev  = document.getElementById("ed-preventivo-valor");
+  const wrapPrev = document.getElementById("ed-preventivo-wrap");
+  if(cbPrev)   cbPrev.checked = !!doc.tem_preventivo && prevVal > 0;
+  if(inpPrev)  inpPrev.value  = prevVal > 0 ? fmtNum(prevVal) : "";
+  if(wrapPrev) wrapPrev.style.display = (cbPrev && cbPrev.checked) ? "" : "none";
 
   // Procedimentos (read-only no E1)
   const procEl = document.getElementById("ed-proc-readonly");
@@ -10800,7 +10890,8 @@ function atualizarLabelMedicoEdicao() {
   if(!target) return;
   const imagem      = parseBRL(document.getElementById("ed-imagem")?.value);
   const consultas   = parseBRL(document.getElementById("ed-consultas")?.value);
-  const laboratorio = parseBRL(document.getElementById("ed-lab")?.value);
+  // Preventivo entra na "fatia lab" pra fins de regra de médico (lab combinado)
+  const laboratorio = parseBRL(document.getElementById("ed-lab")?.value) + lerPreventivoEdicao().valor;
   const procedimentos = [];
   document.querySelectorAll("#ed-proc-lista .orc-proc-linha").forEach(div => {
     const tipo = div.querySelector(".ed-proc-tipo")?.value || "";
@@ -10882,9 +10973,10 @@ function recalcTotalEdicao() {
   const img  = parseBRL(document.getElementById("ed-imagem")?.value);
   const cons = parseBRL(document.getElementById("ed-consultas")?.value);
   const lab  = parseBRL(document.getElementById("ed-lab")?.value);
+  const prev = lerPreventivoEdicao().valor;
   let procs = 0;
   document.querySelectorAll("#ed-proc-lista .ed-proc-valor").forEach(i => { procs += parseBRL(i.value); });
-  const total = img + cons + lab + procs;
+  const total = img + cons + lab + prev + procs;
   const inp = document.getElementById("ed-total");
   if(inp) inp.value = total.toLocaleString("pt-BR",{minimumFractionDigits:2});
   validarSomaPagamentosEdicao();
@@ -10926,7 +11018,11 @@ async function salvarEdicaoLanc() {
   const presEsp  = (document.getElementById("ed-especialidade")?.value || "").trim();
   const imagem      = parseBRL(document.getElementById("ed-imagem")?.value);
   const consultas   = parseBRL(document.getElementById("ed-consultas")?.value);
-  const laboratorio = parseBRL(document.getElementById("ed-lab")?.value);
+  const labPuro     = parseBRL(document.getElementById("ed-lab")?.value);
+  // Preventivo embutido (mesma regra do form de Entrada): soma em `laboratorio`
+  // e grava tem_preventivo/preventivo_valor separados.
+  const prev        = lerPreventivoEdicao();
+  const laboratorio = labPuro + (prev.valor || 0);
 
   if(!paciente) { toast("Informe o nome do paciente.","err"); return; }
   if(!cpf)      { toast("CPF é obrigatório.","err"); return; } // F1: CPF obrigatório
@@ -10995,6 +11091,8 @@ async function salvarEdicaoLanc() {
     imagem:      Number(imagem)      || 0,
     consultas:   Number(consultas)   || 0,
     laboratorio: Number(laboratorio) || 0,
+    tem_preventivo:   !!(prev.tem && prev.valor > 0),
+    preventivo_valor: Number(prev.valor) || 0,
     procedimentos,
     total: Number(total) || 0,
     // F2 — observacoes (sempre gravado, mesmo se vazio — preserva diff de auditoria)
