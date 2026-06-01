@@ -497,9 +497,21 @@
     .pres-dash-table tr:hover td { background:#FAFAFA; }
 
     /* modal metas */
-    .modal-metas { width:520px; max-height:90vh; overflow-y:auto; }
+    .modal-metas { width:560px; max-height:90vh; overflow-y:auto; }
     .modal-metas .fgrid { margin-top:4px; }
     .modal-sec-label { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px; grid-column:1/-1; border-top:1px solid var(--border); padding-top:14px; }
+    /* Linha de meta individual por recepcionista no modal */
+    .mm-rec-linha {
+      display:grid; grid-template-columns: 1fr 1fr 1fr;
+      gap:10px; align-items:end;
+      padding:10px 12px; background:var(--bg2); border-radius:8px;
+      border-left:3px solid var(--primary);
+    }
+    .mm-rec-linha .mm-rec-nome { font-weight:600; font-size:13px; color:var(--text); align-self:center; padding-bottom:4px; }
+    .mm-rec-linha .mm-rec-perfil { font-size:10px; color:var(--text2); font-weight:500; text-transform:uppercase; letter-spacing:.3px; display:block; margin-top:2px; }
+    .mm-rec-linha label { font-size:11px; font-weight:600; color:var(--text2); margin-bottom:4px; display:block; }
+    .mm-rec-linha input { font-size:13px; padding:7px 10px; }
+    .mm-rec-vazio { font-size:13px; color:var(--text2); padding:12px; text-align:center; font-style:italic; }
 
     /* ── MODOS DE VISUALIZAÇÃO DASHBOARD ── */
     .modo-btn {
@@ -2194,15 +2206,8 @@
         <label>Dias Úteis no Mês</label>
         <input type="number" id="mm-dias-uteis" placeholder="22" min="1" max="31" />
       </div>
-      <div class="modal-sec-label">Recepção</div>
-      <div class="fg">
-        <label>Meta de Caixa — Recepção (R$)</label>
-        <input type="text" id="mm-caixa-recepcao" placeholder="0,00" oninput="mascaraValor(this)" />
-      </div>
-      <div class="fg">
-        <label>Meta de Crédito — Recepção (R$)</label>
-        <input type="text" id="mm-credito-recepcao" placeholder="0,00" oninput="mascaraValor(this)" />
-      </div>
+      <div class="modal-sec-label">Recepção — metas individuais</div>
+      <div id="mm-rec-individual" style="display:flex;flex-direction:column;gap:14px"></div>
       <div class="modal-sec-label">Call Center</div>
       <div class="fg">
         <label>Meta de Caixa — Call Center (R$)</label>
@@ -2426,6 +2431,7 @@ const USUARIOS = {
   "fagundestuane99@gmail.com":         { nome: "Tuane",     perfil: "recepcionista", status: "afastada" },
   "raiiane.almeida1401@gmail.com":     { nome: "Raiane",    perfil: "recepcionista"    },
   "leticiaac.r.eis@gmail.com":         { nome: "Leticia",   perfil: "recepcionista"    },
+  "fannapires@gmail.com":              { nome: "Roffana",   perfil: "recepcionista"    },
   "eriellypachecodossantos@gmail.com": { nome: "Erielly",   perfil: "callcenter"       },
   "juluise2005@gmail.com":             { nome: "Júlia",     perfil: "callcenter"       },
   "thifanie.timm@gmail.com":           { nome: "Thifani",   perfil: "financeiro"       },
@@ -2790,7 +2796,8 @@ const VE_COORD = ["coordenadora","lider_callcenter"];
 
 // Premiação coletiva (pool) para Lab, Imagem, Procedimentos e Crédito
 const POOL_REC_EXCLUIDOS = ["Tuane", "Thamyres"];  // não participam do pool
-const POOL_REC_QTD       = 5;                       // recepcionistas no pool (excl. Tuane e Thamyres)
+// Recepcionistas no pool: Dawilla, Suélen, Graziele, Raiane, Leticia, Roffana (Tuane afastada, Thamyres legado)
+const POOL_REC_QTD       = 6;
 const FAIXAS_POOL_LAB    = [{pct:1.0,pool:1500},{pct:0.9,pool:1125},{pct:0.8,pool:500}];
 const FAIXAS_POOL_IMG    = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
 const FAIXAS_POOL_PROC   = [{pct:1.0,pool:500}, {pct:0.9,pool:375}, {pct:0.8,pool:250}];
@@ -2904,14 +2911,134 @@ let unsubDash           = null;  // listener do dashboard
 let dashHistorico       = [];    // docs de historico_mensal quando mês é histórico
 let dashUsandoHistorico = false; // true quando dashboard exibe dados de historico_mensal
 
+// ─────────────────────────────────────────────────────────────
+//  METAS INDIVIDUAIS DE CAIXA E CRÉDITO
+// ─────────────────────────────────────────────────────────────
+// Estrutura no Firestore: metas/{mesAno}/recepcionistas/{docId}
+//   { email, nome, perfil, metaCaixa, metaCredito, atualizado_em, atualizado_por }
+// docId = email sanitizado (substitui '.' e '@' por '_') — permite lookup direto
+// sem precisar de query na coleção `usuarios` (recepcionista logada e dashboard
+// usam o email que já está em USUARIOS / auth.token.email).
+//
+// Quem usa meta individual: perfis "recepcionista" e "lider" (Dara/Bianca podem
+// ter metas menores que as recepcionistas). Tuane (afastada) é filtrada do modal.
+// Tudo o que NÃO é caixa/crédito da recepção/líder (lab, img, proc, boleto, injet.,
+// callcenter) continua usando meta de equipe coletiva — sem alteração.
+let metasIndividuais         = {};   // {emailDocId: {metaCaixa, metaCredito}} — mês corrente (user logado)
+let dashMetasIndividuais     = {};   // {nome: {metaCaixa, metaCredito}} — dashboard (gestão / líder)
+function _docIdMetaInd(email) {
+  return (email || "").replace(/[.@]/g, "_");
+}
+// Devolve {metaCaixa, metaCredito} da usuária logada com fallback no valor coletivo (meta_caixa_recepcao / meta_credito_recepcao).
+function metaIndUsuarioLogado() {
+  const email = (typeof auth !== "undefined" && auth.currentUser?.email) || "";
+  const docId = _docIdMetaInd(email);
+  const ind   = metasIndividuais[docId] || {};
+  const fbC   = metas?.meta_caixa_recepcao   || 0;
+  const fbCr  = metas?.meta_credito_recepcao || 0;
+  return {
+    metaCaixa:   Number(ind.metaCaixa)   > 0 ? Number(ind.metaCaixa)   : fbC,
+    metaCredito: Number(ind.metaCredito) > 0 ? Number(ind.metaCredito) : fbCr,
+  };
+}
+// Devolve {metaCaixa, metaCredito} de uma recepcionista/líder pelo nome (usado no dashboard).
+// Fallback usa as metas coletivas de dashMetasMes pra não quebrar visual quando não há individual.
+function metaIndPorNome(nome) {
+  const ind  = dashMetasIndividuais[nome] || {};
+  const fbC  = dashMetasMes?.meta_caixa_recepcao   || 0;
+  const fbCr = dashMetasMes?.meta_credito_recepcao || 0;
+  return {
+    metaCaixa:   Number(ind.metaCaixa)   > 0 ? Number(ind.metaCaixa)   : fbC,
+    metaCredito: Number(ind.metaCredito) > 0 ? Number(ind.metaCredito) : fbCr,
+  };
+}
+// Lê toda a subcoleção `metas/{mesAno}/recepcionistas/*` e popula o alvo.
+// alvo = "logado" preenche `metasIndividuais` (indexado por docId pra busca por email).
+// alvo = "dash"   preenche `dashMetasIndividuais` (indexado por nome pra render do dashboard).
+async function carregarMetasIndividuais(mesAnoStr, alvo) {
+  try {
+    const snap = await db.collection("metas").doc(mesAnoStr).collection("recepcionistas").get();
+    if(alvo === "dash") {
+      dashMetasIndividuais = {};
+      snap.forEach(d => {
+        const data = d.data() || {};
+        if(data.nome) dashMetasIndividuais[data.nome] = {
+          metaCaixa:   Number(data.metaCaixa)   || 0,
+          metaCredito: Number(data.metaCredito) || 0,
+        };
+      });
+    } else {
+      metasIndividuais = {};
+      snap.forEach(d => {
+        metasIndividuais[d.id] = {
+          metaCaixa:   Number(d.data()?.metaCaixa)   || 0,
+          metaCredito: Number(d.data()?.metaCredito) || 0,
+        };
+      });
+    }
+  } catch(e) {
+    // Não bloqueia a UI — segue com fallback nas metas coletivas
+    console.warn("[metas individuais] falha em " + mesAnoStr + ":", e?.code || e?.message || e);
+  }
+}
+
 let historicoIndividual  = null;  // doc de historico_mensal do usuário logado
 let historicoEquipeAtual = [];    // todos docs de historico_mensal do mês atual
 
 // Faturamento diário consolidado
-let faturamentoDiarioAtual = [];       // todos docs da coleção faturamentoDiario
-let faturamentoMesSel      = "";       // mês selecionado (vazio = usa o mais recente)
-let unsubFaturamento       = null;     // listener do faturamento
-let faturamentoChart       = null;     // instância Chart.js atual
+// [C1] Antes era 1 listener onSnapshot(.orderBy("data")) sobre a coleção inteira
+// (~100 docs lidos por sessão de gestora/líder, mais propagação em cada mudança).
+// Agora: cache por mês carregado sob demanda. faturamentoDiarioAtual é a "view
+// plana" — união dos meses já carregados — para preservar a API dos leitores que
+// filtram por mes_ano (escolherFonteDashboard, getTotaisPorDia, getTotaisEquipeFatDiario,
+// renderFaturamentoDiario). Reads = só os meses que a usuária efetivamente abre.
+let faturamentoDiarioAtual = [];                     // união plana dos meses cacheados (compat)
+let faturamentoMesSel      = "";                     // mês selecionado no seletor
+const faturamentoDiarioCache    = new Map();         // mes_ano → docs[] (cache em memória)
+const _faturamentoMesesFetching = new Set();         // dedup de fetches simultâneos
+let unsubFaturamento       = null;                   // [DEPRECATED em C1] mantido p/ compat de cleanup
+let faturamentoChart       = null;                   // instância Chart.js atual
+
+// Reconstrói a view plana a partir do cache. Chamada após cada get bem-sucedido.
+function _flattenFaturamentoCache() {
+  const arr = [];
+  for(const [, docs] of faturamentoDiarioCache) arr.push(...docs);
+  faturamentoDiarioAtual = arr;
+}
+
+// Garante que os docs de `mesAno` estejam carregados em cache. Reads = 0 se já
+// estiver no cache (a menos que force=true). Dedup: chamadas concorrentes ao
+// mesmo mês aguardam a mesma promise. Falhas são logadas sem propagar — o caller
+// continua com o cache do que tiver (renderização degradada > tela travada).
+async function garantirMesFaturamento(mesAno, force = false) {
+  if(!mesAno) return [];
+  if(!force && faturamentoDiarioCache.has(mesAno)) return faturamentoDiarioCache.get(mesAno);
+  if(_faturamentoMesesFetching.has(mesAno)) {
+    // Outra chamada já está buscando este mês — espera ela terminar
+    return new Promise(resolve => {
+      const id = setInterval(() => {
+        if(!_faturamentoMesesFetching.has(mesAno)) {
+          clearInterval(id);
+          resolve(faturamentoDiarioCache.get(mesAno) || []);
+        }
+      }, 60);
+    });
+  }
+  _faturamentoMesesFetching.add(mesAno);
+  try {
+    const snap = await db.collection("faturamentoDiario")
+      .where("mes_ano","==", mesAno).get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    faturamentoDiarioCache.set(mesAno, docs);
+    _flattenFaturamentoCache();
+    return docs;
+  } catch(e) {
+    console.warn("[fatDiario] falha ao carregar mês", mesAno, e);
+    return [];
+  } finally {
+    _faturamentoMesesFetching.delete(mesAno);
+  }
+}
 
 // Modo de visualização do dashboard ("dia" | "semana" | "mes" | "comparativo")
 let dashModo    = localStorage.getItem("as_dash_modo") || "mes";
@@ -3529,6 +3656,11 @@ function fazerLogout() {
   if(unsubOrcamentos)  { unsubOrcamentos();  unsubOrcamentos=null;  }
   dashLancs=[]; dashMetasMes=null; dashMesAno="";
   coordLancs=[]; equipeLancs=[]; acompLancs=[];
+  // [C1] Limpa cache de faturamentoDiario para que a próxima sessão recarregue
+  // do zero (e não vaze dados de outra usuária em login compartilhado).
+  faturamentoDiarioCache.clear();
+  faturamentoDiarioAtual = [];
+  faturamentoMesSel = "";
 
   if(usuario?.uid) {
     // Firebase Auth — signOut dispara onAuthStateChanged que chama _encerrarSessao
@@ -3824,10 +3956,9 @@ function iniciarAutoRefresh() {
   if(ind) ind.style.display = "flex";
   marcarAtualizadoAgora();
 
-  // Re-fetch único de feriados (não tem onSnapshot)
-  db.collection("feriados").get().then(snap => {
-    feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }).catch(e => console.warn("[feriados auto-refresh]", e));
+  // Feriados são carregados UMA vez no login (em iniciarApp) e ficam em memória.
+  // Mudanças quase nunca ocorrem (~1×/ano); a recarga manual fica no modal "Gerenciar
+  // Feriados" (abrirModalFeriados) — evita ~40k leituras/dia no plano Spark.
 
   autoRefreshInterval = setInterval(tickAutoRefresh, 120000);
 }
@@ -3860,11 +3991,9 @@ async function tickAutoRefresh() {
     const ehCoord   = VE_COORD.includes(perfil);
     const ehGestao  = SO_DASHBOARD.includes(perfil);
 
-    // Re-fetch leve de feriados (não há listener em tempo real)
-    try {
-      const snap = await db.collection("feriados").get();
-      feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch(e) { console.warn("[autoRefresh] feriados:", e); }
+    // [C2] Feriados não são mais relidos a cada tick (eram ~30 leituras × 8h × N sessões/dia,
+    // somando ~40k leituras/dia só de feriados que mudam ~1×/ano). Carregamento único no
+    // login (iniciarApp) + recarga manual ao abrir o modal "Gerenciar Feriados".
 
     // 1) Gestora/Subgestora — dashboard ou orçamentos
     if(ehGestao) {
@@ -3880,17 +4009,19 @@ async function tickAutoRefresh() {
         if(abaLider === "dashboard") renderDashboard();
         else if(abaLider === "equipe") renderCardMetasEquipe();
         else if(abaLider === "lancamentos") { atualizarCards(); renderTabela(); }
-        else if(abaLider === "metas") atualizarCards();
+        else if(abaLider === "metas") { atualizarCards(); calcularRanking(); }
         else if(abaLider === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] lider:", e); }
     }
 
     // 3) Líder de call center: aba lançamentos, coordenação ou orçamentos
+    // [C3] Em "lancamentos" da liderCC, o rank-card está visível (sec-metas
+    // aparece junto), então recalculamos aqui também.
     if(ehLiderCC) {
       try {
         if(abaLiderCC === "callcenter") renderCoord();
         else if(abaLiderCC === "orcamentos") renderKanbanOrcamentos();
-        else { atualizarCards(); renderTabela(); }
+        else { atualizarCards(); renderTabela(); calcularRanking(); }
       } catch(e) { console.warn("[autoRefresh] liderCC:", e); }
     }
 
@@ -3898,7 +4029,7 @@ async function tickAutoRefresh() {
     if(ehRec) {
       try {
         if(abaRec === "lancamentos") { atualizarCards(); renderTabela(); }
-        else if(abaRec === "metas") atualizarCards();
+        else if(abaRec === "metas") { atualizarCards(); calcularRanking(); }
         else if(abaRec === "equipe") renderCardMetasEquipe();
         else if(abaRec === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] rec:", e); }
@@ -3908,7 +4039,7 @@ async function tickAutoRefresh() {
     if(ehCC) {
       try {
         if(abaCC === "lancamentos") { atualizarCards(); renderTabela(); }
-        else if(abaCC === "metas") atualizarCards();
+        else if(abaCC === "metas") { atualizarCards(); calcularRanking(); }
         else if(abaCC === "equipe") renderCardMetasEquipe();
         else if(abaCC === "orcamentos") renderKanbanOrcamentos();
       } catch(e) { console.warn("[autoRefresh] cc:", e); }
@@ -3955,6 +4086,10 @@ function aplicarAbaLider() {
   if(emOrc) renderKanbanOrcamentos();
   if(emRel) iniciarRelatorios();
   if(!emDash && !unsubEquipe) iniciarListenerEquipe();
+  // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras). O card
+  // de ranking só é visível em emMetas, mas chamamos sempre — DOM checks na
+  // função evitam crash quando os elementos não estão na tela.
+  calcularRanking();
 }
 
 function mudarAbaLider(aba) {
@@ -3986,6 +4121,8 @@ function aplicarAbaRec() {
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
   if(emOrc) renderKanbanOrcamentos();
+  // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras)
+  calcularRanking();
 }
 
 function mudarAbaRec(aba) {
@@ -4017,6 +4154,8 @@ function aplicarAbaCC() {
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
 
   if(emOrc) renderKanbanOrcamentos();
+  // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras)
+  calcularRanking();
 }
 
 function mudarAbaCC(aba) {
@@ -4055,6 +4194,10 @@ function aplicarAbaLiderCC() {
   if(emRel) iniciarRelatorios();
   // Inicia listener equipe CC na primeira vez
   if(emLanc && !unsubEquipe) iniciarListenerEquipe();
+  // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras). LiderCC
+  // vê o rank dentro de sec-metas que só aparece em emLanc — mas a chamada é
+  // segura mesmo quando os elementos estão escondidos.
+  calcularRanking();
 }
 
 function mudarAbaLiderCC(aba) {
@@ -4148,6 +4291,8 @@ async function carregarMetas() {
       meta_img_equipe:144000, meta_proc_equipe:227500,
       meta_injetaveis_equipe:60000
     };
+    // Carrega metas individuais (caixa/crédito) — fallback nas coletivas se vazio
+    await carregarMetasIndividuais(mesAno, "logado");
     atualizarCards();
     // Re-renderiza premiação da coordenação com meta correta
     if(VE_COORD.includes(usuario?.perfil)) renderCoordPremiacaoGestao();
@@ -4168,9 +4313,12 @@ async function carregarDashMetas(mesAnoAlvo) {
     };
     dashMetasMes = doc.exists ? { ...base, ...doc.data() } : base;
     console.log("[dash] metas carregadas para", mesAnoAlvo, dashMetasMes);
+    // Carrega metas individuais (caixa/crédito por recepcionista/líder)
+    await carregarMetasIndividuais(mesAnoAlvo, "dash");
   } catch(e) {
     console.error("dash metas:", e);
     dashMetasMes = { ...METAS_EQUIPE_PADRAO, meta_caixa_recepcao:120000, meta_credito_recepcao:16000, meta_caixa_callcenter:28000, dias_uteis:22 };
+    dashMetasIndividuais = {};
   }
 }
 
@@ -4198,7 +4346,10 @@ function iniciarListener() {
 
       atualizarCards();
       renderTabela();
-      calcularRanking();
+      // [C3] calcularRanking NÃO é mais chamado a cada snapshot — antes fazia 1 get
+      // adicional no Firestore por mudança (linha ~4374 antiga: where mes_ano + perfil in).
+      // Agora roda em memória sobre equipeLancs (L3), disparado em aplicarAbaXxx e em
+      // tickAutoRefresh, evitando explosão de leituras quando a recep lança muitos docs.
       if(histAberto) filtrarHistorico();
     }, e => {
       // [FIX 1] Erros do listener aparecem como toast para facilitar diagnóstico
@@ -4259,8 +4410,10 @@ function atualizarCards() {
     ({ caixa, credito } = calcTotais(lancMes));
   }
   const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
-  const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metas.meta_caixa_recepcao||0);
-  const metaCredito = metas.meta_credito_recepcao||0;
+  // Recepcionista/líder usa META INDIVIDUAL (fallback nas coletivas se vazio)
+  const metaInd = isCC ? null : metaIndUsuarioLogado();
+  const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metaInd.metaCaixa   || 0);
+  const metaCredito = isCC ? 0                                : (metaInd.metaCredito || 0);
   const contBoleto  = isCC ? 0 : lancMes.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
 
   console.log(`[Amor Saúde] Totais — Perfil: ${perfil} | Caixa: ${caixa.toFixed(2)} | Crédito: ${credito.toFixed(2)} | MetaCaixa: ${metaCaixa} | MetaCredito: ${metaCredito} | Boletos: ${contBoleto} | Qtd lançamentos: ${lancMes.length}`);
@@ -4365,42 +4518,68 @@ function atualizarProj(caixaAtual, metaCaixa, credito, metaCredito) {
 // ═══════════════════════════════════════════════════════════
 //  RANKING
 // ═══════════════════════════════════════════════════════════
-async function calcularRanking() {
+// [C3] Reescrito para calcular client-side a partir de equipeLancs (L3), sem
+// nenhuma leitura no Firestore. Antes, cada chamada disparava um `get` com
+// where mes_ano + perfil in [...], custando dezenas de docs por execução. Como
+// equipeLancs já é mantido vivo pelo listener iniciarListenerEquipe (que carrega
+// TODOS os lançamentos do mês), tudo que o ranking precisa já está em memória.
+//
+// Fontes de disparo (sem snapshot):
+//   - aplicarAbaXxx (recep/CC/lider/liderCC) — quando a usuária troca de aba
+//   - tickAutoRefresh — a cada 2 min nas abas relevantes
+//
+// Função síncrona. Se equipeLancs ainda não chegou (1ª pintura ou antes do
+// listener pronto), mostra "Carregando..." e segue — a próxima chamada via
+// tab switch ou autorefresh ajusta.
+function calcularRanking() {
+  if(!usuario) return;
   const { perfil, nome } = usuario;
   if(!FAZ_LANC.includes(perfil)) return;
 
-  try {
-    // lider_callcenter compete no mesmo ranking do callcenter
-    const isCC = perfil==="callcenter" || perfil==="lider_callcenter";
-    const perfisGrupo = isCC ? ["callcenter","lider_callcenter"] : ["recepcionista","lider"];
+  // Elementos DOM ficam dentro de sec-metas (rec/CC/líder) ou sec-metas dentro
+  // do bloco de lancamentos (liderCC). Se a página estiver em outra fase de
+  // carregamento e os ids não existirem, sai silenciosamente.
+  const elPos = document.getElementById("rank-pos");
+  const elTit = document.getElementById("rank-tit");
+  const elSub = document.getElementById("rank-sub");
+  if(!elPos || !elTit || !elSub) return;
 
-    const snap = await db.collection("lancamentos")
-      .where("mes_ano","==",mesAno)
-      .where("perfil","in",perfisGrupo)
-      .get();
+  // lider_callcenter compete no mesmo ranking do callcenter (regra antiga preservada)
+  const isCC = perfil === "callcenter" || perfil === "lider_callcenter";
+  const perfisGrupo = isCC ? ["callcenter","lider_callcenter"] : ["recepcionista","lider"];
 
-    const por = {};
-    snap.docs.forEach(d => {
-      const data = d.data();
-      if(data.excluido === true) return; // E2: ignora soft-deleted
-      if(!por[data.usuario_nome]) por[data.usuario_nome] = [];
-      por[data.usuario_nome].push(data);
-    });
+  // Filtra equipeLancs pelo grupo da usuária. equipeLancs já vem sem excluidos
+  // (linha em iniciarListenerEquipe: filter(l => l.excluido !== true)).
+  const lancsGrupo = (equipeLancs || []).filter(l => perfisGrupo.includes(l.perfil));
 
-    const rank = Object.entries(por).map(([u,ls]) => ({
-      nome:u, caixa: calcTotais(ls).caixa
-    })).sort((a,b) => b.caixa - a.caixa);
+  // Sem dados ainda (equipeLancs vazio na 1ª pintura): mantém UI neutra.
+  if(!lancsGrupo.length) {
+    elPos.textContent = "—";
+    elTit.textContent = "Nenhum lançamento ainda";
+    elSub.textContent = `Ranking deste mês`;
+    return;
+  }
 
-    const pos   = rank.findIndex(r=>r.nome===nome) + 1;
-    const total = rank.length;
+  // Agrupa por usuário e soma o caixa via calcTotais (mantém regras de
+  // status pago/saída/saídas-irmãs idênticas ao código antigo).
+  const por = {};
+  for(const l of lancsGrupo) {
+    if(!por[l.usuario_nome]) por[l.usuario_nome] = [];
+    por[l.usuario_nome].push(l);
+  }
 
-    document.getElementById("rank-pos").textContent  = pos>0 ? `${pos}º` : "—";
-    document.getElementById("rank-tit").textContent  = pos>0
-      ? `Você está em ${pos}º lugar este mês`
-      : "Nenhum lançamento ainda";
-    document.getElementById("rank-sub").textContent  =
-      `Entre ${total} ${(perfil==="callcenter"||perfil==="lider_callcenter")?"atendentes":"colaboradoras"} — caixa acumulado`;
-  } catch(e) { console.error("ranking:", e); }
+  const rank = Object.entries(por)
+    .map(([u, ls]) => ({ nome: u, caixa: calcTotais(ls).caixa }))
+    .sort((a, b) => b.caixa - a.caixa);
+
+  const pos   = rank.findIndex(r => r.nome === nome) + 1;
+  const total = rank.length;
+
+  elPos.textContent = pos > 0 ? `${pos}º` : "—";
+  elTit.textContent = pos > 0
+    ? `Você está em ${pos}º lugar este mês`
+    : "Nenhum lançamento ainda";
+  elSub.textContent = `Entre ${total} ${isCC ? "atendentes" : "colaboradoras"} — caixa acumulado`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5612,8 +5791,10 @@ function renderTabelaPremiacao() {
   const contBoleto = lancMes.filter(l => l.tipo === "entrada" && l.forma_pagamento === "Boleto").length;
 
   const m = metas;
-  const metaCaixa   = m.meta_caixa_recepcao   || 0;
-  const metaCredito = m.meta_credito_recepcao || 0;
+  // Meta individual da usuária logada (caixa/crédito). Pools de lab/img/proc/cred ficam coletivos.
+  const metaInd     = metaIndUsuarioLogado();
+  const metaCaixa   = metaInd.metaCaixa   || 0;
+  const metaCredito = metaInd.metaCredito || 0;
   const metaLab     = m.meta_lab_equipe       || 273000;
   const metaImg     = m.meta_img_equipe       || 144000;
   const metaProc    = m.meta_proc_equipe      || 227500;
@@ -6854,6 +7035,11 @@ async function mudarFiltroDash() {
   dashMesAno = v;
   // Recria controles do modo (ex: semanas precisam do novo mês)
   renderControlesModo(dashModo);
+  // [C1] Garante que o faturamentoDiario do mês escolhido está em cache antes
+  // de renderizar o dashboard. escolherFonteDashboard e getTotaisPorDia leem
+  // de faturamentoDiarioAtual filtrando por mes_ano — sem este await o mês
+  // histórico apareceria zerado até o usuário interagir de novo.
+  await garantirMesFaturamento(v);
   carregarDashListener();
 }
 
@@ -7174,14 +7360,16 @@ function renderDashHistorico() {
   const medals   = ["🥇","🥈","🥉"];
 
   function rankRow(r, i) {
-    const mC  = (r.perfil==="callcenter"||r.perfil==="lider_callcenter")
-      ? (dashMetasMes?.meta_caixa_callcenter||0) : (dashMetasMes?.meta_caixa_recepcao||0);
+    const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
+    // Meta individual por nome (caixa/crédito) — CC continua coletivo
+    const indv = !isCC ? metaIndPorNome(r.nome) : null;
+    const mC  = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const mCr =                                                   (indv?.metaCredito || 0);
     const pct = mC > 0 ? (r.caixa/mC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
-    const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
     const premV = mC > 0
       ? (isCC ? calcPremiacao(r.caixa,r.credito||0,r.perfil,mC,0).valor
-               : calcPremiacaoCaixaRec(r.caixa,r.credito||0,mC,dashMetasMes?.meta_credito_recepcao||0,dashMesAno).valor)
+               : calcPremiacaoCaixaRec(r.caixa,r.credito||0,mC,mCr,dashMesAno).valor)
       : 0;
     const premBadge = premV > 0 ? `<span class="prem-badge">🏅 ${brl(premV)}</span>` : "";
     return `<tr>
@@ -7207,9 +7395,10 @@ function renderDashHistorico() {
   // Cards por colaboradora
   function colabCard(r) {
     const perfil = r.perfil;
-    const mC  = (perfil==="callcenter"||perfil==="lider_callcenter")
-      ? (dashMetasMes?.meta_caixa_callcenter||0) : (dashMetasMes?.meta_caixa_recepcao||0);
-    const mCr = dashMetasMes?.meta_credito_recepcao||0;
+    const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
+    const indv = !isCC ? metaIndPorNome(r.nome) : null;
+    const mC   = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const mCr  = isCC ? 0                                        : (indv.metaCredito || 0);
     const prem = mC > 0 ? calcPremiacao(r.caixa||0, r.credito||0, perfil, mC, mCr) : null;
     const pct  = mC > 0 ? (((r.caixa||0)/mC)*100).toFixed(1)+"%" : "—";
     return `<div class="colab-card">
@@ -7863,8 +8052,7 @@ function renderDashPremiacao() {
   const verCC = SO_DASHBOARD.includes(usuario?.perfil);
 
   const m          = dashMetasMes || {};
-  const metaRec    = m.meta_caixa_recepcao   || 120000;
-  const metaCred   = m.meta_credito_recepcao  || 16000;
+  // Recepcionistas/líderes usam metaIndPorNome(nome) dentro de linhasRec — não há meta coletiva única aqui.
   const metaCC     = m.meta_caixa_callcenter  || 28000;
   const metaLab    = m.meta_lab_equipe        || 273000;
   const metaImg    = m.meta_img_equipe        || 144000;
@@ -7910,8 +8098,12 @@ function renderDashPremiacao() {
     .map(([nome, ls]) => {
       const tot       = calcTotaisDetalhados(ls);
       const perfil    = PERFIS[nome] || "";
+      // Meta individual por nome (caixa/crédito). Pools continuam coletivos.
+      const indv      = metaIndPorNome(nome);
+      const mCaixaInd = indv.metaCaixa   || 0;
+      const mCredInd  = indv.metaCredito || 0;
       const contBol   = ls.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
-      const premCaixa = calcPremiacaoCaixaRec(tot.caixa, tot.credito, metaRec, metaCred, dashMesAno);
+      const premCaixa = calcPremiacaoCaixaRec(tot.caixa, tot.credito, mCaixaInd, mCredInd, dashMesAno);
       const premBol   = calcPremBoleto(contBol);
       const parteLab  = calcPartePool(nome, poolLab);
       const parteImg  = calcPartePool(nome, poolImg);
@@ -7923,14 +8115,14 @@ function renderDashPremiacao() {
         const projC    = (tot.caixa   / diasPassF) * diasUteis;
         const projCr   = (tot.credito / diasPassF) * diasUteis;
         const projCont = Math.round((contBol / diasPassF) * diasUteis);
-        totalProj = calcPremiacaoCaixaRec(projC, projCr, metaRec, metaCred, dashMesAno).valor
+        totalProj = calcPremiacaoCaixaRec(projC, projCr, mCaixaInd, mCredInd, dashMesAno).valor
                   + calcPremBoleto(projCont)
                   + calcPartePool(nome, projPoolLab)
                   + calcPartePool(nome, projPoolImg)
                   + calcPartePool(nome, projPoolProc)
                   + calcPartePool(nome, projPoolCred);
       }
-      const pctC = metaRec > 0 ? (tot.caixa / metaRec * 100).toFixed(1) : "—";
+      const pctC = mCaixaInd > 0 ? (tot.caixa / mCaixaInd * 100).toFixed(1) : "—";
       return { nome, perfil, tot, contBol, premCaixa, premBol, parteLab, parteImg, parteProc, parteCred, total, totalProj, pctC };
     })
     .sort((a,b) => b.total - a.total);
@@ -8129,17 +8321,18 @@ function renderDashRanking(lista) {
   }
 
   function rankRow(r, posicao) {
-    const metaC = (r.perfil==="callcenter"||r.perfil==="lider_callcenter")
-      ? (dashMetasMes?.meta_caixa_callcenter||0)
-      : (dashMetasMes?.meta_caixa_recepcao||0);
+    const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
+    // Meta individual por nome (caixa/crédito). CC continua coletivo.
+    const indv  = !isCC ? metaIndPorNome(r.nome) : null;
+    const metaC = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const mCr   =                                                   (indv?.metaCredito || 0);
     const pct = metaC > 0 ? (r.caixa/metaC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
     const premBadge = metaC > 0
       ? (() => {
-          const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
           let v = 0;
           if(isCC) { v = calcPremiacao(r.caixa,r.credito,r.perfil,metaC,0).valor; }
-          else     { v = calcPremiacaoCaixaRec(r.caixa,r.credito,metaC,dashMetasMes?.meta_credito_recepcao||0,dashMesAno).valor; }
+          else     { v = calcPremiacaoCaixaRec(r.caixa,r.credito,metaC,mCr,dashMesAno).valor; }
           return v > 0 ? `<span class="prem-badge">🏅 ${brl(v)}</span>` : "";
         })()
       : "";
@@ -8193,10 +8386,10 @@ function renderDashColaboradoras(lista) {
     const ls = por[nome];
     const tot = calcTotaisDetalhados(ls);
     const perfil = PERFIS[nome] || "";
-    const metaC  = (perfil === "callcenter" || perfil === "lider_callcenter")
-      ? (dashMetasMes?.meta_caixa_callcenter||0)
-      : (dashMetasMes?.meta_caixa_recepcao||0);
-    const metaCr = dashMetasMes?.meta_credito_recepcao||0;
+    const isCC = perfil === "callcenter" || perfil === "lider_callcenter";
+    const indv = !isCC ? metaIndPorNome(nome) : null;
+    const metaC  = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const metaCr = isCC ? 0                                        : (indv.metaCredito || 0);
     const prem   = metaC > 0 ? calcPremiacao(tot.caixa,tot.credito,perfil,metaC,metaCr) : null;
     const pct    = metaC > 0 ? (tot.caixa/metaC*100).toFixed(1)+"%" : "—";
 
@@ -9139,8 +9332,17 @@ async function removerFeriado(docId) {
 // ═══════════════════════════════════════════════════════════
 
 function abrirModalFeriados() {
+  // [C2] Recarga manual de feriados ao abrir o modal — substitui a recarga periódica
+  // que rodava a cada 2 min no tickAutoRefresh. Como o modal é aberto raramente
+  // (gestoras/líderes), o custo é desprezível (~15 leituras por abertura).
+  // Renderiza imediatamente com o cache atual e atualiza assim que o get terminar,
+  // para não bloquear a abertura caso a rede esteja lenta.
   renderListaFeriados();
   document.getElementById("modal-feriados").classList.remove("hidden");
+  db.collection("feriados").get().then(snap => {
+    feriadosFirestore = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderListaFeriados();
+  }).catch(e => console.warn("[feriados modal] falha ao atualizar:", e));
 }
 
 function fecharModalFeriados() {
@@ -9250,15 +9452,57 @@ function abrirModalMetas() {
   set("mm-credito-equipe",   m.meta_credito_equipe   || 0);
   set("mm-boleto-equipe",    m.meta_boleto_equipe    || 0);
   set("mm-dias-uteis",       m.dias_uteis            || 22);
-  set("mm-caixa-recepcao",   m.meta_caixa_recepcao   || 0);
-  set("mm-credito-recepcao", m.meta_credito_recepcao || 0);
   set("mm-caixa-callcenter", m.meta_caixa_callcenter || 0);
   set("mm-lab",              m.meta_lab_equipe        || 0);
   set("mm-img",              m.meta_img_equipe        || 0);
   set("mm-proc",             m.meta_proc_equipe       || 0);
   set("mm-injetaveis",       m.meta_injetaveis_equipe || 0);
 
+  // Metas individuais de caixa/crédito por recepcionista/líder (Tuane afastada não aparece)
+  _renderInputsMetasIndividuais();
+
   document.getElementById("modal-metas").classList.remove("hidden");
+}
+
+// Monta dinamicamente uma linha por recepcionista/líder ativa.
+// IDs dos inputs: mm-rec-caixa-${docId} e mm-rec-credito-${docId} (docId = email sanitizado).
+function _renderInputsMetasIndividuais() {
+  const wrap = document.getElementById("mm-rec-individual");
+  if(!wrap) return;
+  const fmt = v => Number(v) > 0
+    ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 })
+    : "";
+  // Recepção médica (incluindo líderes de recepção) — exclui afastadas
+  const lista = Object.entries(USUARIOS)
+    .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && u.status !== "afastada")
+    .map(([email, u]) => ({ email, nome: u.nome, perfil: u.perfil, docId: _docIdMetaInd(email) }))
+    .sort((a, b) => {
+      // Líderes primeiro pra destacar; depois alfabético dentro de cada grupo
+      if(a.perfil !== b.perfil) return a.perfil === "lider" ? -1 : 1;
+      return a.nome.localeCompare(b.nome, "pt-BR");
+    });
+  if(!lista.length) {
+    wrap.innerHTML = `<div class="mm-rec-vazio">Nenhuma recepcionista ativa cadastrada.</div>`;
+    return;
+  }
+  wrap.innerHTML = lista.map(u => {
+    const ind = metasIndividuais[u.docId] || {};
+    const valC  = fmt(ind.metaCaixa);
+    const valCr = fmt(ind.metaCredito);
+    const perfilLabel = u.perfil === "lider" ? "Líder" : "Recepcionista";
+    return `
+      <div class="mm-rec-linha">
+        <div class="mm-rec-nome">${u.nome}<span class="mm-rec-perfil">${perfilLabel}</span></div>
+        <div class="fg" style="margin:0">
+          <label>Meta Caixa (R$)</label>
+          <input type="text" id="mm-rec-caixa-${u.docId}" placeholder="0,00" value="${valC}" oninput="mascaraValor(this)" />
+        </div>
+        <div class="fg" style="margin:0">
+          <label>Meta Crédito (R$)</label>
+          <input type="text" id="mm-rec-credito-${u.docId}" placeholder="0,00" value="${valCr}" oninput="mascaraValor(this)" />
+        </div>
+      </div>`;
+  }).join("");
 }
 
 function fecharModalMetas() {
@@ -9269,13 +9513,12 @@ async function salvarModalMetas() {
   const get = id => parseBRL(document.getElementById(id)?.value || "0");
   const getN = id => parseInt(document.getElementById(id)?.value) || 22;
 
+  // Metas coletivas (equipe/CC/lab/img/proc/injet./boleto continuam coletivas — SEM alteração)
   const dados = {
     meta_caixa_equipe:     get("mm-caixa-equipe"),
     meta_credito_equipe:   get("mm-credito-equipe"),
     meta_boleto_equipe:    get("mm-boleto-equipe"),
     dias_uteis:            getN("mm-dias-uteis"),
-    meta_caixa_recepcao:   get("mm-caixa-recepcao"),
-    meta_credito_recepcao: get("mm-credito-recepcao"),
     meta_caixa_callcenter: get("mm-caixa-callcenter"),
     meta_lab_equipe:            get("mm-lab"),
     meta_img_equipe:            get("mm-img"),
@@ -9288,12 +9531,42 @@ async function salvarModalMetas() {
   btn.disabled = true; btn.textContent = "Salvando...";
 
   try {
+    // 1) Doc principal — metas coletivas
     await db.collection("metas").doc(alvo).set(dados, { merge: true });
+
+    // 2) Subcoleção `recepcionistas` — uma meta individual por recepcionista/líder ativa.
+    //    Grava nome/email/perfil denormalizados pra dashboard ler sem query em `usuarios`.
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+    const listaInd = Object.entries(USUARIOS)
+      .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && u.status !== "afastada");
+    listaInd.forEach(([email, u]) => {
+      const docId = _docIdMetaInd(email);
+      const valC  = get(`mm-rec-caixa-${docId}`);
+      const valCr = get(`mm-rec-credito-${docId}`);
+      const ref   = db.collection("metas").doc(alvo).collection("recepcionistas").doc(docId);
+      batch.set(ref, {
+        email, nome: u.nome, perfil: u.perfil,
+        metaCaixa: valC, metaCredito: valCr,
+        atualizado_em: ts,
+        atualizado_por: usuario?.nome || "",
+      }, { merge: true });
+    });
+    await batch.commit();
+
+    // 3) Atualiza estado em memória pra refletir imediatamente nos cards/dashboard
     dashMetasMes = { ...(dashMetasMes||{}), ...dados };
-    // Atualiza também metas do usuário corrente se for o mesmo mês
-    if(alvo === mesAno) metas = { ...(metas||{}), ...dados };
+    if(alvo === mesAno) {
+      metas = { ...(metas||{}), ...dados };
+      await carregarMetasIndividuais(mesAno, "logado");
+    }
+    if(alvo === (dashMesAno || mesAno)) {
+      await carregarMetasIndividuais(alvo, "dash");
+    }
+
     fecharModalMetas();
     toast("Metas salvas com sucesso!");
+    if(typeof atualizarCards === "function" && metas) atualizarCards();
     renderDashboard();
   } catch(e) {
     console.error("salvarMetas:", e);
@@ -9479,6 +9752,12 @@ async function inserirFaturamentoMes(mesAnoAlvo, btn) {
     }
     await batch.commit();
 
+    // [C1] Após gravar, força refresh do cache deste mês para refletir os novos
+    // dados nas próximas renderizações (substitui o auto-update do antigo onSnapshot).
+    await garantirMesFaturamento(mesAnoAlvo, true);
+    atualizarSeletorMeses();
+    renderFaturamentoDiario();
+
     if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${dados.length} dias de ${labelMes(mesAnoAlvo)} inseridos com sucesso!</div>`;
     toast(`✅ ${dados.length} dias de ${labelMes(mesAnoAlvo)} inseridos com sucesso!`, "ok");
 
@@ -9520,6 +9799,13 @@ async function importarFaturamentoHistorico(btn) {
     }
     await batch.commit();
 
+    // [C1] Refresh do cache para todos os meses recém-importados (substitui o
+    // auto-update do antigo onSnapshot). Roda em paralelo — ~100 docs total.
+    const mesesImportados = [...new Set(todos.map(d => d.mes_ano).filter(Boolean))];
+    await Promise.all(mesesImportados.map(m => garantirMesFaturamento(m, true)));
+    atualizarSeletorMeses();
+    renderFaturamentoDiario();
+
     if(statusEl) statusEl.innerHTML = `<div class="import-ok">✅ ${todos.length} dias inseridos! (Jan: 26, Fev: 24, Mar: 26, Abr: 24)</div>`;
     toast(`✅ ${todos.length} dias históricos inseridos com sucesso!`, "ok");
 
@@ -9533,31 +9819,47 @@ async function importarFaturamentoHistorico(btn) {
   }
 }
 
-// Inicia o listener em tempo real da coleção faturamentoDiario
-function carregarFaturamentoDiario() {
+// [C1] Carga inicial do faturamentoDiario: APENAS o mês corrente, via one-shot get.
+// Substitui o antigo onSnapshot na coleção inteira (~100 docs por sessão de
+// gestora/líder + propagação contínua). Demais meses (histórico, dashboard de
+// mês passado, comparativo mensal) são lidos sob demanda via garantirMesFaturamento.
+async function carregarFaturamentoDiario() {
+  // Cleanup defensivo do antigo listener — se algum hot-reload deixou aberto
   if(unsubFaturamento) { unsubFaturamento(); unsubFaturamento = null; }
 
-  unsubFaturamento = db.collection("faturamentoDiario")
-    .orderBy("data")
-    .onSnapshot(snap => {
-      faturamentoDiarioAtual = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      atualizarSeletorMeses();
-      renderFaturamentoDiario();
-      if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
-        if(dashUsandoHistorico) renderDashHistorico();
-        else renderDashEquipe(dashLancs);
-      }
-      // Atualiza aba Equipe da recepcionista/callcenter se o listener estiver ativo
-      if(unsubEquipe) renderCardMetasEquipe();
-    }, e => console.warn("[faturamentoDiario] listener erro:", e));
+  const mesCorrente = getMesAno();
+  if(!faturamentoMesSel) faturamentoMesSel = mesCorrente;
+
+  await garantirMesFaturamento(mesCorrente);
+  atualizarSeletorMeses();
+  renderFaturamentoDiario();
+
+  if(document.getElementById("dash-cards-equipe") && dashMesAno && dashMetasMes) {
+    if(dashUsandoHistorico) renderDashHistorico();
+    else renderDashEquipe(dashLancs);
+  }
+  // Atualiza aba Equipe da recepcionista/callcenter se o listener estiver ativo
+  if(unsubEquipe) renderCardMetasEquipe();
 }
 
-// Atualiza o dropdown com os meses disponíveis no Firestore
+// [C1] Atualiza o dropdown de meses do Faturamento Diário.
+// Antes vinha de `faturamentoDiarioAtual` que tinha TODOS os meses (porque o
+// listener carregava a coleção inteira). Agora o array só contém meses já
+// carregados sob demanda — então o dropdown precisa de outra fonte para listar
+// meses ainda não buscados. Combinamos: meses históricos conhecidos (chaves de
+// DATASETS_FATURAMENTO, datasets JS embutidos) + mês corrente + qualquer mês
+// já em cache. Selecionar um mês ainda não carregado dispara o get sob demanda
+// em mudarMesFaturamento.
 function atualizarSeletorMeses() {
   const sel = document.getElementById("fat-sel-mes");
   if(!sel) return;
 
-  const meses = [...new Set(faturamentoDiarioAtual.map(d => d.mes_ano).filter(Boolean))].sort();
+  const historicos = Object.keys(DATASETS_FATURAMENTO || {});
+  const meses = [...new Set([
+    ...historicos,
+    getMesAno(),
+    ...faturamentoDiarioCache.keys(),
+  ])].filter(Boolean).sort();
   if(!meses.length) return;
 
   const atual = faturamentoMesSel || meses[meses.length - 1];
@@ -9567,9 +9869,16 @@ function atualizarSeletorMeses() {
   faturamentoMesSel = sel.value;
 }
 
-// Troca o mês selecionado e re-renderiza
-function mudarMesFaturamento(mes) {
+// [C1] Troca o mês selecionado e re-renderiza. Se o mês ainda não estiver em
+// cache, faz o get sob demanda (where mes_ano == mes). Cache subsequente: 0 leituras.
+async function mudarMesFaturamento(mes) {
   faturamentoMesSel = mes;
+  // Feedback visual enquanto carrega (silenciado se já tem cache — retorna na hora)
+  const cont = document.getElementById("fat-conteudo");
+  if(cont && !faturamentoDiarioCache.has(mes)) {
+    cont.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando faturamento...</div>';
+  }
+  await garantirMesFaturamento(mes);
   renderFaturamentoDiario();
 }
 
@@ -9711,7 +10020,20 @@ function renderFaturamentoDiario() {
     </div>`;
 
   // ── Comparativo mensal ──
+  // [C1] Carrega sob demanda os 4 meses históricos que o comparativo precisa
+  // se ainda não estiverem no cache. Fire-and-forget: dispara os gets em
+  // paralelo e re-renderiza quando todos chegarem. Custo: ~100 docs UMA vez
+  // por sessão na primeira vez que a usuária abre a tela de Faturamento Diário
+  // (mesmo total que antes — mas só pago se ela realmente abre a seção).
   const mesesOrdem = ["2026-01","2026-02","2026-03","2026-04"];
+  const mesesFaltando = mesesOrdem.filter(m => !faturamentoDiarioCache.has(m));
+  if(mesesFaltando.length) {
+    Promise.all(mesesFaltando.map(m => garantirMesFaturamento(m)))
+      .then(() => {
+        // Só re-renderiza se a usuária ainda está vendo a mesma seção
+        if(document.getElementById("fat-conteudo")) renderFaturamentoDiario();
+      });
+  }
   const totaisPorMes = {};
   mesesOrdem.forEach(m => {
     const ds = faturamentoDiarioAtual.filter(d => d.mes_ano === m && (d.caixa + d.credito) > 0);

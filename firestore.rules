@@ -34,6 +34,16 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
+
+      // Metas individuais de caixa/crédito por recepcionista/líder.
+      // Doc id = email sanitizado (vide _docIdMetaInd no index.html).
+      // Leitura aberta a qualquer autenticada (necessária pra render do dashboard e
+      // pra cada recep/líder ler a própria meta). Escrita restrita a gestão.
+      match /recepcionistas/{recepId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null &&
+          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['gestor', 'subgestora'];
+      }
     }
 
     // Usuários: cada uma lê o próprio, gestora lê todos.
