@@ -1754,9 +1754,7 @@
           <button class="btn btn-ghost"   style="width:auto" onclick="limparFiltrosRelatorio()">Limpar Filtros</button>
         </div>
 
-        <div id="rel-aviso-area" style="font-size:12px;color:var(--text2);margin-top:10px;display:none">
-          ℹ️ Você visualiza apenas lançamentos da sua área.
-        </div>
+        <div id="rel-aviso-area" style="font-size:12px;color:var(--text2);margin-top:10px;display:none"></div>
       </div>
 
       <!-- Resumo + Tabela (aparece após gerar) -->
@@ -12145,11 +12143,6 @@ function editarOrcamentoFromModal() {
 let _relInicializado = false;
 let _relLancamentosBuscados = [];   // último resultado da busca (pra exportar)
 
-// Áreas por perfil — define quem aparece no filtro "Recepcionista" e quais
-// docs entram na busca para perfis com escopo restrito (líderes).
-const PERFIS_RECEPCAO   = ["recepcionista","lider"];
-const PERFIS_CALLCENTER = ["callcenter","lider_callcenter","coordenadora"];
-
 // Inicializa a tela (idempotente — só roda 1× por sessão)
 function iniciarRelatorios() {
   if(_relInicializado) return;
@@ -12174,20 +12167,10 @@ function iniciarRelatorios() {
   // Aplica estado inicial (categoria vazia → subtipo escondido)
   _onMudarCategoriaRelatorio();
 
-  // Aviso de área (visível só pra líderes)
+  // Aviso de área removido — agora gestão, coord, líderes e financeiro veem Recepção + Call Center.
   const perfil = usuario?.perfil;
-  const ehLiderArea = (perfil === "lider" || perfil === "lider_callcenter");
   const aviso = document.getElementById("rel-aviso-area");
-  if(aviso) {
-    if(ehLiderArea) {
-      aviso.textContent = perfil === "lider"
-        ? "ℹ️ Você visualiza apenas lançamentos da Recepção."
-        : "ℹ️ Você visualiza apenas lançamentos do Call Center.";
-      aviso.style.display = "";
-    } else {
-      aviso.style.display = "none";
-    }
-  }
+  if(aviso) aviso.style.display = "none";
 
   // Backup do Sistema — visível pra gestão/coord/líderes/financeiro (VE_BACKUP).
   // Carrega timestamp do último backup (coleção config_backup, doc "ultimo").
@@ -12207,15 +12190,12 @@ function iniciarRelatorios() {
 function preencherSelectRecepRelatorio() {
   const sel = document.getElementById("rel-recep");
   if(!sel) return;
-  const perfil = usuario?.perfil;
+  // Todos os perfis com acesso à aba Relatórios (gestão, coord, líderes, financeiro)
+  // veem TODA a equipe que faz lançamento — Recepção + Call Center. Líderes (lider e
+  // lider_callcenter) antes ficavam restritos à própria área; agora têm a visão completa.
   let nomes = Object.values(USUARIOS)
     .filter(u => u.status !== "afastada")
-    .filter(u => {
-      if(perfil === "lider")            return PERFIS_RECEPCAO.includes(u.perfil);
-      if(perfil === "lider_callcenter") return PERFIS_CALLCENTER.includes(u.perfil);
-      // Demais (gestão/coord/financeiro): inclui todos os que fazem lançamento
-      return FAZ_LANC.includes(u.perfil);
-    })
+    .filter(u => FAZ_LANC.includes(u.perfil))
     .map(u => u.nome)
     .sort((a,b) => a.localeCompare(b,"pt-BR"));
 
@@ -12419,12 +12399,8 @@ async function gerarRelatorio() {
       return dt >= dtIni && dt <= dtFim;
     });
 
-    // Filtro por área (líderes)
-    if(perfil === "lider") {
-      docs = docs.filter(l => PERFIS_RECEPCAO.includes(l.perfil));
-    } else if(perfil === "lider_callcenter") {
-      docs = docs.filter(l => PERFIS_CALLCENTER.includes(l.perfil));
-    }
+    // Sem filtro de área: gestão, coord, líderes e financeiro veem Recepção + Call Center.
+    // (Perfis "recepcionista" e "callcenter" não chegam aqui — VE_RELATORIOS não os inclui.)
 
     // Filtros da UI
     if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
