@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(open *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(grep -n \"</script>\\\\|^}\\\\s*$\\\\|window.\\\\|^function \" /Users/eduardadearaujo/Desktop/amorsaude-metas/index.html)",
+      "Bash(firebase --version)",
+      "Bash(node *)",
+      "Bash(pbcopy)",
+      "Bash(grep -n -E \"\\(onSnapshot|getDocs|getDoc|setInterval|setTimeout.*[0-9]{4,}|collection\\\\\\(db|query\\\\\\(\\)\" /Users/eduardadearaujo/Desktop/amorsaude-metas/index.html)",
+      "Bash(git *)",
+      "Bash(awk '/<script[^>]*type=\"module\"|<script>$/,/<\\\\/script>/' index.html)"
     ]
   }
 }
