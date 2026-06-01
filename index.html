@@ -3214,6 +3214,17 @@ function _somarBoletoDoDoc(l) {
   return total;
 }
 
+// Detecta se um lançamento conta como BOLETO pra fins de contagem/premiação.
+// Schema novo: forma_pagamento_1 ou _2 === "boleto" (lowercase).
+// Schema legacy (pré-D3): campo único `forma_pagamento === "Boleto"` capitalizado.
+// Usado nas 3 contagens de boleto (cards do user logado, tabela individual e dashboard de premiações).
+function _ehLancBoleto(l) {
+  if(!l || l.tipo !== "entrada") return false;
+  return l.forma_pagamento_1 === "boleto"
+      || l.forma_pagamento_2 === "boleto"
+      || l.forma_pagamento   === "Boleto";
+}
+
 // Agrega lancamentos pagos do mês (+ saídas vinculadas via id_par) nas mesmas
 // categorias do dashboard. Reusa calcTotaisDetalhados (Fase A — já trata schema novo).
 // Boleto é extraído de forma_pagamento_* (campo `boleto` do doc é sempre 0
@@ -4416,7 +4427,7 @@ function atualizarCards() {
   const metaInd = isCC ? null : metaIndUsuarioLogado();
   const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metaInd.metaCaixa   || 0);
   const metaCredito = isCC ? 0                                : (metaInd.metaCredito || 0);
-  const contBoleto  = isCC ? 0 : lancMes.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
+  const contBoleto  = isCC ? 0 : lancMes.filter(_ehLancBoleto).length;
 
   console.log(`[Amor Saúde] Totais — Perfil: ${perfil} | Caixa: ${caixa.toFixed(2)} | Crédito: ${credito.toFixed(2)} | MetaCaixa: ${metaCaixa} | MetaCredito: ${metaCredito} | Boletos: ${contBoleto} | Qtd lançamentos: ${lancMes.length}`);
 
@@ -5790,7 +5801,7 @@ function renderTabelaPremiacao() {
   } else {
     ({ caixa, credito } = calcTotais(lancMes));
   }
-  const contBoleto = lancMes.filter(l => l.tipo === "entrada" && l.forma_pagamento === "Boleto").length;
+  const contBoleto = lancMes.filter(_ehLancBoleto).length;
 
   const m = metas;
   // Meta individual da usuária logada (caixa/crédito). Pools de lab/img/proc/cred ficam coletivos.
@@ -8104,7 +8115,7 @@ function renderDashPremiacao() {
       const indv      = metaIndPorNome(nome);
       const mCaixaInd = indv.metaCaixa   || 0;
       const mCredInd  = indv.metaCredito || 0;
-      const contBol   = ls.filter(l => l.tipo==="entrada" && l.forma_pagamento==="Boleto").length;
+      const contBol   = ls.filter(_ehLancBoleto).length;
       const premCaixa = calcPremiacaoCaixaRec(tot.caixa, tot.credito, mCaixaInd, mCredInd, dashMesAno);
       const premBol   = calcPremBoleto(contBol);
       const parteLab  = calcPartePool(nome, poolLab);
