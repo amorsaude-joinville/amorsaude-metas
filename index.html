@@ -1721,7 +1721,9 @@
             <label>💳 Forma de pagamento</label>
             <select id="rel-forma">
               <option value="">Todas</option>
-              <option value="caixa">Caixa</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="debito">Débito</option>
+              <option value="pix">PIX</option>
               <option value="credito">Crédito</option>
               <option value="boleto">Boleto</option>
             </select>
@@ -12240,9 +12242,9 @@ function _onMudarCategoriaRelatorio() {
 
 // Converte um doc do Firestore em um objeto "linha do relatório"
 // com Data, Paciente, CPF, Médico, Recepcionista, Categoria, Subtipo, Forma Pagto e Valor.
-// `filtroCategoria`/`filtroSubtipo` (opcionais) decompõem o valor em fatia da categoria
-// filtrada — quando ambos vazios, mantém l.valor cheio (comportamento "Todas").
-function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo) {
+// O valor exibido é calculado por `_calcularValorRelatorio` — que cruza os filtros
+// de forma de pagamento e categoria (ratea proporcionalmente quando ambos ativos).
+function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma) {
   const dt = l.data_hora
     ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
     : (l.criado_em
@@ -12285,9 +12287,57 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo) {
     categoriaLabel: categoriaLabel || "—",
     subtipo:        subtipo || "",
     formaLabel:     formaLabel || "—",
-    valor:          _calcularValorFatia(l, filtroCategoria, filtroSubtipo),
+    valor:          _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma),
     _raw:           l,
   };
+}
+
+// Decide o valor exibido na linha do relatório conforme os filtros ativos.
+// Regras:
+//   - Sem forma nem categoria → l.valor cheio (comportamento "Todas").
+//   - Só categoria          → fatia da categoria (_calcularValorFatia).
+//   - Só forma              → parcela da forma no lançamento inteiro (_calcularValorPorForma).
+//   - Forma + categoria     → rateio proporcional: parcelaForma × (fatiaCategoria / valorTotal).
+//
+// O rateio proporcional é uma ESTIMATIVA — o sistema não armazena qual forma de
+// pagamento pagou qual categoria dentro do mesmo lançamento. Cobre só o caso raro
+// de categoria dividida E pagamento dividido simultaneamente. Quando o pagamento
+// tem uma forma só (caso mais comum), o rateio degenera e o resultado é exato (a
+// fatia da categoria foi 100% paga naquela forma). Quando a categoria não é dividida
+// idem. O método é consistente entre os filtros: a soma das parcelas por forma de
+// um mesmo lançamento = fatia total da categoria — sem dupla contagem.
+function _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma) {
+  if(!filtroForma && !filtroCategoria) return Number(l.valor) || 0;
+  if(!filtroForma)    return _calcularValorFatia(l, filtroCategoria, filtroSubtipo);
+  if(!filtroCategoria) return _calcularValorPorForma(l, filtroForma);
+  // Forma + categoria: rateio proporcional
+  const total = Number(l.valor) || 0;
+  if(total <= 0) return 0;
+  const fatiaCategoria = _calcularValorFatia(l, filtroCategoria, filtroSubtipo);
+  if(fatiaCategoria <= 0) return 0;
+  const parcelaForma = _calcularValorPorForma(l, filtroForma);
+  if(parcelaForma <= 0) return 0;
+  return parcelaForma * (fatiaCategoria / total);
+}
+
+// Calcula a "parcela" de valor de um lançamento referente a uma forma de pagamento
+// específica (dinheiro/debito/pix/credito/boleto). Usada quando o relatório filtra
+// por forma individual — substitui o l.valor cheio pela fatia daquela forma.
+// Schema novo: soma valor_1 e/ou valor_2 conforme onde a forma aparece.
+// Schema legacy (forma_pagamento único, sem _1/_2): retorna l.valor cheio se a forma
+// legacy (normalizada) bate com a filtrada — porque no legacy o valor todo era da
+// única forma cadastrada. Não há split a fazer.
+function _calcularValorPorForma(l, forma) {
+  if(!forma) return Number(l.valor) || 0;
+  let v = 0;
+  if(l.forma_pagamento_1 === forma) v += Number(l.valor_1) || 0;
+  if(l.forma_pagamento_2 === forma) v += Number(l.valor_2) || 0;
+  if(v > 0) return v;
+  // Legacy: doc sem campos _1/_2, com forma_pagamento string capitalizada
+  if(l.forma_pagamento && l.forma_pagamento_1 == null && l.forma_pagamento_2 == null) {
+    if(infoFormaPagamento(l.forma_pagamento).chave === forma) return Number(l.valor) || 0;
+  }
+  return 0;
 }
 
 // Calcula a "fatia" de valor de um lançamento conforme o filtro de Categoria/Subtipo
@@ -12320,21 +12370,18 @@ function _matchCategoria(l, cat) {
   return true;
 }
 
-// Verifica forma_pagamento (caixa/credito/boleto) — usa campos pré-computados
-// `caixa`/`credito` quando disponíveis e detecta boleto pelas formas detalhadas.
+// Verifica forma_pagamento individual (dinheiro/debito/pix/credito/boleto).
+// Casa contra forma_pagamento_1/_2 do schema novo (já lowercase sem acento) e contra
+// forma_pagamento string do legacy, normalizando via infoFormaPagamento (que faz
+// lowercase + remove acento, então "Débito"→"debito", "PIX"→"pix", etc.).
 function _matchFormaPagamento(l, forma) {
   if(!forma) return true;
-  if(forma === "caixa")   return (Number(l.caixa)   || 0) > 0;
-  if(forma === "credito") return (Number(l.credito) || 0) > 0;
-  if(forma === "boleto") {
-    // Boleto é detectado pelo forma_pagamento_1/2 (regra Abr/2026: campo `boleto` é sempre 0)
-    if(l.forma_pagamento_1 === "boleto") return true;
-    if(l.forma_pagamento_2 === "boleto") return true;
-    // Schema legacy: forma_pagamento string
-    if((l.forma_pagamento || "").toLowerCase() === "boleto") return true;
-    return false;
+  if(l.forma_pagamento_1 === forma) return true;
+  if(l.forma_pagamento_2 === forma) return true;
+  if(l.forma_pagamento) {
+    if(infoFormaPagamento(l.forma_pagamento).chave === forma) return true;
   }
-  return true;
+  return false;
 }
 
 // Calcula o conjunto de mes_ano cobertos pelo intervalo [iniStr, fimStr] (YYYY-MM-DD)
@@ -12421,9 +12468,10 @@ async function gerarRelatorio() {
       docs = docs.filter(l => (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
     }
 
-    // Normaliza pra exibição. Passa cat/subtipo pro normalizador decompor o valor
-    // na fatia da categoria filtrada (Tabela/Cards/Excel todos consomem linha.valor).
-    let linhas = docs.map(l => _normalizarLancamentoParaRelatorio(l, cat, subtipo));
+    // Normaliza pra exibição. O valor da linha é decidido por _calcularValorRelatorio:
+    // forma+categoria juntos → rateio proporcional; só um dos dois → fatia direta;
+    // nenhum → valor cheio. Tabela/Cards/Excel todos consomem linha.valor já fatiado.
+    let linhas = docs.map(l => _normalizarLancamentoParaRelatorio(l, cat, subtipo, forma));
 
     // Ordena por data desc
     linhas.sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
