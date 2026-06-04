@@ -8472,12 +8472,31 @@ function renderPrescritores() {
   lista.forEach(l => {
     const k = l.prescritor;
     if(!por[k]) por[k] = { esp:l.prescritor_especialidade||"", total:0, count:0, lab:0, img:0, proc:0, consultas:0, porProcTipo:{} };
-    const v=l.valor||0, p=l.produto||"", tp=l.tipo_procedimento||"";
-    por[k].total += v; por[k].count++;
-    if(p==="Exames Laboratoriais") por[k].lab  += v;
-    if(p==="Exames de Imagem")     por[k].img  += v;
-    if(p==="Procedimento")  { por[k].proc += v; if(tp) por[k].porProcTipo[tp]=(por[k].porProcTipo[tp]||0)+v; }
-    if(p==="Consultas")            por[k].consultas += v;
+    const v = l.valor || 0;
+    por[k].total += v;
+    por[k].count++;
+
+    if(ehDocNovoSchema(l)) {
+      // Schema novo: usa _calcularValorFatia (mesma fonte de verdade do Relatório
+      // de Lançamentos). Lab + Imagem + Proced. + Consultas = total do doc, porque
+      // doc.valor é montado como imagem+consultas+laboratorio+sum(procedimentos).
+      por[k].lab       += _calcularValorFatia(l, "exames",        "");
+      por[k].img       += _calcularValorFatia(l, "imagem",        "");
+      por[k].proc      += _calcularValorFatia(l, "procedimentos", "");
+      por[k].consultas += _calcularValorFatia(l, "consultas",     "");
+      // Breakdown por tipo de procedimento: itera procedimentos[] (cada item {tipo, valor}).
+      (l.procedimentos || []).forEach(p => {
+        const pv = Number(p?.valor) || 0;
+        if(pv > 0 && p?.tipo) por[k].porProcTipo[p.tipo] = (por[k].porProcTipo[p.tipo] || 0) + pv;
+      });
+    } else {
+      // Schema legacy: cada doc tem 1 produto único; valor cheio cai na coluna correspondente.
+      const p = l.produto || "", tp = l.tipo_procedimento || "";
+      if(p === "Exames Laboratoriais") por[k].lab  += v;
+      if(p === "Exames de Imagem")     por[k].img  += v;
+      if(p === "Procedimento")        { por[k].proc += v; if(tp) por[k].porProcTipo[tp] = (por[k].porProcTipo[tp]||0) + v; }
+      if(p === "Consultas")            por[k].consultas += v;
+    }
   });
 
   const rows = Object.entries(por)
