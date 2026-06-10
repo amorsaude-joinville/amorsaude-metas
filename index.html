@@ -1260,6 +1260,25 @@
       <div class="card" style="margin-bottom:20px">
         <div class="card-title">🩺 Análise de Prescritores</div>
 
+        <!-- Filtro de data (precedência sobre o filtro de mês quando preenchido) -->
+        <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:8px;flex-wrap:wrap;padding:12px;background:#F9FAFB;border:1px solid var(--border);border-radius:var(--r2)">
+          <div class="fg" style="margin:0;min-width:140px">
+            <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Data início</label>
+            <input type="date" id="pres-data-ini" onchange="aplicarIntervaloPres()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)" />
+          </div>
+          <div class="fg" style="margin:0;min-width:140px">
+            <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Data fim</label>
+            <input type="date" id="pres-data-fim" onchange="aplicarIntervaloPres()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:14px;outline:none;color:var(--text)" />
+          </div>
+          <button class="btn btn-ghost" style="width:auto;white-space:nowrap" onclick="limparIntervaloPres()">🧹 Limpar</button>
+          <div id="pres-intervalo-status" style="flex:1;min-width:200px;font-size:12px;color:var(--text2);padding-bottom:8px"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:16px">
+          💡 Quando ambas as datas estiverem preenchidas, elas têm precedência sobre o filtro de mês e o período das abas. Data início = data fim → mostra só aquele dia.
+        </div>
+
         <!-- Seletor de aba -->
         <div style="display:flex;gap:4px;background:#F3F4F6;border-radius:var(--r2);padding:4px;margin-bottom:20px;flex-wrap:wrap">
           <button class="pres-tab active" id="pres-tab-pres"  onclick="mudarAbaPres('prescritor')">🏥 Por Prescritor</button>
@@ -3061,6 +3080,15 @@ let abaCC = "lancamentos";
 
 // Aba ativa da seção de prescritores ("prescritor" | "comparativo" | "area")
 let abaPrescritor = "prescritor";
+
+// ── Filtro de DATA da Análise de Prescritores ──────────────────
+// Estado isolado: quando ativo, substitui (precedência) o filtro de
+// mês/período das 3 sub-abas. Não toca em dashLancs nem no onSnapshot
+// global — busca extra por mês fica em presLancsCache (snapshot único
+// por mes_ano) e nunca alimenta cálculos de metas/premiação.
+let presIntervaloAtivo = false;
+let presIntervalo      = { ini: "", fim: "" };
+const presLancsCache   = new Map(); // "YYYY-MM" → docs[]
 
 // Coordenadora — dashboard de Call Center
 let coordLancs  = [];        // lançamentos do CC carregados
@@ -8463,10 +8491,124 @@ function toggleColab(header) {
   chev.classList.toggle("open");
 }
 
+// ── Filtro de DATA da Análise de Prescritores ──────────────────
+// Gera lista de "YYYY-MM" que cobrem o intervalo [iniStr, fimStr], ambos "YYYY-MM-DD".
+function gerarMesesEntrePres(iniStr, fimStr) {
+  const [a1, m1] = iniStr.split("-").map(Number);
+  const [a2, m2] = fimStr.split("-").map(Number);
+  const out = [];
+  let a = a1, m = m1;
+  while (a < a2 || (a === a2 && m <= m2)) {
+    out.push(`${a}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; a++; }
+  }
+  return out;
+}
+
+// Retorna lista de lançamentos a usar pelas 3 sub-abas. Quando o intervalo
+// está ativo, ignora `listaDefault` (que vem do filtro de mês/período da aba)
+// e devolve docs do intervalo combinando dashLancs (mês corrente, vivo) com
+// presLancsCache (demais meses). Filtra client-side por data_hora.
+function obterLancsParaPres(listaDefault) {
+  if (!presIntervaloAtivo) return listaDefault;
+  const meses = gerarMesesEntrePres(presIntervalo.ini, presIntervalo.fim);
+  const todos = [];
+  for (const mes of meses) {
+    const docs = (mes === dashMesAno) ? dashLancs : (presLancsCache.get(mes) || []);
+    todos.push(...docs);
+  }
+  const iniDate = new Date(`${presIntervalo.ini}T00:00:00`);
+  const fimDate = new Date(`${presIntervalo.fim}T23:59:59.999`);
+  return todos.filter(l => {
+    if (!l.data_hora) return false;
+    const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+    return d >= iniDate && d <= fimDate;
+  });
+}
+
+// Re-renderiza a sub-aba atualmente visível (chamada após mudar intervalo).
+function rerenderAbaPresAtiva() {
+  if (abaPrescritor === "prescritor")        renderPrescritores();
+  else if (abaPrescritor === "area")         renderAreaAtuacao();
+  else if (abaPrescritor === "comparativo") {
+    const out = document.getElementById("comp-pres-resultado");
+    if (out && out.innerHTML.trim()) executarCompPres();
+  }
+}
+
+// Aplica o intervalo: valida, busca meses faltantes (uma query por mes_ano),
+// cacheia e re-renderiza. Não toca em dashLancs nem no listener global.
+async function aplicarIntervaloPres() {
+  const ini = document.getElementById("pres-data-ini")?.value || "";
+  const fim = document.getElementById("pres-data-fim")?.value || "";
+  const statusEl = document.getElementById("pres-intervalo-status");
+
+  // Vazio (ou parcialmente vazio) → desliga o intervalo e volta ao filtro de mês.
+  if (!ini || !fim) {
+    presIntervaloAtivo = false;
+    presIntervalo = { ini: "", fim: "" };
+    if (statusEl) {
+      statusEl.innerHTML = (ini || fim)
+        ? '<span style="color:#DC2626">Preencha início e fim para ativar o intervalo.</span>'
+        : '';
+    }
+    rerenderAbaPresAtiva();
+    return;
+  }
+  if (ini > fim) {
+    toast("Data inicial deve ser ≤ data final.", "err");
+    return;
+  }
+
+  const meses = gerarMesesEntrePres(ini, fim);
+  const mesesParaFetch = meses.filter(m => m !== dashMesAno && !presLancsCache.has(m));
+
+  if (statusEl) {
+    statusEl.innerHTML = mesesParaFetch.length
+      ? `⏳ Carregando ${mesesParaFetch.length} mês(es) adicional(is)...`
+      : '⏳ Aplicando intervalo...';
+  }
+
+  try {
+    for (const mes of mesesParaFetch) {
+      const snap = await db.collection("lancamentos").where("mes_ano", "==", mes).get();
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.excluido !== true);
+      presLancsCache.set(mes, docs);
+    }
+    presIntervaloAtivo = true;
+    presIntervalo = { ini, fim };
+    if (statusEl) {
+      const fmtBR = s => { const [a, m, d] = s.split("-"); return `${d}/${m}/${a}`; };
+      const igual = ini === fim;
+      statusEl.innerHTML = igual
+        ? `<span style="color:var(--success);font-weight:600">📅 Dia ${fmtBR(ini)}</span> <span style="color:var(--text2)">· tem precedência sobre o filtro de mês</span>`
+        : `<span style="color:var(--success);font-weight:600">📅 ${fmtBR(ini)} → ${fmtBR(fim)}</span> <span style="color:var(--text2)">· tem precedência sobre o filtro de mês</span>`;
+    }
+    rerenderAbaPresAtiva();
+  } catch (e) {
+    console.error("[pres-intervalo] erro:", e);
+    toast("Erro ao buscar lançamentos do intervalo.", "err");
+    if (statusEl) statusEl.innerHTML = '<span style="color:#DC2626">Erro ao carregar — tente novamente.</span>';
+  }
+}
+
+// Limpa as datas e volta à visão por mês (sem mudança no resto).
+function limparIntervaloPres() {
+  const inpI = document.getElementById("pres-data-ini");
+  const inpF = document.getElementById("pres-data-fim");
+  if (inpI) inpI.value = "";
+  if (inpF) inpF.value = "";
+  presIntervaloAtivo = false;
+  presIntervalo = { ini: "", fim: "" };
+  const statusEl = document.getElementById("pres-intervalo-status");
+  if (statusEl) statusEl.innerHTML = '';
+  rerenderAbaPresAtiva();
+}
+
 // ── Performance por prescritor (aba 1 — detalhado por produto)
 function renderPrescritores() {
   const filtro = (document.getElementById("dash-busca-pres")?.value || "").toLowerCase();
-  const lista  = getDashLancsFiltrados().filter(l => l.tipo==="entrada" && l.prescritor);
+  const lista  = obterLancsParaPres(getDashLancsFiltrados()).filter(l => l.tipo==="entrada" && l.prescritor);
 
   const por = {};
   lista.forEach(l => {
@@ -8646,12 +8788,18 @@ function executarCompPres() {
   if(!presB) { toast("Selecione o Prescritor B.", "err"); return; }
   if(presA === presB) { toast("Selecione prescritores diferentes.", "err"); return; }
 
-  const lista  = filtrarLancsPeriodoPres(periodo);
+  const lista  = obterLancsParaPres(filtrarLancsPeriodoPres(periodo));
   const dadosA = calcDetPrescritor(lista, presA);
   const dadosB = calcDetPrescritor(lista, presB);
 
   const periodoLabels = { mes: labelMes(dashMesAno), semana:"Semana atual", dia:"Ontem (D-1)" };
-  renderCompPresResult(presA, dadosA, presB, dadosB, periodoLabels[periodo]||"");
+  const fmtBR = s => { const [a, m, d] = s.split("-"); return `${d}/${m}/${a}`; };
+  const periodoLabel = presIntervaloAtivo
+    ? (presIntervalo.ini === presIntervalo.fim
+        ? `Dia ${fmtBR(presIntervalo.ini)}`
+        : `${fmtBR(presIntervalo.ini)} → ${fmtBR(presIntervalo.fim)}`)
+    : (periodoLabels[periodo] || "");
+  renderCompPresResult(presA, dadosA, presB, dadosB, periodoLabel);
 }
 
 // Renderiza a tabela comparativa entre dois prescritores
@@ -8747,7 +8895,7 @@ const ESP_POR_PRES = Object.fromEntries(PRESCRITORES.map(([n,e])=>[n,e]));
 
 function renderAreaAtuacao() {
   const periodo = document.getElementById("area-pres-periodo")?.value || "mes";
-  const lista   = filtrarLancsPeriodoPres(periodo).filter(l => l.tipo==="entrada" && l.prescritor);
+  const lista   = obterLancsParaPres(filtrarLancsPeriodoPres(periodo)).filter(l => l.tipo==="entrada" && l.prescritor);
 
   // Agrupa por especialidade
   const porArea = {};
