@@ -764,7 +764,8 @@
           <option value="Tuane" style="color:#9CA3AF;font-style:italic">Tuane (afastada)</option>
           <option value="Raiane">Raiane</option>
           <option value="Leticia">Leticia</option>
-          <option value="Roffana">Roffana</option>
+          <option value="Amanda">Amanda</option>
+          <option value="Fernanda">Fernanda</option>
         </optgroup>
         <optgroup label="Call Center">
           <option value="Erielly">Erielly</option>
@@ -2455,7 +2456,9 @@ const USUARIOS = {
   "fagundestuane99@gmail.com":         { nome: "Tuane",     perfil: "recepcionista", status: "afastada" },
   "raiiane.almeida1401@gmail.com":     { nome: "Raiane",    perfil: "recepcionista"    },
   "leticiaac.r.eis@gmail.com":         { nome: "Leticia",   perfil: "recepcionista"    },
-  "fannapires@gmail.com":              { nome: "Roffana",   perfil: "recepcionista"    },
+  "fannapires@gmail.com":              { nome: "Roffana",   perfil: "recepcionista", status: "desligada" },
+  "mandsglins28@hotmail.com":          { nome: "Amanda",    perfil: "recepcionista"    },
+  "almeidafernanda0803@gmail.com":     { nome: "Fernanda",  perfil: "recepcionista"    },
   "eriellypachecodossantos@gmail.com": { nome: "Erielly",   perfil: "callcenter"       },
   "juluise2005@gmail.com":             { nome: "Júlia",     perfil: "callcenter"       },
   "thifanie.timm@gmail.com":           { nome: "Thifani",   perfil: "financeiro"       },
@@ -2472,13 +2475,24 @@ function emailPorNome(nome) {
   return Object.keys(USUARIOS).find(e => USUARIOS[e].nome === nome) || null;
 }
 
-// Status de colaboradora: "afastada" (Tuane) bloqueia login mas mantém histórico.
-// "desligada" não fica em USUARIOS — sai de todas as listagens individuais.
+// Status de colaboradora: "afastada" (licença) e "desligada" (demissão) bloqueiam
+// login mas mantêm a entrada em USUARIOS para que relatórios continuem resolvendo
+// o nome a partir do email nos lançamentos históricos. Status ausente / "ativa" = libera login.
 function statusPorNome(nome) {
   const u = Object.values(USUARIOS).find(x => x.nome === nome);
   return u?.status || null;
 }
 function ehAfastada(nome) { return statusPorNome(nome) === "afastada"; }
+// Qualquer status diferente de "ativa" bloqueia o login. Cobre afastada, desligada
+// e qualquer rótulo futuro de inatividade sem precisar mexer no predicado.
+function loginBloqueado(nome) {
+  const s = statusPorNome(nome);
+  return !!s && s !== "ativa";
+}
+// Predicado explícito para listagens que escondem ex-colaboradoras MAS mantêm
+// quem está só afastada (Tuane). Usado em metas individuais e no filtro de
+// Relatórios. Login usa loginBloqueado() (mais amplo).
+function ehDesligada(u) { return u?.status === "desligada"; }
 
 const PERFIL_LABEL = {
   gestor:"Gestor", subgestora:"Sub-Gestora", coordenadora:"Coordenadora",
@@ -3597,7 +3611,7 @@ async function fazerLogin() {
   if(!nome) { err.textContent="Selecione seu nome."; err.classList.remove("hidden"); return; }
   if(!senha){ err.textContent="Informe a senha.";    err.classList.remove("hidden"); return; }
   if(!PERFIS[nome]) { err.textContent="Usuária não encontrada."; err.classList.remove("hidden"); return; }
-  if(ehAfastada(nome)) { err.textContent="Colaboradora afastada — login indisponível."; err.classList.remove("hidden"); return; }
+  if(loginBloqueado(nome)) { err.textContent="Colaboradora inativa — login indisponível."; err.classList.remove("hidden"); return; }
 
   const btn = document.querySelector("#tela-login .btn-primary");
   btn.disabled = true; btn.textContent = "Entrando...";
@@ -3732,10 +3746,10 @@ auth.onAuthStateChanged(async fbUser => {
       console.warn("[Auth] Email não reconhecido:", fbUser.email);
       auth.signOut(); return;
     }
-    if(u.status === "afastada") {
+    if(u.status && u.status !== "ativa") {
       const errEl = document.getElementById("erro-login");
       if(errEl) {
-        errEl.textContent = "Colaboradora afastada — login indisponível.";
+        errEl.textContent = "Colaboradora inativa — login indisponível.";
         errEl.classList.remove("hidden");
       }
       auth.signOut();
@@ -9662,9 +9676,11 @@ function _renderInputsMetasIndividuais() {
   const fmt = v => Number(v) > 0
     ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 })
     : "";
-  // Recepção médica (incluindo líderes de recepção) — exclui afastadas
+  // Recepção médica (incluindo líderes de recepção) — exclui desligadas;
+  // afastadas (Tuane) permanecem porque a meta delas continua sendo definida
+  // pra quando voltarem.
   const lista = Object.entries(USUARIOS)
-    .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && u.status !== "afastada")
+    .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && !ehDesligada(u))
     .map(([email, u]) => ({ email, nome: u.nome, perfil: u.perfil, docId: _docIdMetaInd(email) }))
     .sort((a, b) => {
       // Líderes primeiro pra destacar; depois alfabético dentro de cada grupo
@@ -9728,8 +9744,10 @@ async function salvarModalMetas() {
     //    Grava nome/email/perfil denormalizados pra dashboard ler sem query em `usuarios`.
     const ts = firebase.firestore.FieldValue.serverTimestamp();
     const batch = db.batch();
+    // MESMO predicado da listagem em _renderInputsMetasIndividuais — render e
+    // save precisam casar (1 input renderizado ⇒ 1 doc gravado).
     const listaInd = Object.entries(USUARIOS)
-      .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && u.status !== "afastada");
+      .filter(([_, u]) => (u.perfil === "recepcionista" || u.perfil === "lider") && !ehDesligada(u));
     listaInd.forEach(([email, u]) => {
       const docId = _docIdMetaInd(email);
       const valC  = get(`mm-rec-caixa-${docId}`);
@@ -12376,7 +12394,7 @@ function preencherSelectRecepRelatorio() {
   // veem TODA a equipe que faz lançamento — Recepção + Call Center. Líderes (lider e
   // lider_callcenter) antes ficavam restritos à própria área; agora têm a visão completa.
   let nomes = Object.values(USUARIOS)
-    .filter(u => u.status !== "afastada")
+    .filter(u => !ehDesligada(u))
     .filter(u => FAZ_LANC.includes(u.perfil))
     .map(u => u.nome)
     .sort((a,b) => a.localeCompare(b,"pt-BR"));
