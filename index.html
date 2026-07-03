@@ -1676,9 +1676,14 @@
 
             <div class="fg full">
               <label>Motivo *</label>
-              <select id="s-motivo">
+              <select id="s-motivo" onchange="onMotivoSaidaAvulsaChange()">
                 <option value="" disabled selected>Selecione...</option>
               </select>
+            </div>
+
+            <div class="fg full" id="s-motivo-outro-wrap" style="display:none">
+              <label>Especificar (qual outro motivo?) *</label>
+              <input type="text" id="s-motivo-outro" maxlength="80" placeholder="Descreva..." />
             </div>
 
           </div>
@@ -1827,6 +1832,48 @@
               </thead>
               <tbody id="rel-tbody"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Saídas do período ══
+           Populado por gerarRelatorio() em paralelo ao rel-resultado. Usa os
+           mesmos filtros de data + recepcionista; ignora forma/categoria/subtipo
+           (não se aplicam a saída). Aparece sempre que o botão foi acionado; se
+           não houver saídas no intervalo, mostra placeholder DENTRO do card. -->
+      <div id="rel-saidas-resultado" style="display:none;margin-top:16px">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">📤 Saídas do Período</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Qtd. Saídas</div>
+              <div style="font-size:24px;font-weight:700;color:var(--text);margin-top:4px" id="rel-saidas-qtd">0</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Total (R$)</div>
+              <div style="font-size:24px;font-weight:700;color:#DC2626;margin-top:4px" id="rel-saidas-val">R$ 0,00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Colaboradora</th>
+                  <th style="text-align:right">Valor</th>
+                  <th>Motivo</th>
+                  <th>Detalhe</th>
+                </tr>
+              </thead>
+              <tbody id="rel-saidas-tbody"></tbody>
+            </table>
+          </div>
+          <div id="rel-saidas-vazio" class="empty" style="display:none;padding:24px">
+            <div class="ei">📤</div>
+            Nenhuma saída registrada no período.
           </div>
         </div>
       </div>
@@ -2771,12 +2818,25 @@ const MOTIVOS_SAIDA = [
   "Retorno Particular/Convênios",
 ];
 // Para Saída Avulsa (form #form-saida) — exclui "Desconto" porque saída avulsa
-// não desconta mais caixa a partir de Maio/2026.
-const MOTIVOS_SAIDA_AVULSA = MOTIVOS_SAIDA.filter(m => m !== "Desconto");
+// não desconta mais caixa a partir de Maio/2026. Adiciona "Outro" (texto livre
+// obrigatório na UI, persiste como "Outro: <texto>" — mesmo padrão de MOTIVOS_RECUSA).
+const MOTIVOS_SAIDA_AVULSA = [...MOTIVOS_SAIDA.filter(m => m !== "Desconto"), "Outro"];
 
 // Popula um <select> de motivos de saída (preserva placeholder)
 function popularSelectMotivos(idSelect) {
   popularSelect(idSelect, MOTIVOS_SAIDA);
+}
+
+// Mostra/esconde input "Outro" no form de Saída Avulsa (#form-saida).
+// Espelha exatamente o padrão do modal de recusa (onMotivoRecusaChange):
+// esconde e limpa o input quando o motivo deixa de ser "Outro".
+function onMotivoSaidaAvulsaChange() {
+  const motivo = document.getElementById("s-motivo")?.value || "";
+  const wrap   = document.getElementById("s-motivo-outro-wrap");
+  const input  = document.getElementById("s-motivo-outro");
+  const ehOutro = motivo === "Outro";
+  if(wrap) wrap.style.display = ehOutro ? "" : "none";
+  if(!ehOutro && input) input.value = "";
 }
 
 // Popula um <select> de formas de pagamento (preserva placeholder)
@@ -5361,12 +5421,19 @@ async function salvarSaida() {
   const vStr   = document.getElementById("s-valor").value.trim();
   const prod   = document.getElementById("s-produto").value;
   const motivo = document.getElementById("s-motivo").value;
+  // Texto obrigatório quando motivo === "Outro" (mesmo padrão de salvarRecusa).
+  const motivoOutro = (document.getElementById("s-motivo-outro")?.value || "").trim();
 
   if(!nome)  { toast("Informe o nome do paciente.","err"); return; }
   if(cpf.length<14) { toast("CPF inválido.","err"); return; }
   if(!vStr)  { toast("Informe o valor da saída.","err"); return; }
   if(!prod)  { toast("Selecione o produto.","err"); return; }
   if(!motivo){ toast("Selecione o motivo.","err"); return; }
+  if(motivo === "Outro" && !motivoOutro) { toast("Especifique qual outro motivo.","err"); return; }
+
+  // Concatena "Outro: <texto>" pra preservar detalhe sem campo separado.
+  // Legacy (7 motivos originais) segue igual — Detalhe fica vazio no relatório.
+  const motivoFinal = motivo === "Outro" ? `Outro: ${motivoOutro}` : motivo;
 
   const valor = parseBRL(vStr);
   if(valor<=0) { toast("Valor deve ser maior que zero.","err"); return; }
@@ -5391,7 +5458,7 @@ async function salvarSaida() {
     usuario_nome: usuario.nome, perfil: usuario.perfil,
     tipo:"saida", paciente_nome:nome, paciente_cpf:cpf, valor,
     produto:prod, tipo_procedimento:null, forma_pagamento:null,
-    prescritor:null, prescritor_especialidade:null, motivo_saida:motivo,
+    prescritor:null, prescritor_especialidade:null, motivo_saida: motivoFinal,
     mes_ano: getMesAno(),
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
@@ -5406,6 +5473,10 @@ async function salvarSaida() {
     ["s-nome","s-cpf","s-valor"].forEach(id=>document.getElementById(id).value="");
     document.getElementById("s-produto").value="";
     document.getElementById("s-motivo").value="";
+    const inpMotOutro  = document.getElementById("s-motivo-outro");
+    const wrapMotOutro = document.getElementById("s-motivo-outro-wrap");
+    if(inpMotOutro)  inpMotOutro.value = "";
+    if(wrapMotOutro) wrapMotOutro.style.display = "none";
     toast("Saída registrada com sucesso!");
   } catch(e) {
     // [FIX 1] Exibe mensagem de erro detalhada do Firebase na tela
@@ -12339,6 +12410,7 @@ function editarOrcamentoFromModal() {
 // Estado do relatório (em memória, não persiste)
 let _relInicializado = false;
 let _relLancamentosBuscados = [];   // último resultado da busca (pra exportar)
+let _relSaidasBuscadas      = [];   // último resultado de saídas (pra exportar)
 
 // Inicializa a tela (idempotente — só roda 1× por sessão)
 function iniciarRelatorios() {
@@ -12435,6 +12507,8 @@ function limparFiltrosRelatorio() {
   document.getElementById("rel-resultado").style.display = "none";
   document.getElementById("rel-vazio").style.display     = "none";
   document.getElementById("rel-loading").style.display   = "none";
+  const relSaidasWrap = document.getElementById("rel-saidas-resultado");
+  if(relSaidasWrap) relSaidasWrap.style.display = "none";
 }
 
 // Mostra/esconde o filtro "Tipo de procedimento" conforme a Categoria selecionada.
@@ -12608,6 +12682,75 @@ function _mesesNoIntervalo(iniStr, fimStr) {
   return out;
 }
 
+// Parsing de motivo_saida: quando o motivo começa com "Outro: ", separa em
+// rótulo "Outro" + detalhe (texto livre). Legacy sem prefixo → rótulo = motivo,
+// detalhe vazio. Mesmo padrão do motivo_recusa (recusa também concatena).
+function _relParseMotivoSaida(motivo) {
+  const s = (motivo || "").toString();
+  if(s.startsWith("Outro: ")) return { rotulo: "Outro", detalhe: s.slice(7).trim() };
+  return { rotulo: s || "—", detalhe: "" };
+}
+
+// Renderiza a tabela + cards do relatório de Saídas.
+// docs = lançamentos com tipo="saida" no intervalo, sem filtro de recep aplicado.
+// Aplica intervalo de data (dtIni/dtFim) + recep (opcional) e popula a UI.
+// Popula _relSaidasBuscadas para o export do Excel.
+function _renderRelatorioSaidas(docs, dtIni, dtFim, recepFiltro) {
+  let saidas = (docs || []).filter(l => {
+    const dt = l.data_hora
+      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+      : null;
+    if(!dt) return false;
+    return dt >= dtIni && dt <= dtFim;
+  });
+  if(recepFiltro) saidas = saidas.filter(l => (l.usuario_nome || "") === recepFiltro);
+
+  const linhas = saidas.map(l => {
+    const dt = l.data_hora
+      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+      : null;
+    const parsed = _relParseMotivoSaida(l.motivo_saida);
+    return {
+      data:          dt,
+      colaboradora:  l.usuario_nome || "—",
+      valor:         Number(l.valor) || 0,
+      motivoRotulo:  parsed.rotulo,
+      motivoDetalhe: parsed.detalhe,
+    };
+  }).sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
+
+  _relSaidasBuscadas = linhas;
+
+  const wrap  = document.getElementById("rel-saidas-resultado");
+  const tbody = document.getElementById("rel-saidas-tbody");
+  const vazio = document.getElementById("rel-saidas-vazio");
+  const qtd   = document.getElementById("rel-saidas-qtd");
+  const val   = document.getElementById("rel-saidas-val");
+  if(!wrap || !tbody) return;
+
+  wrap.style.display = "";
+  const total = linhas.reduce((s,l) => s + (l.valor || 0), 0);
+  if(qtd) qtd.textContent = linhas.length.toString();
+  if(val) val.textContent = _relFmtBRL(total);
+
+  if(linhas.length === 0) {
+    tbody.innerHTML = "";
+    if(vazio) vazio.style.display = "";
+    return;
+  }
+  if(vazio) vazio.style.display = "none";
+
+  tbody.innerHTML = linhas.map(l => `
+    <tr>
+      <td>${_relFmtData(l.data)}</td>
+      <td>${escHTML(l.colaboradora)}</td>
+      <td style="text-align:right;font-weight:600;color:#DC2626">${_relFmtBRL(l.valor)}</td>
+      <td>${escHTML(l.motivoRotulo)}</td>
+      <td>${l.motivoDetalhe ? escHTML(l.motivoDetalhe) : "—"}</td>
+    </tr>
+  `).join("");
+}
+
 async function gerarRelatorio() {
   const iniStr = document.getElementById("rel-data-ini").value;
   const fimStr = document.getElementById("rel-data-fim").value;
@@ -12646,6 +12789,9 @@ async function gerarRelatorio() {
     // Aplica filtros base — só lançamentos não excluídos e "pagos" (visíveis)
     docs = docs.filter(l => l.excluido !== true);
     docs = docs.filter(ehDocPago);
+    // Captura as saídas ANTES do filtro que remove tipo="saida" abaixo — o
+    // relatório de Saídas (renderizado no final) consome essa lista.
+    const docsSaidasIntervalo = docs.filter(l => l.tipo === "saida");
     docs = docs.filter(l => l.tipo !== "saida"); // relatório foca em receita
 
     // Recorta pelo intervalo exato em data_hora (mes_ano cobre mês inteiro)
@@ -12688,6 +12834,10 @@ async function gerarRelatorio() {
 
     _relLancamentosBuscados = linhas;
     loading.style.display = "none";
+
+    // Renderiza Saídas ANTES do early-return de lançamentos vazio: intervalo
+    // pode ter 0 lançamentos mas ter saídas registradas (ex: só saída avulsa).
+    _renderRelatorioSaidas(docsSaidasIntervalo, dtIni, dtFim, recep);
 
     if(linhas.length === 0) {
       vazio.style.display = "";
@@ -12748,7 +12898,8 @@ function _relFmtDataArquivo(yyyymmdd) {
 function exportarRelatorioExcel() {
   if(typeof XLSX === "undefined") { alert("Biblioteca de exportação não carregou. Recarregue a página."); return; }
   const linhas = _relLancamentosBuscados || [];
-  if(linhas.length === 0) { alert("Nenhum dado para exportar."); return; }
+  const saidas = _relSaidasBuscadas      || [];
+  if(linhas.length === 0 && saidas.length === 0) { alert("Nenhum dado para exportar."); return; }
 
   const iniStr = document.getElementById("rel-data-ini").value;
   const fimStr = document.getElementById("rel-data-fim").value;
@@ -12844,10 +12995,39 @@ function exportarRelatorioExcel() {
     });
   });
 
+  // ── Aba 3: "Saídas"
+  // Ordem: Data | Colaboradora | Valor (R$) | Motivo | Detalhe (Outro)
+  // Se motivo_saida for "Outro: <texto>", Motivo="Outro" e Detalhe=<texto>.
+  const dadosSaidas = [
+    ["Data", "Colaboradora", "Valor (R$)", "Motivo", "Detalhe (Outro)"],
+    ...saidas.map(l => [
+      _relFmtData(l.data),
+      l.colaboradora  || "",
+      Number(l.valor) || 0,
+      l.motivoRotulo  || "",
+      l.motivoDetalhe || "",
+    ])
+  ];
+  const wsSaidas = XLSX.utils.aoa_to_sheet(dadosSaidas);
+  // Coluna C (Valor, índice 2) — formato moeda
+  for(let r = 1; r < dadosSaidas.length; r++) {
+    const cell = wsSaidas[XLSX.utils.encode_cell({ c:2, r })];
+    if(cell) cell.z = 'R$ #,##0.00';
+  }
+  wsSaidas["!cols"] = [
+    { wch:12 },  // Data
+    { wch:20 },  // Colaboradora
+    { wch:14 },  // Valor
+    { wch:22 },  // Motivo
+    { wch:36 },  // Detalhe
+  ];
+  _relAplicarEstiloCabecalho(wsSaidas, 5);
+
   // ── Monta workbook
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsLanc,   "Lançamentos");
   XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+  XLSX.utils.book_append_sheet(wb, wsSaidas, "Saídas");
 
   const nomeArq = `relatorio_lancamentos_${_relFmtDataArquivo(iniStr)}_a_${_relFmtDataArquivo(fimStr)}.xlsx`;
   XLSX.writeFile(wb, nomeArq);
