@@ -10484,67 +10484,20 @@ function renderFaturamentoChart(dados) {
 // Listener tempo real da coleção orcamentos.
 // Mantém o array `orcamentos` em memória sempre fresco.
 function iniciarListenerOrcamentos() {
-  // Encerra qualquer listener anterior (o wrapper _combinado_ abaixo cuida
-  // de fechar os dois subscribers). fazerLogout também chama unsubOrcamentos().
   if(unsubOrcamentos) { unsubOrcamentos(); unsubOrcamentos = null; }
-
-  const perfil = usuario?.perfil || "";
-  const nome   = usuario?.nome   || "";
-
-  // Feature #3 — Etapa 5 — DOIS listeners, merge/dedup por id no cliente:
-  //
-  // Query A (inalterada): mês corrente completo (5 status) — mesma de sempre.
-  //   Requer índice composto: mes_ano ASC + status ASC (já existe em produção).
-  //
-  // Query B (nova): pendentes (STATUS_KANBAN) de QUALQUER mês. Para
-  //   recepcionista/callcenter, adiciona filtro por dono (usuario_nome) para
-  //   economizar leituras — precisa de índice composto usuario_nome ASC +
-  //   status ASC (Firestore mostra link para criar no primeiro erro se faltar).
-  //   Para gestão/liderança/coord: sem filtro de dono; usa apenas o índice
-  //   auto de campo único de `status`. filtrarOrcamentosPorPerfil segue
-  //   ajustando visibilidade no cliente como já fazia.
-  //
-  // A coluna "Pagos" fica filtrada no cliente por dataPagamento(o) === dataRef
-  // (Etapa 4), e "Recusados" mostra apenas do mês corrente pela lógica de
-  // renderKanbanOrcamentos (a Query B só traz pendentes).
-  let cacheA = [];
-  let cacheB = [];
-  function reconciliar() {
-    // Dedup por id: um card em STATUS_KANBAN do mês corrente aparece nas duas
-    // queries (mesmo dado; snapshot Firestore é consistente).
-    const map = new Map();
-    cacheA.forEach(d => map.set(d.id, d));
-    cacheB.forEach(d => map.set(d.id, d));
-    acompLancs = Array.from(map.values()).filter(l => l.excluido !== true);
-    const sec = document.getElementById("sec-orcamentos");
-    if(sec && sec.style.display !== "none") renderKanbanOrcamentos();
-  }
-
-  const unsubA = db.collection("lancamentos")
+  // Fase D: kanban "Acompanhamento" lê de lancamentos com status no kanban
+  // (acompanhar/link_enviado/lancar) + "pago" do mês corrente.
+  // Os pagos são filtrados no cliente para mostrar só os do dia atual (D3.4).
+  // Requer índice composto Firestore (mes_ano + status); link de criação
+  // aparece no console do Firestore se o índice faltar.
+  unsubOrcamentos = db.collection("lancamentos")
     .where("mes_ano", "==", getMesAno())
     .where("status",  "in", [...STATUS_KANBAN, "pago", "recusado"])
     .onSnapshot(snap => {
-      cacheA = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      reconciliar();
-    }, e => console.warn("[acompanhamento] listener A (mês atual) erro:", e));
-
-  const ehRecOuCC = (perfil === "recepcionista" || perfil === "callcenter");
-  const queryB = ehRecOuCC
-    ? db.collection("lancamentos")
-        .where("usuario_nome", "==", nome)
-        .where("status", "in", STATUS_KANBAN)
-    : db.collection("lancamentos")
-        .where("status", "in", STATUS_KANBAN);
-  const unsubB = queryB.onSnapshot(snap => {
-    cacheB = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    reconciliar();
-  }, e => console.warn("[acompanhamento] listener B (pendentes cross-mês) erro:", e));
-
-  // Wrapper único preserva a API atual (fazerLogout e reinit chamam unsubOrcamentos()).
-  unsubOrcamentos = () => {
-    if(unsubA) unsubA();
-    if(unsubB) unsubB();
-  };
+      acompLancs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.excluido !== true);
+      const sec = document.getElementById("sec-orcamentos");
+      if(sec && sec.style.display !== "none") renderKanbanOrcamentos();
+    }, e => console.warn("[acompanhamento] listener erro:", e));
 }
 
 // Filtra a lista de orçamentos conforme as regras de visibilidade do perfil
@@ -10837,17 +10790,10 @@ function calcularKanbanStats(docs, periodo) {
     if(!d) return "";
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
-  // Feature #3 Etapa 5 — desde que acompLancs passou a incluir cards de meses
-  // ANTERIORES (Query B do listener), não podemos mais assumir que "acompLancs
-  // já é filtrado por mes_ano no listener". Filtramos explicitamente aqui pra
-  // manter a estatística "Este mês" contando SÓ cards do mês corrente.
-  // Consequência: cards carregados aparecem no quadro (com selo e alerta),
-  // mas não sujam pendentes/pagos/recusados/taxa do mini-dashboard do mês.
-  const mesCorrente = getMesAno();
   const filtrados = docs.filter(l => {
     if((l.tipo || "entrada") !== "entrada") return false;
     if(periodo === "dia") return isoDoc(l) === dataRef;
-    return l.mes_ano === mesCorrente;
+    return true; // mês inteiro (acompLancs já é filtrado por mes_ano no listener)
   });
 
   const pendentes = filtrados.filter(l => STATUS_KANBAN.includes(l.status));
