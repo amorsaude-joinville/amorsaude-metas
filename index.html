@@ -232,8 +232,12 @@
       margin-left:6px; cursor:help; opacity:.7; font-size:.9em; transition:opacity .15s;
     }
     .card-icone-obs:hover { opacity:1; }
-    .orc-card { background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
+    .orc-card { position:relative; background:#fff; border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
     .orc-card:hover { border-color:var(--primary); box-shadow:0 2px 8px rgba(232,0,61,.10); }
+    /* D4 — Selo de origem: aparece SÓ em cards carregados de meses anteriores.
+       Absoluto pra não empurrar layout; pointer-events:none pra não interferir
+       em clicks do card ou do dropdown de status. */
+    .orc-selo-origem { position:absolute; top:8px; right:8px; background:#F3F4F6; color:#6B7280; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; border:1px solid var(--border); text-transform:uppercase; letter-spacing:.3px; line-height:1.4; pointer-events:none; }
     .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
     .orc-card .orc-tot { font-size:15px; font-weight:700; color:var(--primary); margin-bottom:4px; }
     .orc-card .orc-meta-info { font-size:11px; color:var(--text2); line-height:1.4; }
@@ -10987,6 +10991,7 @@ function cardPagoHTML(o) {
     : "—";
   return `
     <div class="orc-card orc-card-pago" onclick="abrirModalOrcDet('${o.id}')">
+      ${_seloOrigemCard(o)}
       <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
       <div class="orc-tot">${brl(liquido)}</div>
       <div class="orc-meta-info">
@@ -11039,6 +11044,24 @@ function iconeObsHTML(doc) {
   return ` <span class="card-icone-obs" title="${titleEsc}">📝</span>`;
 }
 
+// Feature #3 — Etapa 1 (D4) — Selo de origem: retorna um badge tipo "mai/26"
+// SÓ quando doc.mes_ano é diferente do mês corrente (card carregado de mês
+// anterior). Card do mês atual OU sem mes_ano válido → string vazia (sem selo).
+// Puramente cosmético — não muda listener, cálculos ou status.
+function _seloOrigemCard(doc) {
+  const mesDoc = doc && doc.mes_ano;
+  if(!mesDoc || typeof mesDoc !== "string") return "";
+  if(mesDoc === getMesAno()) return "";
+  const partes = mesDoc.split("-");
+  if(partes.length !== 2) return "";
+  const ano = partes[0];
+  const idx = parseInt(partes[1], 10) - 1;
+  const nomes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  if(!(idx >= 0 && idx < 12) || ano.length < 2) return "";
+  const label = `${nomes[idx]}/${ano.slice(-2)}`;
+  return `<span class="orc-selo-origem" title="Card originado em ${label} (mês anterior)">${label}</span>`;
+}
+
 function btnEditarHTML(l) {
   const ok = podeEditarCard(l);
   if(ok) {
@@ -11069,6 +11092,7 @@ function cardRecusadoHTML(o) {
 
   return `
     <div class="orc-card orc-card-recusado" onclick="abrirModalOrcDet('${o.id}')">
+      ${_seloOrigemCard(o)}
       <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
       <div class="orc-tot">${brl(total)}</div>
       <div class="orc-meta-info">
@@ -11104,6 +11128,7 @@ function cardOrcamentoHTML(o) {
   const total    = Number(o.total) || Number(o.valor) || 0;
   return `
     <div class="orc-card" onclick="abrirModalOrcDet('${o.id}')">
+      ${_seloOrigemCard(o)}
       <div class="orc-pac">${escHTML(paciente)}${iconeObsHTML(o)}</div>
       <div class="orc-tot">${brl(total)}</div>
       <div class="orc-meta-info">
