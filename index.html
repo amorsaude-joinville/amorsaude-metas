@@ -10922,7 +10922,8 @@ function renderKanbanOrcamentos() {
     col.style.display = visivel ? "" : "none";
   });
 
-  // Distribui em 5 colunas. Coluna "pago" só aceita docs com data === data de
+  // Distribui em 5 colunas. Coluna "pago" só aceita docs com data DO PAGAMENTO
+  // (pago_em, com fallback pra data_hora — Feature #3 Etapa 4) === data de
   // referência (default hoje; = #kanban-filtro-dia quando setado — feature #2).
   // "recusado" mostra todos os do mês (sem filtro de data extra).
   const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[], recusado:[] };
@@ -10932,7 +10933,7 @@ function renderKanbanOrcamentos() {
     if(s === "pago") {
       // Só pagos da data de referência + somente entradas (saídas-doc com id_par ficam fora)
       if((o.tipo || "entrada") !== "entrada") return;
-      if(dataDoc(o) !== dataRef) return;
+      if(dataPagamento(o) !== dataRef) return;
       colunas.pago.push(o);
       return;
     }
@@ -11094,6 +11095,27 @@ function _alertaEncalhadoHTML(doc) {
   const dias = _ehCardEncalhado(doc);
   if(!dias) return "";
   return `<div class="orc-encalhado-tag" title="Sem mudança de status há ${dias} dias">⚠️ ${dias} dias parado</div>`;
+}
+
+// Feature #3 — Etapa 4 (D7-B) — Data de referência do PAGAMENTO em YYYY-MM-DD.
+// Fonte: pago_em (gravado na Etapa 3), fallback data_hora (docs antigos +
+// vendas diretas criadas já como "pago" que não passam pelo modal). Nunca
+// retorna vazio se pelo menos um dos dois campos existir — garante que
+// nenhum card pago suma da coluna "Pagos do dia" por falta de pago_em.
+// Aceita Firestore Timestamp (.toDate), Date, number (millis) e string.
+function dataPagamento(o) {
+  const ts = (o && (o.pago_em || o.data_hora)) || null;
+  if(!ts) return "";
+  let d = null;
+  if(typeof ts.toDate === "function") {
+    try { d = ts.toDate(); } catch(_) { return ""; }
+  } else if(ts instanceof Date) {
+    d = ts;
+  } else if(typeof ts === "number" || typeof ts === "string") {
+    d = new Date(ts);
+  }
+  if(!d || isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function btnEditarHTML(l) {
