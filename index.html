@@ -10835,14 +10835,16 @@ function renderKanbanMiniDashboard() {
   const [ano, mes, dia] = dataRef.split("-");
   const rotuloDMY  = `${dia}/${mes}/${ano}`;
   const rotuloDM   = `${dia}/${mes}`;
-  const lblDia   = document.getElementById("kb-mini-dia-label");
-  const lblPago  = document.getElementById("orc-col-pago-label");
-  const aviso    = document.getElementById("kanban-dia-aviso");
-  const avisoDt  = document.getElementById("kanban-dia-aviso-data");
-  if(lblDia)   lblDia.textContent   = emHoje ? "📅 Hoje:" : `📅 Dia ${rotuloDM}:`;
-  if(lblPago)  lblPago.textContent  = emHoje ? "🟢 Pagos do dia" : `🟢 Pagos de ${rotuloDM}`;
-  if(aviso)    aviso.style.display  = emHoje ? "none" : "";
-  if(avisoDt)  avisoDt.textContent  = rotuloDMY;
+  const lblDia            = document.getElementById("kb-mini-dia-label");
+  const lblPago           = document.getElementById("orc-col-pago-label");
+  // Nomes prefixados com `avisoKanbanDia*` pra não colidir com a `aviso` já
+  // usada logo abaixo pelo banner "kb-mini-aviso" (filtro Pendentes/Pagos).
+  const avisoKanbanDia    = document.getElementById("kanban-dia-aviso");
+  const avisoKanbanDiaDt  = document.getElementById("kanban-dia-aviso-data");
+  if(lblDia)          lblDia.textContent          = emHoje ? "📅 Hoje:" : `📅 Dia ${rotuloDM}:`;
+  if(lblPago)         lblPago.textContent         = emHoje ? "🟢 Pagos do dia" : `🟢 Pagos de ${rotuloDM}`;
+  if(avisoKanbanDia)  avisoKanbanDia.style.display = emHoje ? "none" : "";
+  if(avisoKanbanDiaDt) avisoKanbanDiaDt.textContent = rotuloDMY;
 
   // Estado dos botões + aviso de filtro ativo
   document.querySelectorAll(".kb-mini-card[data-filtro]").forEach(btn => {
