@@ -1844,6 +1844,18 @@
       <div id="rel-saidas-resultado" style="display:none;margin-top:16px">
         <div class="card" style="margin-bottom:16px">
           <div class="card-title">📤 Saídas do Período</div>
+
+          <!-- Mini-filtro por motivo (afeta só esta seção; filtragem client-side
+               a partir de _relSaidasBrutas, sem re-fetch no Firestore). -->
+          <div style="display:flex;gap:12px;align-items:end;margin-bottom:14px;flex-wrap:wrap">
+            <div class="fg" style="margin:0;flex:1;min-width:220px">
+              <label>🏷️ Motivo</label>
+              <select id="rel-saidas-motivo" onchange="_aplicarFiltroMotivoSaidas()">
+                <option value="">Todos os motivos</option>
+              </select>
+            </div>
+          </div>
+
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">
             <div>
               <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Qtd. Saídas</div>
@@ -1853,6 +1865,13 @@
               <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Total (R$)</div>
               <div style="font-size:24px;font-weight:700;color:#DC2626;margin-top:4px" id="rel-saidas-val">R$ 0,00</div>
             </div>
+          </div>
+
+          <!-- Resumo por motivo — sempre reflete o período completo (não muda
+               sob o filtro acima), pra dar contexto enquanto o usuário faz drill-down. -->
+          <div id="rel-saidas-resumo-motivos" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:none">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Resumo por motivo (período completo)</div>
+            <div id="rel-saidas-resumo-lista"></div>
           </div>
         </div>
 
@@ -12410,7 +12429,8 @@ function editarOrcamentoFromModal() {
 // Estado do relatório (em memória, não persiste)
 let _relInicializado = false;
 let _relLancamentosBuscados = [];   // último resultado da busca (pra exportar)
-let _relSaidasBuscadas      = [];   // último resultado de saídas (pra exportar)
+let _relSaidasBuscadas      = [];   // último resultado de saídas (pra exportar) — reflete filtro de motivo
+let _relSaidasBrutas        = [];   // saídas do período pré-filtro-motivo — fonte do resumo e do re-render
 
 // Inicializa a tela (idempotente — só roda 1× por sessão)
 function iniciarRelatorios() {
@@ -12438,6 +12458,9 @@ function iniciarRelatorios() {
   }
   // Aplica estado inicial (categoria vazia → subtipo escondido)
   _onMudarCategoriaRelatorio();
+
+  // Popula mini-filtro de motivo do relatório de Saídas (a partir da constante)
+  _popularSelectMotivoSaidas();
 
   // Aviso de área removido — agora gestão, coord, líderes e financeiro veem Recepção + Call Center.
   const perfil = usuario?.perfil;
@@ -12509,6 +12532,9 @@ function limparFiltrosRelatorio() {
   document.getElementById("rel-loading").style.display   = "none";
   const relSaidasWrap = document.getElementById("rel-saidas-resultado");
   if(relSaidasWrap) relSaidasWrap.style.display = "none";
+  // Reseta o mini-filtro de motivo do card de Saídas pra "Todos os motivos"
+  const relSaidasMotivo = document.getElementById("rel-saidas-motivo");
+  if(relSaidasMotivo) relSaidasMotivo.value = "";
 }
 
 // Mostra/esconde o filtro "Tipo de procedimento" conforme a Categoria selecionada.
@@ -12691,10 +12717,111 @@ function _relParseMotivoSaida(motivo) {
   return { rotulo: s || "—", detalhe: "" };
 }
 
+// Popula o <select> de filtro por motivo do relatório de Saídas a partir de
+// MOTIVOS_SAIDA_AVULSA (fonte única — inclui "Outro" no final). Idempotente:
+// se chamado de novo, preserva o valor atualmente selecionado.
+function _popularSelectMotivoSaidas() {
+  const sel = document.getElementById("rel-saidas-motivo");
+  if(!sel) return;
+  const valorAnterior = sel.value;
+  sel.innerHTML = '<option value="">Todos os motivos</option>';
+  MOTIVOS_SAIDA_AVULSA.forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+  if(valorAnterior) sel.value = valorAnterior;
+}
+
+// Renderiza o breakdown por rótulo de motivo (Qtd + Valor) — sempre a partir
+// da lista bruta (período completo), independente do filtro de motivo ativo.
+// Agrupa "Outro: <texto>" tudo junto em "Outro" via _relParseMotivoSaida
+// (que já foi aplicado na fase de normalização — l.motivoRotulo).
+function _renderResumoMotivosSaidas(brutas) {
+  const wrap  = document.getElementById("rel-saidas-resumo-motivos");
+  const lista = document.getElementById("rel-saidas-resumo-lista");
+  if(!wrap || !lista) return;
+  if(!brutas || brutas.length === 0) { wrap.style.display = "none"; lista.innerHTML = ""; return; }
+
+  const grupos = {};
+  brutas.forEach(l => {
+    const r = l.motivoRotulo || "—";
+    if(!grupos[r]) grupos[r] = { qtd: 0, valor: 0 };
+    grupos[r].qtd++;
+    grupos[r].valor += Number(l.valor) || 0;
+  });
+  const linhas = Object.entries(grupos).sort((a,b) => b[1].valor - a[1].valor);
+
+  wrap.style.display = "";
+  lista.innerHTML = linhas.map(([motivo, {qtd, valor}]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px">
+      <span style="flex:1;min-width:0">${escHTML(motivo)}</span>
+      <span style="color:var(--text2);margin:0 12px;white-space:nowrap">${qtd} ${qtd === 1 ? "saída" : "saídas"}</span>
+      <span style="font-weight:600;color:#DC2626;white-space:nowrap">${_relFmtBRL(valor)}</span>
+    </div>
+  `).join("");
+}
+
+// Renderiza a tabela + cards de Qtd/Valor a partir de uma lista já normalizada
+// e (opcionalmente) filtrada por motivo. Popula _relSaidasBuscadas pro export.
+// Empty message adapta ao contexto: se há filtro ativo e o período tem saídas
+// de outros motivos, sinaliza que o filtro é a causa do vazio.
+function _renderTabelaSaidas(linhas) {
+  const tbody = document.getElementById("rel-saidas-tbody");
+  const vazio = document.getElementById("rel-saidas-vazio");
+  const qtd   = document.getElementById("rel-saidas-qtd");
+  const val   = document.getElementById("rel-saidas-val");
+  if(!tbody) return;
+
+  _relSaidasBuscadas = linhas;
+
+  const total = linhas.reduce((s,l) => s + (l.valor || 0), 0);
+  if(qtd) qtd.textContent = linhas.length.toString();
+  if(val) val.textContent = _relFmtBRL(total);
+
+  if(linhas.length === 0) {
+    tbody.innerHTML = "";
+    if(vazio) {
+      const motivoFiltro = document.getElementById("rel-saidas-motivo")?.value || "";
+      const temPeriodo = (_relSaidasBrutas || []).length > 0;
+      const msg = (motivoFiltro && temPeriodo)
+        ? "Nenhuma saída com esse motivo no período."
+        : "Nenhuma saída registrada no período.";
+      vazio.innerHTML = `<div class="ei">📤</div>${msg}`;
+      vazio.style.display = "";
+    }
+    return;
+  }
+  if(vazio) vazio.style.display = "none";
+
+  tbody.innerHTML = linhas.map(l => `
+    <tr>
+      <td>${_relFmtData(l.data)}</td>
+      <td>${escHTML(l.colaboradora)}</td>
+      <td style="text-align:right;font-weight:600;color:#DC2626">${_relFmtBRL(l.valor)}</td>
+      <td>${escHTML(l.motivoRotulo)}</td>
+      <td>${l.motivoDetalhe ? escHTML(l.motivoDetalhe) : "—"}</td>
+    </tr>
+  `).join("");
+}
+
+// Aplica o filtro atual do <select> de motivo às saídas brutas e re-renderiza
+// tabela + cards. Sem re-fetch no Firestore — só refiltro local a partir do
+// cache em _relSaidasBrutas. Chamado pelo onchange do dropdown.
+function _aplicarFiltroMotivoSaidas() {
+  const motivoFiltro = document.getElementById("rel-saidas-motivo")?.value || "";
+  const linhas = motivoFiltro
+    ? _relSaidasBrutas.filter(l => l.motivoRotulo === motivoFiltro)
+    : _relSaidasBrutas.slice();
+  _renderTabelaSaidas(linhas);
+}
+
 // Renderiza a tabela + cards do relatório de Saídas.
 // docs = lançamentos com tipo="saida" no intervalo, sem filtro de recep aplicado.
-// Aplica intervalo de data (dtIni/dtFim) + recep (opcional) e popula a UI.
-// Popula _relSaidasBuscadas para o export do Excel.
+// Aplica intervalo de data (dtIni/dtFim) + recep (opcional), guarda a lista
+// bruta em _relSaidasBrutas, renderiza o resumo (sempre com o período completo)
+// e delega a tabela/cards ao _aplicarFiltroMotivoSaidas (que respeita o filtro
+// de motivo atualmente selecionado).
 function _renderRelatorioSaidas(docs, dtIni, dtFim, recepFiltro) {
   let saidas = (docs || []).filter(l => {
     const dt = l.data_hora
@@ -12719,36 +12846,16 @@ function _renderRelatorioSaidas(docs, dtIni, dtFim, recepFiltro) {
     };
   }).sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
 
-  _relSaidasBuscadas = linhas;
+  _relSaidasBrutas = linhas;
 
-  const wrap  = document.getElementById("rel-saidas-resultado");
-  const tbody = document.getElementById("rel-saidas-tbody");
-  const vazio = document.getElementById("rel-saidas-vazio");
-  const qtd   = document.getElementById("rel-saidas-qtd");
-  const val   = document.getElementById("rel-saidas-val");
-  if(!wrap || !tbody) return;
+  const wrap = document.getElementById("rel-saidas-resultado");
+  if(wrap) wrap.style.display = "";
 
-  wrap.style.display = "";
-  const total = linhas.reduce((s,l) => s + (l.valor || 0), 0);
-  if(qtd) qtd.textContent = linhas.length.toString();
-  if(val) val.textContent = _relFmtBRL(total);
+  // Resumo por motivo — sempre reflete o período completo (não afetado pelo filtro)
+  _renderResumoMotivosSaidas(_relSaidasBrutas);
 
-  if(linhas.length === 0) {
-    tbody.innerHTML = "";
-    if(vazio) vazio.style.display = "";
-    return;
-  }
-  if(vazio) vazio.style.display = "none";
-
-  tbody.innerHTML = linhas.map(l => `
-    <tr>
-      <td>${_relFmtData(l.data)}</td>
-      <td>${escHTML(l.colaboradora)}</td>
-      <td style="text-align:right;font-weight:600;color:#DC2626">${_relFmtBRL(l.valor)}</td>
-      <td>${escHTML(l.motivoRotulo)}</td>
-      <td>${l.motivoDetalhe ? escHTML(l.motivoDetalhe) : "—"}</td>
-    </tr>
-  `).join("");
+  // Tabela + cards — respeita o filtro de motivo atualmente selecionado
+  _aplicarFiltroMotivoSaidas();
 }
 
 async function gerarRelatorio() {
@@ -12958,6 +13065,15 @@ function exportarRelatorioExcel() {
   // Totais por forma de pagamento (label)
   const porFp = {};
   linhas.forEach(l => { porFp[l.formaLabel] = (porFp[l.formaLabel] || 0) + (l.valor || 0); });
+  // Totais por motivo de saída (Saídas) — sempre do PERÍODO COMPLETO (não afetado
+  // pelo filtro de motivo aplicado à aba "Saídas"). Espelha o resumo da UI.
+  // Agrupa "Outro: <texto>" tudo junto em "Outro" via l.motivoRotulo já parseado.
+  const brutasSaidas = _relSaidasBrutas || [];
+  const porMotivoSaida = {};
+  brutasSaidas.forEach(l => {
+    const r = l.motivoRotulo || "—";
+    porMotivoSaida[r] = (porMotivoSaida[r] || 0) + (Number(l.valor) || 0);
+  });
 
   const dadosResumo = [];
   dadosResumo.push(["Período", `${_relFmtData(new Date(iniStr+"T12:00:00"))} a ${_relFmtData(new Date(fimStr+"T12:00:00"))}`]);
@@ -12972,6 +13088,9 @@ function exportarRelatorioExcel() {
   dadosResumo.push([]);
   dadosResumo.push(["Por Forma de Pagamento", "Valor (R$)"]);
   Object.entries(porFp).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
+  dadosResumo.push([]);
+  dadosResumo.push(["Por Motivo (Saídas)", "Valor (R$)"]);
+  Object.entries(porMotivoSaida).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
 
   const wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
   wsResumo["!cols"] = [{ wch:30 },{ wch:18 }];
@@ -12981,8 +13100,10 @@ function exportarRelatorioExcel() {
     const cell = wsResumo[cellRef];
     if(cell && typeof cell.v === "number" && r !== 1) cell.z = 'R$ #,##0.00';
   }
-  // Aplica estilo de cabeçalho nas 3 linhas de seção
-  [4, 5+Object.keys(porRec).length+1, 5+Object.keys(porRec).length+1 + Object.keys(porCat).length+2].forEach(rowIdx => {
+  // Aplica estilo de cabeçalho nas 4 linhas de seção (Rec/Cat/FP/Motivo(Saídas))
+  const _rowFp = 5 + Object.keys(porRec).length + 1 + Object.keys(porCat).length + 2;
+  const _rowMs = _rowFp + Object.keys(porFp).length + 2;
+  [4, 5+Object.keys(porRec).length+1, _rowFp, _rowMs].forEach(rowIdx => {
     ["A","B"].forEach(col => {
       const ref = `${col}${rowIdx+1}`;
       if(wsResumo[ref]) {
