@@ -883,8 +883,14 @@
 
       <!-- D3.7 — Mini-dashboard (Hoje + Mês). Botões clicáveis filtram colunas do kanban. -->
       <div class="kb-mini">
+        <!-- Banner "olhando o passado": visível SÓ quando #kanban-filtro-dia aponta
+             pra um dia ≠ hoje. Populado por renderKanbanMiniDashboard. -->
+        <div class="kb-mini-aviso" id="kanban-dia-aviso" style="display:none">
+          ⚠️ Visualizando o kanban de <strong id="kanban-dia-aviso-data">—</strong> (não é o dia atual).
+          <button type="button" onclick="_kanbanVoltarParaHoje()">🔙 Voltar pra hoje</button>
+        </div>
         <div class="kb-mini-row">
-          <span class="kb-mini-label">📅 Hoje:</span>
+          <span class="kb-mini-label" id="kb-mini-dia-label">📅 Hoje:</span>
           <button type="button" class="kb-mini-card kb-mini-pendentes" data-filtro="pendentes" onclick="toggleFiltroKanbanMini('pendentes')">
             <span class="kb-mini-titulo">Pendentes</span>
             <span class="kb-mini-valor" id="kb-mini-dia-pend">0 · R$ 0,00</span>
@@ -940,6 +946,12 @@
             <input type="date" id="orc-filtro-ate" onchange="renderKanbanOrcamentos()"
               style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)" />
           </div>
+          <div class="fg">
+            <label style="font-size:13px;font-weight:600">📅 Ver estado do dia</label>
+            <input type="date" id="kanban-filtro-dia" onchange="renderKanbanOrcamentos()"
+              style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r2);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)"
+              title="Vazio = hoje. Preenchido = kanban 'olha' aquele dia (stats do dia + coluna 'Pagos' + label 'Hoje')." />
+          </div>
           <div class="fg" style="flex:1;min-width:200px">
             <label style="font-size:13px;font-weight:600">Buscar paciente</label>
             <input type="text" id="orc-filtro-busca" placeholder="🔍 Buscar paciente..." oninput="renderKanbanOrcamentos()"
@@ -977,7 +989,7 @@
         <!-- Coluna "Pagos do dia" (Fase D3.4) — mostra pagos com data === hoje.
              Permite reverter pagamento via botão dedicado em cada card. -->
         <div class="orc-col" data-status="pago">
-          <div class="orc-col-head">🟢 Pagos do dia <span class="orc-count" id="orc-cnt-pago">0</span></div>
+          <div class="orc-col-head"><span id="orc-col-pago-label">🟢 Pagos do dia</span> <span class="orc-count" id="orc-cnt-pago">0</span></div>
           <div id="orc-col-pago"></div>
         </div>
         <!-- Etapa 5: coluna "Recusados" — mostra orçamentos com status "recusado".
@@ -10732,11 +10744,39 @@ function toggleFiltroKanbanMini(filtro) {
 
 // Calcula stats {pendentes, pagos, taxa} de um array de docs.
 // Filtra por dia atual se periodo="dia"; senão, considera o array todo (mês).
+// Data de referência do Kanban: valor do #kanban-filtro-dia (YYYY-MM-DD) se
+// preenchido, senão a data de hoje. Fonte única — usada por calcularKanbanStats
+// (filtro do "dia" no mini-dashboard) e pela coluna "Pagos" do kanban.
+function _getKanbanDataRef() {
+  const inp = document.getElementById("kanban-filtro-dia");
+  const v = (inp && inp.value) || "";
+  if(v) return v;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// True se a data de referência é hoje (filtro vazio ou = hoje).
+function _ehKanbanEmHoje() {
+  const inp = document.getElementById("kanban-filtro-dia");
+  const v = (inp && inp.value) || "";
+  if(!v) return true;
+  const d = new Date();
+  const hojeStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return v === hojeStr;
+}
+
+// Handler do botão "Voltar pra hoje" do banner amarelo: limpa o picker e
+// re-renderiza o kanban. Não toca em outros filtros (De/Até/Busca/Status).
+function _kanbanVoltarParaHoje() {
+  const inp = document.getElementById("kanban-filtro-dia");
+  if(inp) inp.value = "";
+  renderKanbanOrcamentos();
+}
+
 function calcularKanbanStats(docs, periodo) {
-  const hojeStr = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })();
+  // Data usada como "hoje" no filtro do modo "dia". Igual à data real do sistema,
+  // exceto se o usuário preencheu #kanban-filtro-dia (aí "olha" aquele dia).
+  const dataRef = _getKanbanDataRef();
   function isoDoc(l) {
     const ts = l.data_hora || l.criado_em;
     const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
@@ -10745,7 +10785,7 @@ function calcularKanbanStats(docs, periodo) {
   }
   const filtrados = docs.filter(l => {
     if((l.tipo || "entrada") !== "entrada") return false;
-    if(periodo === "dia") return isoDoc(l) === hojeStr;
+    if(periodo === "dia") return isoDoc(l) === dataRef;
     return true; // mês inteiro (acompLancs já é filtrado por mes_ano no listener)
   });
 
@@ -10786,6 +10826,23 @@ function renderKanbanMiniDashboard() {
     setText(`kb-mini-${periodo}-recusados`, String(stats.recusados.count));
     setText(`kb-mini-${periodo}-taxa`,      `${stats.taxa.toFixed(0)}%`);
   });
+
+  // Feature #2 — reflete a data de referência nos labels dinâmicos e no banner.
+  // Quando dia = hoje: label "📅 Hoje:", coluna "🟢 Pagos do dia", banner oculto.
+  // Quando dia ≠ hoje: label "📅 Dia DD/MM:", coluna "🟢 Pagos de DD/MM", banner "⚠️ Visualizando…".
+  const emHoje = _ehKanbanEmHoje();
+  const dataRef = _getKanbanDataRef();
+  const [ano, mes, dia] = dataRef.split("-");
+  const rotuloDMY  = `${dia}/${mes}/${ano}`;
+  const rotuloDM   = `${dia}/${mes}`;
+  const lblDia   = document.getElementById("kb-mini-dia-label");
+  const lblPago  = document.getElementById("orc-col-pago-label");
+  const aviso    = document.getElementById("kanban-dia-aviso");
+  const avisoDt  = document.getElementById("kanban-dia-aviso-data");
+  if(lblDia)   lblDia.textContent   = emHoje ? "📅 Hoje:" : `📅 Dia ${rotuloDM}:`;
+  if(lblPago)  lblPago.textContent  = emHoje ? "🟢 Pagos do dia" : `🟢 Pagos de ${rotuloDM}`;
+  if(aviso)    aviso.style.display  = emHoje ? "none" : "";
+  if(avisoDt)  avisoDt.textContent  = rotuloDMY;
 
   // Estado dos botões + aviso de filtro ativo
   document.querySelectorAll(".kb-mini-card[data-filtro]").forEach(btn => {
@@ -10856,19 +10913,17 @@ function renderKanbanOrcamentos() {
     col.style.display = visivel ? "" : "none";
   });
 
-  // Distribui em 5 colunas. "pago" só aceita docs com data===hoje (D3.4).
+  // Distribui em 5 colunas. Coluna "pago" só aceita docs com data === data de
+  // referência (default hoje; = #kanban-filtro-dia quando setado — feature #2).
   // "recusado" mostra todos os do mês (sem filtro de data extra).
   const colunas = { lancar:[], link_enviado:[], acompanhar:[], pago:[], recusado:[] };
-  const hojeStr = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })();
+  const dataRef = _getKanbanDataRef();
   filtrados.forEach(o => {
     const s = o.status || "acompanhar";
     if(s === "pago") {
-      // Só pagos do dia atual + somente entradas (saídas-doc com id_par ficam fora)
+      // Só pagos da data de referência + somente entradas (saídas-doc com id_par ficam fora)
       if((o.tipo || "entrada") !== "entrada") return;
-      if(dataDoc(o) !== hojeStr) return;
+      if(dataDoc(o) !== dataRef) return;
       colunas.pago.push(o);
       return;
     }
