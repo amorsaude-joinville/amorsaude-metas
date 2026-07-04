@@ -12365,6 +12365,12 @@ async function salvarPagamentoModal() {
       // F2 — observacoes (sempre gravado, mesmo vazio — sobrescreve o anterior)
       observacoes: ((document.getElementById("pag-observacoes")?.value || "").trim().slice(0, 250)),
       atualizado_em: ts,
+      // Feature #3 Etapa 3 (D7-B, preparatório) — marca o instante em que o card
+      // efetivamente virou "pago". Distinto de atualizado_em (que muda em qualquer
+      // edição futura). NÃO é lido em produção nesta etapa; Etapa 4 fará a coluna
+      // "Pagos do dia" consumir pago_em || data_hora. Docs pagos ANTES desta etapa
+      // não têm pago_em — o fallback pra data_hora entra na Etapa 4.
+      pago_em: ts,
       // Auditoria mínima
       editado_em:        ts,
       editado_por:       usuario.nome || "",
