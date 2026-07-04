@@ -1764,6 +1764,7 @@
               <option value="exames">Exames</option>
               <option value="procedimentos">Procedimentos</option>
               <option value="imagem">Imagem</option>
+              <option value="saidas">Saídas</option>
             </select>
           </div>
           <!-- Subtipo de procedimento (só aparece quando Categoria = Procedimentos) -->
@@ -1771,6 +1772,14 @@
             <label>🧪 Tipo de procedimento</label>
             <select id="rel-subtipo">
               <option value="">Todos</option>
+            </select>
+          </div>
+          <!-- Filtro de motivo (só aparece quando Categoria = Saídas — modo saídas
+               troca a tabela principal para mostrar as saídas do período). -->
+          <div class="fg" id="rel-motivo-wrap" style="margin:0;display:none">
+            <label>🏷️ Motivo (Saídas)</label>
+            <select id="rel-motivo" onchange="_aplicarFiltroMotivoSaidas()">
+              <option value="">Todos os motivos</option>
             </select>
           </div>
           <!-- Busca opcional por nome de paciente (case-insensitive, substring) -->
@@ -1791,11 +1800,13 @@
       <!-- Resumo + Tabela (aparece após gerar) -->
       <div id="rel-resultado" style="display:none">
 
-        <!-- Card resumo total -->
+        <!-- Card resumo total. Labels dos cards de Qtd e Médio têm id porque
+             mudam de rótulo em modo saídas (Lançamentos→Saídas, Valor Médio→
+             Qtd. Motivos). Card do meio (Valor Total) mantém rótulo nos dois modos. -->
         <div class="card" style="margin-bottom:16px">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">
             <div>
-              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Lançamentos</div>
+              <div id="rel-tot-qtd-label" style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Lançamentos</div>
               <div style="font-size:24px;font-weight:700;color:var(--text);margin-top:4px" id="rel-tot-qtd">0</div>
             </div>
             <div>
@@ -1803,7 +1814,7 @@
               <div style="font-size:24px;font-weight:700;color:var(--primary);margin-top:4px" id="rel-tot-val">R$ 0,00</div>
             </div>
             <div>
-              <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Médio</div>
+              <div id="rel-tot-med-label" style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Valor Médio</div>
               <div style="font-size:24px;font-weight:700;color:var(--text);margin-top:4px" id="rel-tot-med">R$ 0,00</div>
             </div>
             <div style="display:flex;align-items:center;justify-content:flex-end">
@@ -1812,12 +1823,25 @@
           </div>
         </div>
 
-        <!-- Tabela — ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma Pagto | Valor.
+        <!-- Resumo por motivo (topo) — visível SÓ em modo saídas. Mesma info do
+             #rel-saidas-resumo-motivos do card #rel-saidas-resultado; alimentado
+             pela mesma _renderResumoMotivosSaidas (que popula os dois containers). -->
+        <div id="rel-resumo-motivos-topo" style="display:none;margin-bottom:16px">
+          <div class="card">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Resumo por motivo (período completo)</div>
+            <div id="rel-resumo-motivos-topo-lista"></div>
+          </div>
+        </div>
+
+        <!-- Tabela — thead+tbody são populados por _renderTabelaPrincipal(modo),
+             que troca as colunas conforme modo (lançamentos = 9 cols / saídas = 5 cols).
+             Modo lançamentos: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma Pagto | Valor.
+             Modo saídas:      Data | Colaboradora | Valor | Motivo | Detalhe.
              CPF sem mask de privacidade (é relatório financeiro). -->
         <div class="card">
           <div class="tbl-wrap">
             <table>
-              <thead>
+              <thead id="rel-thead">
                 <tr>
                   <th>Data</th>
                   <th>Paciente</th>
@@ -12431,6 +12455,7 @@ let _relInicializado = false;
 let _relLancamentosBuscados = [];   // último resultado da busca (pra exportar)
 let _relSaidasBuscadas      = [];   // último resultado de saídas (pra exportar) — reflete filtro de motivo
 let _relSaidasBrutas        = [];   // saídas do período pré-filtro-motivo — fonte do resumo e do re-render
+let _relModoAtual           = "lancamentos";  // "lancamentos" | "saidas" — controla tabela/cards/filtros/export
 
 // Inicializa a tela (idempotente — só roda 1× por sessão)
 function iniciarRelatorios() {
@@ -12461,6 +12486,8 @@ function iniciarRelatorios() {
 
   // Popula mini-filtro de motivo do relatório de Saídas (a partir da constante)
   _popularSelectMotivoSaidas();
+  // Popula filtro de motivo do modo Saídas (área principal de filtros)
+  _popularSelectMotivoSaidas("rel-motivo");
 
   // Aviso de área removido — agora gestão, coord, líderes e financeiro veem Recepção + Call Center.
   const perfil = usuario?.perfil;
@@ -12537,15 +12564,40 @@ function limparFiltrosRelatorio() {
   if(relSaidasMotivo) relSaidasMotivo.value = "";
 }
 
-// Mostra/esconde o filtro "Tipo de procedimento" conforme a Categoria selecionada.
-// Só visível quando Categoria === "procedimentos". Reseta valor pra "Todos" ao esconder.
+// Ajusta visibilidade dos filtros da UI conforme a Categoria selecionada:
+//  - Subtipo: só quando cat === "procedimentos" (comportamento antigo).
+//  - Modo Saídas (cat === "saidas"): esconde Profissional e Forma de pagamento
+//    (não se aplicam a saída), mostra o filtro Motivo. Zera os filtros ocultos
+//    pra evitar "filtragem invisível" quando o usuário voltar pra modo lançamentos.
 function _onMudarCategoriaRelatorio() {
-  const cat   = document.getElementById("rel-categoria")?.value || "";
-  const wrap  = document.getElementById("rel-subtipo-wrap");
-  const sel   = document.getElementById("rel-subtipo");
-  const mostra = (cat === "procedimentos");
-  if(wrap) wrap.style.display = mostra ? "" : "none";
-  if(!mostra && sel) sel.value = "";
+  const cat = document.getElementById("rel-categoria")?.value || "";
+  const isSaidas = (cat === "saidas");
+
+  // Subtipo (comportamento existente — só em procedimentos)
+  const wrapSub = document.getElementById("rel-subtipo-wrap");
+  const selSub  = document.getElementById("rel-subtipo");
+  const mostraSub = (cat === "procedimentos");
+  if(wrapSub) wrapSub.style.display = mostraSub ? "" : "none";
+  if(!mostraSub && selSub) selSub.value = "";
+
+  // Modo Saídas: esconde filtros de lançamento, mostra filtro de motivo
+  const wrapProf   = document.getElementById("rel-profissional")?.closest(".fg");
+  const wrapForma  = document.getElementById("rel-forma")?.closest(".fg");
+  const wrapMotivo = document.getElementById("rel-motivo-wrap");
+  if(wrapProf)   wrapProf.style.display   = isSaidas ? "none" : "";
+  if(wrapForma)  wrapForma.style.display  = isSaidas ? "none" : "";
+  if(wrapMotivo) wrapMotivo.style.display = isSaidas ? "" : "none";
+
+  // Zera os filtros ocultos pra não filtrar invisivelmente na próxima geração
+  if(isSaidas) {
+    const selProf = document.getElementById("rel-profissional");
+    const selForma = document.getElementById("rel-forma");
+    if(selProf) selProf.value = "";
+    if(selForma) selForma.value = "";
+  } else {
+    const selMotivo = document.getElementById("rel-motivo");
+    if(selMotivo) selMotivo.value = "";
+  }
 }
 
 // Converte um doc do Firestore em um objeto "linha do relatório"
@@ -12717,11 +12769,13 @@ function _relParseMotivoSaida(motivo) {
   return { rotulo: s || "—", detalhe: "" };
 }
 
-// Popula o <select> de filtro por motivo do relatório de Saídas a partir de
-// MOTIVOS_SAIDA_AVULSA (fonte única — inclui "Outro" no final). Idempotente:
-// se chamado de novo, preserva o valor atualmente selecionado.
-function _popularSelectMotivoSaidas() {
-  const sel = document.getElementById("rel-saidas-motivo");
+// Popula um <select> de filtro por motivo a partir de MOTIVOS_SAIDA_AVULSA
+// (fonte única — inclui "Outro" no final). Idempotente. Aceita id opcional:
+// default = "rel-saidas-motivo" (mini-filtro do card #rel-saidas-resultado);
+// "rel-motivo" = filtro principal do modo saídas.
+function _popularSelectMotivoSaidas(selId) {
+  selId = selId || "rel-saidas-motivo";
+  const sel = document.getElementById(selId);
   if(!sel) return;
   const valorAnterior = sel.value;
   sel.innerHTML = '<option value="">Todos os motivos</option>';
@@ -12733,16 +12787,10 @@ function _popularSelectMotivoSaidas() {
   if(valorAnterior) sel.value = valorAnterior;
 }
 
-// Renderiza o breakdown por rótulo de motivo (Qtd + Valor) — sempre a partir
-// da lista bruta (período completo), independente do filtro de motivo ativo.
-// Agrupa "Outro: <texto>" tudo junto em "Outro" via _relParseMotivoSaida
-// (que já foi aplicado na fase de normalização — l.motivoRotulo).
-function _renderResumoMotivosSaidas(brutas) {
-  const wrap  = document.getElementById("rel-saidas-resumo-motivos");
-  const lista = document.getElementById("rel-saidas-resumo-lista");
-  if(!wrap || !lista) return;
-  if(!brutas || brutas.length === 0) { wrap.style.display = "none"; lista.innerHTML = ""; return; }
-
+// Gera o HTML das linhas do resumo por motivo (Qtd + Valor por rótulo, ordenado
+// por valor desc). Extraído do render pra permitir popular dois containers.
+function _relResumoMotivosHTML(brutas) {
+  if(!brutas || brutas.length === 0) return "";
   const grupos = {};
   brutas.forEach(l => {
     const r = l.motivoRotulo || "—";
@@ -12751,15 +12799,63 @@ function _renderResumoMotivosSaidas(brutas) {
     grupos[r].valor += Number(l.valor) || 0;
   });
   const linhas = Object.entries(grupos).sort((a,b) => b[1].valor - a[1].valor);
-
-  wrap.style.display = "";
-  lista.innerHTML = linhas.map(([motivo, {qtd, valor}]) => `
+  return linhas.map(([motivo, {qtd, valor}]) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px">
       <span style="flex:1;min-width:0">${escHTML(motivo)}</span>
       <span style="color:var(--text2);margin:0 12px;white-space:nowrap">${qtd} ${qtd === 1 ? "saída" : "saídas"}</span>
       <span style="font-weight:600;color:#DC2626;white-space:nowrap">${_relFmtBRL(valor)}</span>
     </div>
   `).join("");
+}
+
+// Renderiza o breakdown por rótulo de motivo (Qtd + Valor) em DOIS containers:
+//  - #rel-saidas-resumo-motivos: dentro do #rel-saidas-resultado (modo lançamentos)
+//  - #rel-resumo-motivos-topo:   dentro do #rel-resultado (modo saídas — controlado por _relModoAtual)
+// Ambos consomem sempre o período completo (não afetados pelo filtro de motivo).
+function _renderResumoMotivosSaidas(brutas) {
+  const html = _relResumoMotivosHTML(brutas);
+  const emSaidas = (_relModoAtual === "saidas");
+
+  const wrap1 = document.getElementById("rel-saidas-resumo-motivos");
+  const lista1 = document.getElementById("rel-saidas-resumo-lista");
+  if(wrap1 && lista1) {
+    if(!html) { wrap1.style.display = "none"; lista1.innerHTML = ""; }
+    else       { wrap1.style.display = ""; lista1.innerHTML = html; }
+  }
+
+  const wrap2 = document.getElementById("rel-resumo-motivos-topo");
+  const lista2 = document.getElementById("rel-resumo-motivos-topo-lista");
+  if(wrap2 && lista2) {
+    if(!html || !emSaidas) { wrap2.style.display = "none"; lista2.innerHTML = ""; }
+    else                    { wrap2.style.display = ""; lista2.innerHTML = html; }
+  }
+}
+
+// Normalização das saídas em objetos de linha (data, colaboradora, valor,
+// motivoRotulo, motivoDetalhe). Extraído de _renderRelatorioSaidas pra permitir
+// uso direto no modo saídas de gerarRelatorio (que também precisa da mesma lista).
+function _relNormalizarSaidas(docs, dtIni, dtFim, recepFiltro) {
+  let saidas = (docs || []).filter(l => {
+    const dt = l.data_hora
+      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+      : null;
+    if(!dt) return false;
+    return dt >= dtIni && dt <= dtFim;
+  });
+  if(recepFiltro) saidas = saidas.filter(l => (l.usuario_nome || "") === recepFiltro);
+  return saidas.map(l => {
+    const dt = l.data_hora
+      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
+      : null;
+    const parsed = _relParseMotivoSaida(l.motivo_saida);
+    return {
+      data:          dt,
+      colaboradora:  l.usuario_nome || "—",
+      valor:         Number(l.valor) || 0,
+      motivoRotulo:  parsed.rotulo,
+      motivoDetalhe: parsed.detalhe,
+    };
+  }).sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
 }
 
 // Renderiza a tabela + cards de Qtd/Valor a partir de uma lista já normalizada
@@ -12805,57 +12901,128 @@ function _renderTabelaSaidas(linhas) {
   `).join("");
 }
 
-// Aplica o filtro atual do <select> de motivo às saídas brutas e re-renderiza
-// tabela + cards. Sem re-fetch no Firestore — só refiltro local a partir do
-// cache em _relSaidasBrutas. Chamado pelo onchange do dropdown.
+// Aplica o filtro atual de motivo às saídas brutas e re-renderiza. Sem re-fetch.
+// Modo-aware: em modo saídas lê rel-motivo (filtro principal) e renderiza a
+// tabela+cards da tela principal; em modo lançamentos lê rel-saidas-motivo
+// (mini-filtro do card #rel-saidas-resultado) e renderiza esse card.
 function _aplicarFiltroMotivoSaidas() {
-  const motivoFiltro = document.getElementById("rel-saidas-motivo")?.value || "";
+  const emSaidas = (_relModoAtual === "saidas");
+  const selId = emSaidas ? "rel-motivo" : "rel-saidas-motivo";
+  const motivoFiltro = document.getElementById(selId)?.value || "";
   const linhas = motivoFiltro
     ? _relSaidasBrutas.filter(l => l.motivoRotulo === motivoFiltro)
     : _relSaidasBrutas.slice();
-  _renderTabelaSaidas(linhas);
+  _relSaidasBuscadas = linhas;
+  if(emSaidas) {
+    _renderCardsResumo("saidas", null, linhas);
+    _renderTabelaPrincipal("saidas", linhas);
+  } else {
+    _renderTabelaSaidas(linhas);
+  }
 }
 
-// Renderiza a tabela + cards do relatório de Saídas.
-// docs = lançamentos com tipo="saida" no intervalo, sem filtro de recep aplicado.
-// Aplica intervalo de data (dtIni/dtFim) + recep (opcional), guarda a lista
-// bruta em _relSaidasBrutas, renderiza o resumo (sempre com o período completo)
-// e delega a tabela/cards ao _aplicarFiltroMotivoSaidas (que respeita o filtro
-// de motivo atualmente selecionado).
+// Renderiza o card #rel-saidas-resultado (modo lançamentos): guarda a lista
+// bruta em _relSaidasBrutas, renderiza o resumo por motivo (período completo)
+// e delega a tabela/cards ao _aplicarFiltroMotivoSaidas.
 function _renderRelatorioSaidas(docs, dtIni, dtFim, recepFiltro) {
-  let saidas = (docs || []).filter(l => {
-    const dt = l.data_hora
-      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
-      : null;
-    if(!dt) return false;
-    return dt >= dtIni && dt <= dtFim;
-  });
-  if(recepFiltro) saidas = saidas.filter(l => (l.usuario_nome || "") === recepFiltro);
-
-  const linhas = saidas.map(l => {
-    const dt = l.data_hora
-      ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
-      : null;
-    const parsed = _relParseMotivoSaida(l.motivo_saida);
-    return {
-      data:          dt,
-      colaboradora:  l.usuario_nome || "—",
-      valor:         Number(l.valor) || 0,
-      motivoRotulo:  parsed.rotulo,
-      motivoDetalhe: parsed.detalhe,
-    };
-  }).sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
-
-  _relSaidasBrutas = linhas;
+  _relSaidasBrutas = _relNormalizarSaidas(docs, dtIni, dtFim, recepFiltro);
 
   const wrap = document.getElementById("rel-saidas-resultado");
   if(wrap) wrap.style.display = "";
 
-  // Resumo por motivo — sempre reflete o período completo (não afetado pelo filtro)
   _renderResumoMotivosSaidas(_relSaidasBrutas);
-
-  // Tabela + cards — respeita o filtro de motivo atualmente selecionado
   _aplicarFiltroMotivoSaidas();
+}
+
+// Renderiza os 3 cards de resumo do topo (Qtd | Valor Total | Médio/Motivos).
+// Em modo saídas, a 1ª label vira "Saídas" e a 3ª vira "Qtd. Motivos" (contagem
+// de rótulos distintos — valor médio de saída não tem interpretação clara).
+function _renderCardsResumo(modo, linhasLanc, linhasSaida) {
+  const lblQtd = document.getElementById("rel-tot-qtd-label");
+  const lblMed = document.getElementById("rel-tot-med-label");
+  const valQtd = document.getElementById("rel-tot-qtd");
+  const valVal = document.getElementById("rel-tot-val");
+  const valMed = document.getElementById("rel-tot-med");
+  if(modo === "saidas") {
+    const linhas = linhasSaida || [];
+    const totalVal = linhas.reduce((s,l) => s + (l.valor || 0), 0);
+    const motivosDistintos = new Set(linhas.map(l => l.motivoRotulo)).size;
+    if(lblQtd) lblQtd.textContent = "Saídas";
+    if(lblMed) lblMed.textContent = "Qtd. Motivos";
+    if(valQtd) valQtd.textContent = linhas.length.toString();
+    if(valVal) valVal.textContent = _relFmtBRL(totalVal);
+    if(valMed) valMed.textContent = motivosDistintos.toString();
+  } else {
+    const linhas = linhasLanc || [];
+    const totalVal = linhas.reduce((s,l) => s + (l.valor || 0), 0);
+    const media = linhas.length > 0 ? totalVal / linhas.length : 0;
+    if(lblQtd) lblQtd.textContent = "Lançamentos";
+    if(lblMed) lblMed.textContent = "Valor Médio";
+    if(valQtd) valQtd.textContent = linhas.length.toString();
+    if(valVal) valVal.textContent = _relFmtBRL(totalVal);
+    if(valMed) valMed.textContent = _relFmtBRL(media);
+  }
+}
+
+// Renderiza <thead> e <tbody> da tabela principal conforme o modo. Se linhas
+// está vazio, mostra placeholder interno (a mensagem #rel-vazio externa só é
+// usada quando NÃO HÁ dados no período; filtro que cortou pra 0 usa este aqui).
+function _renderTabelaPrincipal(modo, linhas) {
+  const thead = document.getElementById("rel-thead");
+  const tbody = document.getElementById("rel-tbody");
+  if(!thead || !tbody) return;
+
+  if(modo === "saidas") {
+    thead.innerHTML = `<tr>
+      <th>Data</th>
+      <th>Colaboradora</th>
+      <th style="text-align:right">Valor</th>
+      <th>Motivo</th>
+      <th>Detalhe</th>
+    </tr>`;
+    if(linhas.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text2)">Nenhuma saída para o filtro atual.</td></tr>`;
+    } else {
+      tbody.innerHTML = linhas.map(l => `
+        <tr>
+          <td>${_relFmtData(l.data)}</td>
+          <td>${escHTML(l.colaboradora)}</td>
+          <td style="text-align:right;font-weight:600;color:#DC2626">${_relFmtBRL(l.valor)}</td>
+          <td>${escHTML(l.motivoRotulo)}</td>
+          <td>${l.motivoDetalhe ? escHTML(l.motivoDetalhe) : "—"}</td>
+        </tr>
+      `).join("");
+    }
+  } else {
+    thead.innerHTML = `<tr>
+      <th>Data</th>
+      <th>Paciente</th>
+      <th>CPF</th>
+      <th>Médico</th>
+      <th>Recepcionista</th>
+      <th>Categoria</th>
+      <th>Subtipo</th>
+      <th>Forma Pagto</th>
+      <th style="text-align:right">Valor</th>
+    </tr>`;
+    if(linhas.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">Nenhum lançamento para o filtro atual.</td></tr>`;
+    } else {
+      tbody.innerHTML = linhas.map(l => `
+        <tr>
+          <td>${_relFmtData(l.data)}</td>
+          <td>${l.paciente ? escHTML(l.paciente) : "—"}</td>
+          <td>${l.cpf      ? escHTML(l.cpf)      : "—"}</td>
+          <td>${l.medico   ? escHTML(l.medico)   : "—"}</td>
+          <td>${l.recepcionista}</td>
+          <td>${l.categoriaLabel}</td>
+          <td>${l.subtipo  ? escHTML(l.subtipo)  : "—"}</td>
+          <td>${l.formaLabel}</td>
+          <td style="text-align:right;font-weight:600">${_relFmtBRL(l.valor)}</td>
+        </tr>
+      `).join("");
+    }
+  }
 }
 
 async function gerarRelatorio() {
@@ -12868,7 +13035,15 @@ async function gerarRelatorio() {
   // Subtipo de procedimento — só relevante quando cat === "procedimentos"
   const subtipo = document.getElementById("rel-subtipo")?.value || "";
   // Busca por paciente: case-insensitive, substring. Vazia = ignora filtro.
+  // Aplicada a lançamentos E a saídas (ambas têm paciente_nome).
   const pacienteBusca = (document.getElementById("rel-paciente")?.value || "").trim().toLowerCase();
+  // Filtro de motivo (só relevante em modo saídas)
+  const motivo = document.getElementById("rel-motivo")?.value || "";
+  // Modo do relatório: "saidas" quando cat === "saidas"; caso contrário, "lancamentos".
+  // Determina qual tabela/cards/export exibir. Persistido no global _relModoAtual
+  // para o export e o filtro de motivo (que também depende do modo) consultarem.
+  const modo = (cat === "saidas") ? "saidas" : "lancamentos";
+  _relModoAtual = modo;
 
   if(!iniStr || !fimStr) { alert("Preencha data início e data fim."); return; }
   if(iniStr > fimStr)    { alert("Data início precisa ser menor ou igual à data fim."); return; }
@@ -12915,20 +13090,29 @@ async function gerarRelatorio() {
     // Sem filtro de área: gestão, coord, líderes e financeiro veem Recepção + Call Center.
     // (Perfis "recepcionista" e "callcenter" não chegam aqui — VE_RELATORIOS não os inclui.)
 
-    // Filtros da UI
+    // Filtros da UI aplicados a lançamentos.
+    // Nota: cat === "saidas" NÃO filtra por categoria (é um sinalizador de modo,
+    // não uma categoria real); linhas de lançamento continuam sendo processadas
+    // pra preservar _relLancamentosBuscados caso o usuário volte pro modo lanç.
     if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
     if(prof)  docs = docs.filter(l => (l.prescritor || "") === prof);
-    if(cat)   docs = docs.filter(l => _matchCategoria(l, cat));
+    if(cat && cat !== "saidas") docs = docs.filter(l => _matchCategoria(l, cat));
     if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma));
-    // Subtipo de procedimento — só vale se cat === "procedimentos" e subtipo selecionado.
-    // Filtra lançamentos cujo array procedimentos[] contém o tipo escolhido com valor > 0.
     if(cat === "procedimentos" && subtipo) {
       docs = docs.filter(l => Array.isArray(l.procedimentos)
         && l.procedimentos.some(p => p?.tipo === subtipo && (Number(p.valor) || 0) > 0));
     }
-    // Busca de paciente: case-insensitive, substring no campo paciente_nome
     if(pacienteBusca) {
       docs = docs.filter(l => (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
+    }
+
+    // Aplica paciente busca também nas saídas (ambas gravam paciente_nome).
+    // Corrige de quebra um gap antigo: hoje o card #rel-saidas-resultado ignorava
+    // este filtro; passa a respeitá-lo tanto no card quanto na tabela de modo saídas.
+    let docsSaidasFiltrado = docsSaidasIntervalo;
+    if(pacienteBusca) {
+      docsSaidasFiltrado = docsSaidasFiltrado.filter(l =>
+        (l.paciente_nome || "").toLowerCase().includes(pacienteBusca));
     }
 
     // Normaliza pra exibição. O valor da linha é decidido por _calcularValorRelatorio:
@@ -12942,41 +13126,51 @@ async function gerarRelatorio() {
     _relLancamentosBuscados = linhas;
     loading.style.display = "none";
 
-    // Renderiza Saídas ANTES do early-return de lançamentos vazio: intervalo
-    // pode ter 0 lançamentos mas ter saídas registradas (ex: só saída avulsa).
-    _renderRelatorioSaidas(docsSaidasIntervalo, dtIni, dtFim, recep);
+    const vazioEl = document.getElementById("rel-vazio");
+    const wrapSaidasCard = document.getElementById("rel-saidas-resultado");
 
-    if(linhas.length === 0) {
-      vazio.style.display = "";
-      return;
+    if(modo === "saidas") {
+      // Modo SAÍDAS — tabela principal troca pra saídas, filtro Motivo ativo
+      // Normaliza saídas (data + recep já filtrados; paciente também via docsSaidasFiltrado)
+      _relSaidasBrutas = _relNormalizarSaidas(docsSaidasFiltrado, dtIni, dtFim, recep);
+
+      // Aplica filtro de motivo pra tabela + cards
+      const linhasSaidaFilt = motivo
+        ? _relSaidasBrutas.filter(l => l.motivoRotulo === motivo)
+        : _relSaidasBrutas.slice();
+      _relSaidasBuscadas = linhasSaidaFilt;
+
+      // Esconde o card #rel-saidas-resultado (redundante em modo saídas)
+      if(wrapSaidasCard) wrapSaidasCard.style.display = "none";
+
+      // Resumo por motivo (topo — período completo, não afetado pelo filtro)
+      _renderResumoMotivosSaidas(_relSaidasBrutas);
+
+      // Empty state EXTERNO: 0 saídas no período (nada pra filtrar/mostrar)
+      if(_relSaidasBrutas.length === 0) {
+        if(vazioEl) vazioEl.innerHTML = '<div class="empty"><div class="ei">📤</div>Nenhuma saída registrada no período.</div>';
+        vazio.style.display = "";
+        return;
+      }
+      // Se filtro cortou pra 0 mas o período tem saídas: mostra resultado com
+      // resumo visível + placeholder DENTRO da tabela (via _renderTabelaPrincipal).
+      _renderCardsResumo("saidas", null, linhasSaidaFilt);
+      _renderTabelaPrincipal("saidas", linhasSaidaFilt);
+      resultado.style.display = "";
+    } else {
+      // Modo LANÇAMENTOS — comportamento clássico, com card #rel-saidas-resultado
+      // aparecendo embaixo (com seu próprio mini-filtro de motivo).
+      _renderRelatorioSaidas(docsSaidasFiltrado, dtIni, dtFim, recep);
+
+      if(linhas.length === 0) {
+        if(vazioEl) vazioEl.innerHTML = '<div class="empty"><div class="ei">🔍</div>Nenhum lançamento encontrado para os filtros selecionados.</div>';
+        vazio.style.display = "";
+        return;
+      }
+      _renderCardsResumo("lancamentos", linhas, null);
+      _renderTabelaPrincipal("lancamentos", linhas);
+      resultado.style.display = "";
     }
-
-    // Resumo
-    const total = linhas.reduce((s,l) => s + (l.valor || 0), 0);
-    const media = total / linhas.length;
-    document.getElementById("rel-tot-qtd").textContent = linhas.length.toString();
-    document.getElementById("rel-tot-val").textContent = _relFmtBRL(total);
-    document.getElementById("rel-tot-med").textContent = _relFmtBRL(media);
-
-    // Tabela — ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma Pagto | Valor.
-    // Campos vazios (Paciente / CPF / Médico / Subtipo) mostram "—" na tabela.
-    // CPF sem mask de privacidade (é relatório financeiro).
-    const tbody = document.getElementById("rel-tbody");
-    tbody.innerHTML = linhas.map(l => `
-      <tr>
-        <td>${_relFmtData(l.data)}</td>
-        <td>${l.paciente ? escHTML(l.paciente) : "—"}</td>
-        <td>${l.cpf      ? escHTML(l.cpf)      : "—"}</td>
-        <td>${l.medico   ? escHTML(l.medico)   : "—"}</td>
-        <td>${l.recepcionista}</td>
-        <td>${l.categoriaLabel}</td>
-        <td>${l.subtipo  ? escHTML(l.subtipo)  : "—"}</td>
-        <td>${l.formaLabel}</td>
-        <td style="text-align:right;font-weight:600">${_relFmtBRL(l.valor)}</td>
-      </tr>
-    `).join("");
-
-    resultado.style.display = "";
   } catch(e) {
     console.error("[Relatório] erro ao gerar:", e);
     loading.style.display = "none";
@@ -13006,11 +13200,21 @@ function exportarRelatorioExcel() {
   if(typeof XLSX === "undefined") { alert("Biblioteca de exportação não carregou. Recarregue a página."); return; }
   const linhas = _relLancamentosBuscados || [];
   const saidas = _relSaidasBuscadas      || [];
-  if(linhas.length === 0 && saidas.length === 0) { alert("Nenhum dado para exportar."); return; }
+  const emSaidas = (_relModoAtual === "saidas");
+
+  if(emSaidas) {
+    if(saidas.length === 0) { alert("Nenhuma saída para exportar."); return; }
+  } else {
+    if(linhas.length === 0 && saidas.length === 0) { alert("Nenhum dado para exportar."); return; }
+  }
 
   const iniStr = document.getElementById("rel-data-ini").value;
   const fimStr = document.getElementById("rel-data-fim").value;
 
+  // Em modo saídas, as abas Lançamentos + Resumo ficariam sem contexto
+  // (o usuário está olhando saídas); pula direto pra aba Saídas.
+  let wsLanc, wsResumo;
+  if(!emSaidas) {
   // ── Aba 1: "Lançamentos"
   // Ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma de Pagamento | Valor (R$)
   // CPF como texto (preserva zeros à esquerda). Sem dados → célula vazia (não "—").
@@ -13028,7 +13232,7 @@ function exportarRelatorioExcel() {
       Number(l.valor) || 0,
     ])
   ];
-  const wsLanc = XLSX.utils.aoa_to_sheet(dadosLanc);
+  wsLanc = XLSX.utils.aoa_to_sheet(dadosLanc);
   // Coluna C (CPF, índice 2) — força tipo string com formato texto pra preservar zeros à esquerda
   for(let r = 1; r < dadosLanc.length; r++) {
     const refCpf = XLSX.utils.encode_cell({ c:2, r });
@@ -13092,7 +13296,7 @@ function exportarRelatorioExcel() {
   dadosResumo.push(["Por Motivo (Saídas)", "Valor (R$)"]);
   Object.entries(porMotivoSaida).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => dadosResumo.push([k, v]));
 
-  const wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
+  wsResumo = XLSX.utils.aoa_to_sheet(dadosResumo);
   wsResumo["!cols"] = [{ wch:30 },{ wch:18 }];
   // Aplica formato moeda na coluna B em qualquer linha numérica
   for(let r = 0; r < dadosResumo.length; r++) {
@@ -13116,7 +13320,9 @@ function exportarRelatorioExcel() {
     });
   });
 
-  // ── Aba 3: "Saídas"
+  } // fecha `if(!emSaidas)` — abas Lançamentos + Resumo só em modo lançamentos
+
+  // ── Aba: "Saídas" (sempre presente; em modo saídas é a única aba)
   // Ordem: Data | Colaboradora | Valor (R$) | Motivo | Detalhe (Outro)
   // Se motivo_saida for "Outro: <texto>", Motivo="Outro" e Detalhe=<texto>.
   const dadosSaidas = [
@@ -13144,13 +13350,17 @@ function exportarRelatorioExcel() {
   ];
   _relAplicarEstiloCabecalho(wsSaidas, 5);
 
-  // ── Monta workbook
+  // ── Monta workbook — abas Lançamentos + Resumo só entram em modo lançamentos;
+  // aba Saídas entra sempre. Em modo saídas, é a única aba do arquivo.
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, wsLanc,   "Lançamentos");
-  XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+  if(!emSaidas) {
+    XLSX.utils.book_append_sheet(wb, wsLanc,   "Lançamentos");
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+  }
   XLSX.utils.book_append_sheet(wb, wsSaidas, "Saídas");
 
-  const nomeArq = `relatorio_lancamentos_${_relFmtDataArquivo(iniStr)}_a_${_relFmtDataArquivo(fimStr)}.xlsx`;
+  const nomePrefixo = emSaidas ? "relatorio_saidas" : "relatorio_lancamentos";
+  const nomeArq = `${nomePrefixo}_${_relFmtDataArquivo(iniStr)}_a_${_relFmtDataArquivo(fimStr)}.xlsx`;
   XLSX.writeFile(wb, nomeArq);
 }
 
