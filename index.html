@@ -238,6 +238,9 @@
        Absoluto pra não empurrar layout; pointer-events:none pra não interferir
        em clicks do card ou do dropdown de status. */
     .orc-selo-origem { position:absolute; top:8px; right:8px; background:#F3F4F6; color:#6B7280; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; border:1px solid var(--border); text-transform:uppercase; letter-spacing:.3px; line-height:1.4; pointer-events:none; }
+    /* D5 — Tag de "encalhado": cards em STATUS_KANBAN parados >30 dias.
+       Cor de atenção suave (âmbar), mesma paleta do banner .kb-mini-aviso. */
+    .orc-encalhado-tag { display:block; margin-top:6px; padding:5px 8px; background:#FEF3C7; color:#78350F; border:1px solid #FCD34D; border-radius:6px; font-size:11px; font-weight:600; line-height:1.3; }
     .orc-card .orc-pac { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
     .orc-card .orc-tot { font-size:15px; font-weight:700; color:var(--primary); margin-bottom:4px; }
     .orc-card .orc-meta-info { font-size:11px; color:var(--text2); line-height:1.4; }
@@ -11062,6 +11065,37 @@ function _seloOrigemCard(doc) {
   return `<span class="orc-selo-origem" title="Card originado em ${label} (mês anterior)">${label}</span>`;
 }
 
+// Feature #3 — Etapa 2 (D5) — Detecta card "encalhado": em STATUS_KANBAN e sem
+// mudança de status há mais de `thresholdDias` (default 30). Retorna o número
+// de dias completos parado (inteiro >= threshold+1), ou null se não aplica.
+// Data de referência: atualizado_em || criado_em (fallback pra docs antigos).
+// Retorna null defensivamente se ambos ausentes/inválidos (não gera falso alerta).
+function _ehCardEncalhado(doc, thresholdDias) {
+  if(!doc || !STATUS_KANBAN.includes(doc.status)) return null;
+  const limite = (typeof thresholdDias === "number" && thresholdDias > 0) ? thresholdDias : 30;
+  const ts = doc.atualizado_em || doc.criado_em;
+  if(!ts) return null;
+  let millis = null;
+  if(typeof ts.toMillis === "function") {
+    try { millis = ts.toMillis(); } catch(_) { return null; }
+  } else if(ts instanceof Date) {
+    millis = ts.getTime();
+  } else if(typeof ts === "number") {
+    millis = ts;
+  }
+  if(millis == null || !isFinite(millis)) return null;
+  const dias = Math.floor((Date.now() - millis) / 86400000);
+  return dias > limite ? dias : null;
+}
+
+// Renderiza a tag "⚠️ N dias parado" quando o card está encalhado. Vazio caso
+// contrário. Só usa `_ehCardEncalhado`, que já filtra por STATUS_KANBAN.
+function _alertaEncalhadoHTML(doc) {
+  const dias = _ehCardEncalhado(doc);
+  if(!dias) return "";
+  return `<div class="orc-encalhado-tag" title="Sem mudança de status há ${dias} dias">⚠️ ${dias} dias parado</div>`;
+}
+
 function btnEditarHTML(l) {
   const ok = podeEditarCard(l);
   if(ok) {
@@ -11135,6 +11169,7 @@ function cardOrcamentoHTML(o) {
         ${medico ? `🩺 ${escHTML(medico)}<br>` : ""}
         🕒 ${dataCurta} · ${escHTML(quemFez)}
       </div>
+      ${_alertaEncalhadoHTML(o)}
       <div class="orc-card-acao" onclick="event.stopPropagation()">
         <select onchange="mudarStatusOrcamento('${o.id}', this.value)">${opts}</select>
         ${btnEditarHTML(o)}
