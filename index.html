@@ -12447,6 +12447,13 @@ async function salvarPagamentoModal() {
       // "Pagos do dia" consumir pago_em || data_hora. Docs pagos ANTES desta etapa
       // não têm pago_em — o fallback pra data_hora entra na Etapa 4.
       pago_em: ts,
+      // Feature #3 Etapa 6 (D3) — Reescreve mes_ano pro mês do PAGAMENTO. Um card
+      // criado em junho, pago em julho, passa a contar em julho (queries mensais,
+      // faturamento, ranking, premiação). O mês de origem NÃO perde nada — cards
+      // pendentes nunca contam pra faturamento; só os pagos entram. Cards já
+      // pagos ANTES desta etapa continuam com o mes_ano original (retrocompat).
+      // data_hora e criado_em permanecem inalterados (data do atendimento).
+      mes_ano: getMesAno(),
       // Auditoria mínima
       editado_em:        ts,
       editado_por:       usuario.nome || "",
@@ -12479,7 +12486,11 @@ async function salvarPagamentoModal() {
         valor_percentual: saidaPct,
         valor_reais:      Number(saidaValor) || 0,
         motivo:           saidaMotivo || "",
-        mes_ano:   d.mes_ano || getMesAno(),
+        // Feature #3 Etapa 6 (D3) — Saída-irmã fica no MESMO mês do card principal
+        // recém-atualizado (mês do pagamento). Sem fallback pro d.mes_ano original
+        // (que era o mês da criação do card), senão o pagamento ficaria com o
+        // caixa em julho e o desconto em junho — dessincronizado.
+        mes_ano:   getMesAno(),
         data_hora: ts,
         criado_em: ts,
         id_par: idPar,
