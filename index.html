@@ -2679,12 +2679,20 @@ const STATUS_KANBAN = ["acompanhar","link_enviado","lancar"];
 // Formas de pagamento detalhadas (value lowercase sem acento; label visível com acento)
 // REGRA DE NEGÓCIO (Abr/2026): Boleto vai para CAIXA. Campo boleto sempre 0
 // (mantido só para compatibilidade com dados históricos importados).
+//
+// "app_cartoes_todos" (Etapa 1 da feature App TODOS) é um SINALIZADOR DE UI —
+// não deve ser gravado como forma_pagamento_N. Etapas 3-5 transformam antes de
+// salvar: forma_pagamento_N passa a ser o sub-tipo real (pix/debito/credito),
+// e via_app_N + app_codigo_N registram a origem. Consumidores atuais (mapear,
+// match, ehBoleto, inferirLabel) nunca precisam reconhecer este value porque
+// ele nunca chega no banco depois das etapas seguintes.
 const FORMAS_PAGAMENTO = [
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "debito",   label: "Débito"   },
-  { value: "pix",      label: "PIX"      },
-  { value: "boleto",   label: "Boleto"   },
-  { value: "credito",  label: "Crédito"  },
+  { value: "dinheiro",          label: "Dinheiro"              },
+  { value: "debito",            label: "Débito"                },
+  { value: "pix",               label: "PIX"                   },
+  { value: "boleto",            label: "Boleto"                },
+  { value: "credito",           label: "Crédito"               },
+  { value: "app_cartoes_todos", label: "App Cartão de TODOS"   },
 ];
 
 // Dado o forma_pagamento (lowercase novo OU capitalizado legacy), retorna:
