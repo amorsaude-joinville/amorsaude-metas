@@ -1810,13 +1810,24 @@
           </div>
           <div class="fg" style="margin:0">
             <label>💳 Forma de pagamento</label>
-            <select id="rel-forma">
+            <select id="rel-forma" onchange="_onMudarFormaRelatorio()">
               <option value="">Todas</option>
               <option value="dinheiro">Dinheiro</option>
               <option value="debito">Débito</option>
               <option value="pix">PIX</option>
               <option value="credito">Crédito</option>
               <option value="boleto">Boleto</option>
+              <option value="app">App Cartão de TODOS</option>
+            </select>
+          </div>
+          <!-- Feature #3 Etapa 7 — Sub-filtro do app; só aparece quando forma="app". -->
+          <div class="fg" id="rel-forma-app-wrap" style="margin:0;display:none">
+            <label>📱 Tipo (via app)</label>
+            <select id="rel-forma-app-tipo">
+              <option value="">Todos</option>
+              <option value="pix">PIX</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
             </select>
           </div>
           <div class="fg" style="margin:0">
@@ -13058,6 +13069,10 @@ function limparFiltrosRelatorio() {
   const selProf = document.getElementById("rel-profissional");
   if(selProf) selProf.value = "";
   document.getElementById("rel-forma").value     = "";
+  // Feature #3 Etapa 7 — reseta o sub-filtro do App e re-aplica visibilidade (esconde o wrap)
+  const selFormaApp = document.getElementById("rel-forma-app-tipo");
+  if(selFormaApp) selFormaApp.value = "";
+  _onMudarFormaRelatorio();
   document.getElementById("rel-categoria").value = "";
   const inpPac = document.getElementById("rel-paciente");
   if(inpPac) inpPac.value = "";
@@ -13085,6 +13100,19 @@ function limparFiltrosRelatorio() {
 //  - Modo Saídas (cat === "saidas"): esconde Profissional e Forma de pagamento
 //    (não se aplicam a saída), mostra o filtro Motivo. Zera os filtros ocultos
 //    pra evitar "filtragem invisível" quando o usuário voltar pra modo lançamentos.
+// Feature #3 Etapa 7 — Mostra/esconde o sub-filtro "Tipo (via app)" conforme
+// a "Forma de pagamento" selecionada. Espelha o padrão de _onMudarCategoriaRelatorio.
+// Só aparece quando forma === "app". Ao esconder, limpa o valor pra não filtrar
+// invisivelmente na próxima geração do relatório.
+function _onMudarFormaRelatorio() {
+  const forma = document.getElementById("rel-forma")?.value || "";
+  const wrap  = document.getElementById("rel-forma-app-wrap");
+  const sub   = document.getElementById("rel-forma-app-tipo");
+  const ehApp = (forma === "app");
+  if(wrap) wrap.style.display = ehApp ? "" : "none";
+  if(!ehApp && sub) sub.value = "";
+}
+
 function _onMudarCategoriaRelatorio() {
   const cat = document.getElementById("rel-categoria")?.value || "";
   const isSaidas = (cat === "saidas");
@@ -13097,22 +13125,31 @@ function _onMudarCategoriaRelatorio() {
   if(!mostraSub && selSub) selSub.value = "";
 
   // Modo Saídas: esconde filtros de lançamento, mostra filtro de motivo
-  const wrapProf   = document.getElementById("rel-profissional")?.closest(".fg");
-  const wrapForma  = document.getElementById("rel-forma")?.closest(".fg");
-  const wrapMotivo = document.getElementById("rel-motivo-wrap");
-  if(wrapProf)   wrapProf.style.display   = isSaidas ? "none" : "";
-  if(wrapForma)  wrapForma.style.display  = isSaidas ? "none" : "";
-  if(wrapMotivo) wrapMotivo.style.display = isSaidas ? "" : "none";
+  const wrapProf    = document.getElementById("rel-profissional")?.closest(".fg");
+  const wrapForma   = document.getElementById("rel-forma")?.closest(".fg");
+  const wrapFormaApp = document.getElementById("rel-forma-app-wrap"); // Feature #3 Etapa 7
+  const wrapMotivo  = document.getElementById("rel-motivo-wrap");
+  if(wrapProf)     wrapProf.style.display     = isSaidas ? "none" : "";
+  if(wrapForma)    wrapForma.style.display    = isSaidas ? "none" : "";
+  if(wrapMotivo)   wrapMotivo.style.display   = isSaidas ? "" : "none";
+  // wrapFormaApp: em modo saídas SEMPRE escondido; em modo lançamentos, deixa
+  // _onMudarFormaRelatorio() decidir (só aparece se forma==="app").
+  if(isSaidas && wrapFormaApp) wrapFormaApp.style.display = "none";
 
   // Zera os filtros ocultos pra não filtrar invisivelmente na próxima geração
   if(isSaidas) {
     const selProf = document.getElementById("rel-profissional");
     const selForma = document.getElementById("rel-forma");
+    const selFormaApp = document.getElementById("rel-forma-app-tipo"); // Feature #3 Etapa 7
     if(selProf) selProf.value = "";
     if(selForma) selForma.value = "";
+    if(selFormaApp) selFormaApp.value = "";
   } else {
     const selMotivo = document.getElementById("rel-motivo");
     if(selMotivo) selMotivo.value = "";
+    // Feature #3 Etapa 7 — ao voltar pro modo lançamentos, re-avalia se o wrap
+    // do sub-filtro do App deve aparecer (rel-forma pode ter sido setado antes)
+    _onMudarFormaRelatorio();
   }
 }
 
@@ -13258,8 +13295,23 @@ function _matchCategoria(l, cat) {
 // Casa contra forma_pagamento_1/_2 do schema novo (já lowercase sem acento) e contra
 // forma_pagamento string do legacy, normalizando via infoFormaPagamento (que faz
 // lowercase + remove acento, então "Débito"→"debito", "PIX"→"pix", etc.).
-function _matchFormaPagamento(l, forma) {
+//
+// Feature #3 Etapa 7 — quando forma === "app", filtra por via_app_N === true
+// (qualquer forma via App Cartão de TODOS). Sub-tipo (appTipo) restringe pra
+// via app + sub-tipo específico (pix/debito/credito). Um doc com 2 formas passa
+// se QUALQUER uma delas é via app com o sub-tipo casando.
+// Filtros clássicos (dinheiro/debito/pix/credito/boleto) continuam por
+// forma_pagamento_N — pegam pagamentos normais E via app juntos, como já
+// pegavam desde a Etapa 3 (via app grava forma_pagamento_N = sub-tipo real).
+function _matchFormaPagamento(l, forma, appTipo) {
   if(!forma) return true;
+  if(forma === "app") {
+    const ehApp1 = !!l.via_app_1;
+    const ehApp2 = !!l.via_app_2;
+    if(!appTipo) return ehApp1 || ehApp2;
+    return (ehApp1 && l.forma_pagamento_1 === appTipo)
+        || (ehApp2 && l.forma_pagamento_2 === appTipo);
+  }
   if(l.forma_pagamento_1 === forma) return true;
   if(l.forma_pagamento_2 === forma) return true;
   if(l.forma_pagamento) {
@@ -13555,6 +13607,8 @@ async function gerarRelatorio() {
   const recep  = document.getElementById("rel-recep").value || "";
   const prof   = document.getElementById("rel-profissional")?.value || "";
   const forma  = document.getElementById("rel-forma").value || "";
+  // Feature #3 Etapa 7 — sub-tipo do "App Cartão de TODOS" (só usado quando forma==="app")
+  const formaApp = document.getElementById("rel-forma-app-tipo")?.value || "";
   const cat    = document.getElementById("rel-categoria").value || "";
   // Subtipo de procedimento — só relevante quando cat === "procedimentos"
   const subtipo = document.getElementById("rel-subtipo")?.value || "";
@@ -13621,7 +13675,7 @@ async function gerarRelatorio() {
     if(recep) docs = docs.filter(l => (l.usuario_nome || "") === recep);
     if(prof)  docs = docs.filter(l => (l.prescritor || "") === prof);
     if(cat && cat !== "saidas") docs = docs.filter(l => _matchCategoria(l, cat));
-    if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma));
+    if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma, formaApp));
     if(cat === "procedimentos" && subtipo) {
       docs = docs.filter(l => Array.isArray(l.procedimentos)
         && l.procedimentos.some(p => p?.tipo === subtipo && (Number(p.valor) || 0) > 0));
