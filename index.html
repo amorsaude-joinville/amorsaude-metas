@@ -1568,11 +1568,33 @@
 
               <div class="fg full">
                 <label>Forma de Pagamento *</label>
-                <select id="e-fp1" style="max-width:280px">
+                <select id="e-fp1" style="max-width:280px" onchange="onFormaPagamentoChange('e-fp1')">
                   <option value="" disabled selected>Selecione...</option>
                 </select>
                 <div style="font-size:11px;color:var(--text2);margin-top:4px" id="e-fp1-hint">
                   ⓘ Valor desta forma = Total inteiro do orçamento
+                </div>
+              </div>
+              <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 1ª forma.
+                   Escondido; mostrado quando e-fp1 === "app_cartoes_todos". -->
+              <div class="fg full" id="e-fp1-app-wrap" style="display:none">
+                <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+                  <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div>
+                      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+                      <select id="e-fp1-app-subtipo">
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="pix">PIX</option>
+                        <option value="debito">Débito</option>
+                        <option value="credito">Crédito</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+                      <input type="text" id="e-fp1-app-codigo" placeholder="ID do pagamento" />
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="fg" id="e-fp1-val-wrap" style="display:none">
@@ -1587,11 +1609,32 @@
                 <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
                   <div class="fg">
                     <label>2ª Forma de Pagamento *</label>
-                    <select id="e-fp2"><option value="" disabled selected>Selecione...</option></select>
+                    <select id="e-fp2" onchange="onFormaPagamentoChange('e-fp2')"><option value="" disabled selected>Selecione...</option></select>
                   </div>
                   <div class="fg">
                     <label>Valor 2ª forma (R$) *</label>
                     <input type="text" id="e-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentos()" />
+                  </div>
+                  <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 2ª forma. -->
+                  <div class="fg full" id="e-fp2-app-wrap" style="display:none">
+                    <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+                      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                        <div>
+                          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+                          <select id="e-fp2-app-subtipo">
+                            <option value="" disabled selected>Selecione...</option>
+                            <option value="pix">PIX</option>
+                            <option value="debito">Débito</option>
+                            <option value="credito">Crédito</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+                          <input type="text" id="e-fp2-app-codigo" placeholder="ID do pagamento" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
                     <div id="e-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
@@ -2091,19 +2134,61 @@
         <div class="fgrid">
           <div class="fg">
             <label>Forma de Pagamento *</label>
-            <select id="ed-fp1"><option value="" disabled selected>Selecione...</option></select>
+            <select id="ed-fp1" onchange="onFormaPagamentoChange('ed-fp1')"><option value="" disabled selected>Selecione...</option></select>
           </div>
           <div class="fg">
             <label>Valor 1ª (R$) *</label>
             <input type="text" id="ed-fp1-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosEdicao()" />
           </div>
+          <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 1ª forma no modal de edição. -->
+          <div class="fg full" id="ed-fp1-app-wrap" style="display:none">
+            <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+                  <select id="ed-fp1-app-subtipo">
+                    <option value="" disabled selected>Selecione...</option>
+                    <option value="pix">PIX</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+                  <input type="text" id="ed-fp1-app-codigo" placeholder="ID do pagamento" />
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="fg">
             <label>2ª Forma de Pagamento (opcional)</label>
-            <select id="ed-fp2"><option value="">— nenhuma —</option></select>
+            <select id="ed-fp2" onchange="onFormaPagamentoChange('ed-fp2')"><option value="">— nenhuma —</option></select>
           </div>
           <div class="fg">
             <label>Valor 2ª (R$)</label>
             <input type="text" id="ed-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosEdicao()" />
+          </div>
+          <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 2ª forma no modal de edição. -->
+          <div class="fg full" id="ed-fp2-app-wrap" style="display:none">
+            <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+                  <select id="ed-fp2-app-subtipo">
+                    <option value="" disabled selected>Selecione...</option>
+                    <option value="pix">PIX</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+                  <input type="text" id="ed-fp2-app-codigo" placeholder="ID do pagamento" />
+                </div>
+              </div>
+            </div>
           </div>
           <div class="fg full">
             <div id="ed-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
@@ -2191,11 +2276,33 @@
     <!-- Forma de pagamento (1ª, sempre obrigatória) -->
     <div class="fg full">
       <label>Forma de Pagamento *</label>
-      <select id="pag-fp1" style="max-width:280px">
+      <select id="pag-fp1" style="max-width:280px" onchange="onFormaPagamentoChange('pag-fp1')">
         <option value="" disabled selected>Selecione...</option>
       </select>
       <div style="font-size:11px;color:var(--text2);margin-top:4px" id="pag-fp1-hint">
         ⓘ Valor desta forma = Total do orçamento (R$ <span id="pag-total-hint">0,00</span>)
+      </div>
+    </div>
+
+    <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 1ª forma no modal do kanban. -->
+    <div class="fg full" id="pag-fp1-app-wrap" style="display:none">
+      <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+            <select id="pag-fp1-app-subtipo">
+              <option value="" disabled selected>Selecione...</option>
+              <option value="pix">PIX</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+            <input type="text" id="pag-fp1-app-codigo" placeholder="ID do pagamento" />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2216,11 +2323,32 @@
       <div class="fgrid" style="background:var(--bg2);padding:12px;border-radius:var(--r2)">
         <div class="fg">
           <label>2ª Forma de Pagamento *</label>
-          <select id="pag-fp2"><option value="" disabled selected>Selecione...</option></select>
+          <select id="pag-fp2" onchange="onFormaPagamentoChange('pag-fp2')"><option value="" disabled selected>Selecione...</option></select>
         </div>
         <div class="fg">
           <label>Valor 2ª forma (R$) *</label>
           <input type="text" id="pag-fp2-val" placeholder="0,00" oninput="mascaraValor(this);validarSomaPagamentosModal()" />
+        </div>
+        <!-- Etapa 2 — bloco expansor "App Cartão de TODOS" da 2ª forma no modal do kanban. -->
+        <div class="fg full" id="pag-fp2-app-wrap" style="display:none">
+          <div style="background:#F3F4F6;border:1px solid var(--border);border-radius:var(--r2);padding:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">📱 Detalhes do App Cartão de TODOS</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Sub-tipo *</label>
+                <select id="pag-fp2-app-subtipo">
+                  <option value="" disabled selected>Selecione...</option>
+                  <option value="pix">PIX</option>
+                  <option value="debito">Débito</option>
+                  <option value="credito">Crédito</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Código do app *</label>
+                <input type="text" id="pag-fp2-app-codigo" placeholder="ID do pagamento" />
+              </div>
+            </div>
+          </div>
         </div>
         <div class="fg full" style="display:flex;align-items:center;justify-content:space-between;margin:0">
           <div id="pag-fp-aviso" style="font-size:12px;color:var(--text2)"></div>
@@ -11098,6 +11226,25 @@ function atualizarContadorObs(textareaEl, contadorId) {
   if(contador) {
     contador.textContent = len;
     contador.style.color = len > 240 ? "#B91C1C" : "var(--text2)";
+  }
+}
+
+// Pagamento via App Cartão de TODOS — Etapa 2: mostra/esconde o bloco expansor
+// (sub-tipo + código) ao lado de um select de forma de pagamento. Handler único
+// compartilhado por todos os 6 selects (e-fp1, e-fp2, pag-fp1, pag-fp2, ed-fp1,
+// ed-fp2) — cada select passa o próprio prefix. Padrão espelha onMotivoRecusaChange:
+// esconde e LIMPA os campos quando o usuário sai da opção "app_cartoes_todos"
+// (evita dados órfãos escondidos que poderiam ser enviados por engano na Etapa 3+).
+function onFormaPagamentoChange(prefix) {
+  const forma = document.getElementById(prefix)?.value || "";
+  const wrap  = document.getElementById(prefix + "-app-wrap");
+  const sub   = document.getElementById(prefix + "-app-subtipo");
+  const cod   = document.getElementById(prefix + "-app-codigo");
+  const ehApp = (forma === "app_cartoes_todos");
+  if(wrap) wrap.style.display = ehApp ? "" : "none";
+  if(!ehApp) {
+    if(sub) sub.value = "";
+    if(cod) cod.value = "";
   }
 }
 
