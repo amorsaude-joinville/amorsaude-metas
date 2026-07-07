@@ -2853,11 +2853,23 @@ function inferirProdutoLabel(l) {
 }
 
 // Forma de pagamento "exibida" — coluna Pagamento da tabela.
-function inferirPagamentoLabel(l) {
+// Feature #3 Etapa 6 — quando via_app_N === true, sufixa a forma com
+// "(via app · CÓDIGO)" para tornar visível que foi pagamento via App Cartão
+// de TODOS (necessário pra conciliação bancária com o extrato do app).
+// - opts.semSufixo = true → não sufixa (usado pra chave de agrupamento no
+//   Resumo do Excel; senão cada código viraria bucket próprio no "Por Forma
+//   de Pagamento").
+function inferirPagamentoLabel(l, opts) {
+  const semSufixo = !!(opts && opts.semSufixo);
   if(ehDocNovoSchema(l)) {
-    const a = infoFormaPagamento(l.forma_pagamento_1).label;
+    const sufixar = (label, viaApp, codigo) => {
+      if(semSufixo || !viaApp) return label;
+      const cod = (codigo || "").toString().trim();
+      return cod ? `${label} (via app · ${cod})` : `${label} (via app)`;
+    };
+    const a = sufixar(infoFormaPagamento(l.forma_pagamento_1).label, l.via_app_1, l.app_codigo_1);
     if(l.forma_pagamento_2) {
-      const b = infoFormaPagamento(l.forma_pagamento_2).label;
+      const b = sufixar(infoFormaPagamento(l.forma_pagamento_2).label, l.via_app_2, l.app_codigo_2);
       return `${a} + ${b}`;
     }
     return a;
@@ -13119,9 +13131,16 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
   let categoriaLabel;
   try { categoriaLabel = inferirProdutoLabel(l); } catch(e) { categoriaLabel = l.produto || "—"; }
 
-  // Forma de pagamento (label amigável)
-  let formaLabel;
+  // Forma de pagamento (label amigável). Feature #3 Etapa 6 — dois labels:
+  //   formaLabel: com sufixo "(via app · CÓDIGO)" quando aplicável — usado na
+  //     tabela HTML do relatório e na aba "Lançamentos" do Excel (visibilidade
+  //     total pro operador conciliar com o extrato do app).
+  //   formaChave: sem sufixo — usado na agregação "Por Forma de Pagamento"
+  //     do Excel Resumo (senão cada código de app viraria bucket próprio,
+  //     fragmentando o total do PIX/Débito/Crédito).
+  let formaLabel, formaChave;
   try { formaLabel = inferirPagamentoLabel(l); } catch(e) { formaLabel = l.forma_pagamento || "—"; }
+  try { formaChave = inferirPagamentoLabel(l, { semSufixo: true }); } catch(e) { formaChave = formaLabel; }
 
   // Médico solicitante — campo principal é `prescritor`. Aceita fallbacks
   // legacy: `medico` / `medico_solicitante` (caso algum doc antigo use).
@@ -13151,6 +13170,7 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
     categoriaLabel: categoriaLabel || "—",
     subtipo:        subtipo || "",
     formaLabel:     formaLabel || "—",
+    formaChave:     formaChave || formaLabel || "—",  // Feature #3 Etapa 6 — chave sem sufixo pra agregação do Resumo
     valor:          _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma),
     _raw:           l,
   };
@@ -13771,8 +13791,12 @@ function exportarRelatorioExcel() {
   const porCat = {};
   linhas.forEach(l => { porCat[l.categoriaLabel] = (porCat[l.categoriaLabel] || 0) + (l.valor || 0); });
   // Totais por forma de pagamento (label)
+  // Feature #3 Etapa 6 — usa formaChave (SEM sufixo "via app · CÓDIGO") pra
+  // agrupamento. Assim "PIX normal" + "PIX via app" caem no mesmo bucket "PIX",
+  // preservando a totalização por forma de pagamento no Resumo. A tabela de
+  // detalhe (aba "Lançamentos") continua usando formaLabel com sufixo.
   const porFp = {};
-  linhas.forEach(l => { porFp[l.formaLabel] = (porFp[l.formaLabel] || 0) + (l.valor || 0); });
+  linhas.forEach(l => { porFp[l.formaChave] = (porFp[l.formaChave] || 0) + (l.valor || 0); });
   // Totais por motivo de saída (Saídas) — sempre do PERÍODO COMPLETO (não afetado
   // pelo filtro de motivo aplicado à aba "Saídas"). Espelha o resumo da UI.
   // Agrupa "Outro: <texto>" tudo junto em "Outro" via l.motivoRotulo já parseado.
