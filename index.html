@@ -5111,6 +5111,10 @@ function removerSegundaForma() {
   document.getElementById("e-fp2").value = "";
   document.getElementById("e-fp2-val").value = "";
   document.getElementById("e-fp1-val").value = "";
+  // Feature #3 Etapa 3 — limpa bloco "App Cartão de TODOS" da 2ª forma (o wrap
+  // externo já sumiu, mas os campos internos ainda ficam preenchidos se o
+  // usuário volta a adicionar a 2ª forma depois).
+  onFormaPagamentoChange("e-fp2");
   const hint = document.getElementById("e-fp1-hint");
   if(hint) hint.style.display = "";
   validarSomaPagamentos();
@@ -5170,6 +5174,9 @@ function resetFormEntrada() {
   document.getElementById("e-proc-lista").innerHTML = "";
   set("e-total","0,00");
   set("e-fp1",""); set("e-fp1-val","");
+  // Feature #3 Etapa 3 — esconde bloco expansor "App Cartão de TODOS" e limpa
+  // sub-tipo/código da 1ª forma (a 2ª é limpa por removerSegundaForma abaixo).
+  onFormaPagamentoChange("e-fp1");
   removerSegundaForma();
   set("busca-pres","");
   preencherPres();
@@ -5231,6 +5238,16 @@ async function salvarEntrada() {
   const fp1val  = tem2 ? parseBRL(document.getElementById("e-fp1-val").value) : 0;
   const fp2val  = tem2 ? parseBRL(document.getElementById("e-fp2-val").value) : 0;
 
+  // Pagamento via App Cartão de TODOS (feature #3 etapa 3) — se o select da
+  // forma vier com o gatilho "app_cartoes_todos", lê sub-tipo (pix/debito/credito)
+  // e código do bloco expansor da UI (Etapa 2). Só é gravado se status==="pago".
+  const ehApp1 = (fp1 === "app_cartoes_todos");
+  const ehApp2 = tem2 && (fp2 === "app_cartoes_todos");
+  const app1Subtipo = ehApp1 ? (document.getElementById("e-fp1-app-subtipo")?.value || "") : "";
+  const app1Codigo  = ehApp1 ? (document.getElementById("e-fp1-app-codigo")?.value  || "").trim() : "";
+  const app2Subtipo = ehApp2 ? (document.getElementById("e-fp2-app-subtipo")?.value || "") : "";
+  const app2Codigo  = ehApp2 ? (document.getElementById("e-fp2-app-codigo")?.value  || "").trim() : "";
+
   // Status
   const status = document.querySelector('input[name="e-status"]:checked')?.value || "pago";
 
@@ -5260,9 +5277,31 @@ async function salvarEntrada() {
     if(!FORMAS_PAGAMENTO.some(f => f.value === fp1)) {
       toast("Forma de pagamento inválida — selecione uma da lista.","err"); return;
     }
+
+    // Feature #3 Etapa 3 — validação do gatilho "App Cartão de TODOS":
+    //  (a) no máximo uma das formas pode ser via app;
+    //  (b) se via app, sub-tipo (pix/debito/credito) e código são obrigatórios.
+    // Ordem: check ambas-app ANTES dos outros pra dar feedback certo (não pedir
+    // valor 2ª forma se o usuário nem devia ter marcado a 2ª como app).
+    if(ehApp1 && ehApp2) {
+      toast("Só uma das formas pode ser via app Cartão de TODOS.","err"); return;
+    }
+    if(ehApp1) {
+      if(!app1Subtipo) { toast("Selecione o sub-tipo (PIX/Débito/Crédito) do app na 1ª forma.","err"); return; }
+      if(!app1Codigo)  { toast("Informe o código do app na 1ª forma.","err"); return; }
+    }
+    if(ehApp2) {
+      if(!app2Subtipo) { toast("Selecione o sub-tipo (PIX/Débito/Crédito) do app na 2ª forma.","err"); return; }
+      if(!app2Codigo)  { toast("Informe o código do app na 2ª forma.","err"); return; }
+    }
+
     if(!tem2) {
       valor1Final = total;
-      fp1Final   = fp1;
+      // Feature #3 Etapa 3 — se app, grava o sub-tipo real; senão, o valor cru
+      // do select. mapearFormaPagamento e todo o cálculo do caixa continuam
+      // funcionando SEM MUDANÇA porque "pix"/"debito"/"credito" já são valores
+      // conhecidos por eles.
+      fp1Final   = ehApp1 ? app1Subtipo : fp1;
     } else {
       if(!fp2)        { toast("Selecione a 2ª forma de pagamento.","err"); return; }
       if(fp1val <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
@@ -5274,8 +5313,8 @@ async function salvarEntrada() {
       }
       valor1Final = fp1val;
       valor2Final = fp2val;
-      fp1Final    = fp1;
-      fp2Final    = fp2;
+      fp1Final    = ehApp1 ? app1Subtipo : fp1;
+      fp2Final    = ehApp2 ? app2Subtipo : fp2;
     }
   }
   // Se status ≠ "pago": fp1Final="", valor1Final=0, fp2Final="", valor2Final=0 (já inicializados)
@@ -5367,6 +5406,14 @@ async function salvarEntrada() {
     data_hora: firebase.firestore.FieldValue.serverTimestamp(),
     criado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
+
+  // Feature #3 Etapa 3 — Marcadores "via app Cartão de TODOS". Só grava quando
+  // efetivamente pago (status="pago"), senão os campos ficam AUSENTES no doc
+  // (schema limpo — nenhum consumidor precisa lidar com "false" ou "" órfãos).
+  // forma_pagamento_N já contém o sub-tipo real (pix/debito/credito) via
+  // transformação acima, então mapearFormaPagamento soma no caixa normalmente.
+  if(status === "pago" && ehApp1) { doc.via_app_1 = true; doc.app_codigo_1 = app1Codigo; }
+  if(status === "pago" && ehApp2) { doc.via_app_2 = true; doc.app_codigo_2 = app2Codigo; }
 
   // D4: Pago + saída embutida → cria 2 docs com id_par. Saída materializada agora.
   // D5: Status≠Pago + saída embutida → guarda saida_pendente no próprio doc.
