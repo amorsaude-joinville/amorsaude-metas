@@ -11825,13 +11825,47 @@ async function abrirModalEdicao(docId) {
   const ehPago = (doc.status || "") === "pago";
   if(blocoPag) blocoPag.style.display = ehPago ? "" : "none";
   if(ehPago) {
-    set("ed-fp1",     doc.forma_pagamento_1 || "");
+    // Feature #3 Etapa 5 (PARTE B — pré-carregamento) — quando o doc foi pago
+    // via App Cartão de TODOS (via_app_N === true), o select da forma vem com
+    // o GATILHO "app_cartoes_todos" (em vez do sub-tipo real) e os campos
+    // internos do bloco expansor são preenchidos com sub-tipo (= forma_pagamento_N
+    // real) + código. Isso é CRÍTICO pra que o próximo save mantenha os
+    // marcadores via_app/app_codigo — senão o helper resolveria ehApp=false
+    // e os campos seriam DELETADOS silenciosamente.
+    //
+    // Ordem importa: primeiro set() no select, DEPOIS onFormaPagamentoChange()
+    // pra expandir o wrap (que não limpa campos quando forma === app_cartoes_todos),
+    // AI SIM set() nos campos internos. set() atribuição direta em .value NÃO
+    // dispara onchange, por isso o handler é chamado manualmente.
+    if(doc.via_app_1) {
+      set("ed-fp1", "app_cartoes_todos");
+      onFormaPagamentoChange("ed-fp1");
+      set("ed-fp1-app-subtipo", doc.forma_pagamento_1 || "");
+      set("ed-fp1-app-codigo",  doc.app_codigo_1      || "");
+    } else {
+      set("ed-fp1", doc.forma_pagamento_1 || "");
+      // Chamado pra ESCONDER o wrap (e limpar campos internos) caso venha
+      // resíduo de outro doc editado antes na mesma sessão.
+      onFormaPagamentoChange("ed-fp1");
+    }
     set("ed-fp1-val", fmtNum(doc.valor_1));
-    set("ed-fp2",     doc.forma_pagamento_2 || "");
+
+    if(doc.via_app_2) {
+      set("ed-fp2", "app_cartoes_todos");
+      onFormaPagamentoChange("ed-fp2");
+      set("ed-fp2-app-subtipo", doc.forma_pagamento_2 || "");
+      set("ed-fp2-app-codigo",  doc.app_codigo_2      || "");
+    } else {
+      set("ed-fp2", doc.forma_pagamento_2 || "");
+      onFormaPagamentoChange("ed-fp2");
+    }
     set("ed-fp2-val", fmtNum(doc.valor_2));
   } else {
     set("ed-fp1",""); set("ed-fp1-val","");
     set("ed-fp2",""); set("ed-fp2-val","");
+    // Garante que os blocos app estão escondidos e limpos ao abrir doc não-pago
+    onFormaPagamentoChange("ed-fp1");
+    onFormaPagamentoChange("ed-fp2");
   }
 
   // Procedimentos editáveis (E2) — reconstrói lista
@@ -12176,6 +12210,13 @@ async function salvarEdicaoLanc() {
     if(!fp1) { toast("Selecione a forma de pagamento.","err"); return; }
     if(!FORMAS_PAGAMENTO.some(f => f.value === fp1)) { toast("Forma de pagamento inválida.","err"); return; }
 
+    // Feature #3 Etapa 5 (PARTE A) — gatilho "App Cartão de TODOS" via helper
+    // compartilhado. Mesma lógica de salvarEntrada/salvarPagamentoModal.
+    // tem2 = !!fp2 (aqui o schema é "select 2ª forma vazio quando não usa").
+    const tem2 = !!fp2;
+    const appPag = resolverFormasApp({ prefix1: "ed-fp1", prefix2: "ed-fp2", fp1, fp2, tem2 });
+    if(!appPag.ok) { toast(appPag.erro, "err"); return; }
+
     let valor1Final = v1, valor2Final = 0, fp2Final = "";
     if(fp2) {
       if(v1 <= 0) { toast("Informe o valor da 1ª forma.","err"); return; }
@@ -12184,7 +12225,10 @@ async function salvarEdicaoLanc() {
       if(Math.abs(soma - total) > 0.01) {
         toast(`Soma das formas (${brl(soma)}) não bate com o total (${brl(total)}).`,"err"); return;
       }
-      valor1Final = v1; valor2Final = v2; fp2Final = fp2;
+      valor1Final = v1; valor2Final = v2;
+      // Feature #3 — fpNEfetivo já é sub-tipo real (pix/debito/credito) quando
+      // via app. mapearFormaPagamento e cálculo do caixa continuam sem mudança.
+      fp2Final = appPag.fp2Efetivo;
     } else {
       // Forma única — valor_1 deve bater com total
       if(Math.abs(v1 - total) > 0.01 && v1 > 0) {
@@ -12193,12 +12237,14 @@ async function salvarEdicaoLanc() {
       valor1Final = total; // assume total quando uma forma só
     }
 
-    const m1 = mapearFormaPagamento(fp1, valor1Final);
+    // fp1 vira o efetivo (sub-tipo real se app; senão o valor cru)
+    const fp1Efetivo = appPag.fp1Efetivo;
+    const m1 = mapearFormaPagamento(fp1Efetivo, valor1Final);
     const m2 = fp2Final ? mapearFormaPagamento(fp2Final, valor2Final) : { caixa:0, credito:0 };
     const caixaCalc   = m1.caixa   + m2.caixa;
     const creditoCalc = m1.credito + m2.credito;
 
-    updates.forma_pagamento_1 = fp1;
+    updates.forma_pagamento_1 = fp1Efetivo;
     updates.valor_1           = Number(valor1Final) || 0;
     updates.forma_pagamento_2 = fp2Final;
     updates.valor_2           = Number(valor2Final) || 0;
@@ -12206,6 +12252,18 @@ async function salvarEdicaoLanc() {
     updates.credito           = Number(creditoCalc) || 0;
     updates.boleto            = 0;
     updates.valor             = Number(total)       || 0;
+
+    // Feature #3 Etapa 5 — Marcadores "via app Cartão de TODOS". CUIDADO:
+    // ao contrário de salvarEntrada/salvarPagamentoModal (que apenas ADICIONAM
+    // quando é app), aqui precisamos também LIMPAR quando o doc originalmente
+    // era via app e agora está sendo editado para forma normal. Senão os
+    // campos ficariam órfãos no doc.
+    if(appPag.ehApp1) { updates.via_app_1 = true; updates.app_codigo_1 = appPag.appCodigo1; }
+    else { updates.via_app_1 = firebase.firestore.FieldValue.delete();
+           updates.app_codigo_1 = firebase.firestore.FieldValue.delete(); }
+    if(appPag.ehApp2) { updates.via_app_2 = true; updates.app_codigo_2 = appPag.appCodigo2; }
+    else { updates.via_app_2 = firebase.firestore.FieldValue.delete();
+           updates.app_codigo_2 = firebase.firestore.FieldValue.delete(); }
   }
 
   // ── E2: gestão de desconto/saída-irmã ──
