@@ -2864,23 +2864,23 @@ function inferirProdutoLabel(l) {
 }
 
 // Forma de pagamento "exibida" — coluna Pagamento da tabela.
-// Feature #3 Etapa 6 — quando via_app_N === true, sufixa a forma com
-// "(via app · CÓDIGO)" para tornar visível que foi pagamento via App Cartão
-// de TODOS (necessário pra conciliação bancária com o extrato do app).
+// Feature #3 Etapa 6 — quando via_app_N === true, sufixa a forma com "(via app)"
+// para deixar visível que foi pagamento via App Cartão de TODOS.
+// Feature #3 Etapa 8 — o CÓDIGO da transação NÃO é mais parte deste label;
+// virou coluna própria "ID Transação" no relatório (fica isolado pra
+// facilitar copiar/colar na conciliação bancária). Aqui só o marcador "(via app)".
 // - opts.semSufixo = true → não sufixa (usado pra chave de agrupamento no
-//   Resumo do Excel; senão cada código viraria bucket próprio no "Por Forma
-//   de Pagamento").
+//   Resumo do Excel; senão "PIX" e "PIX (via app)" ficariam em buckets diferentes).
 function inferirPagamentoLabel(l, opts) {
   const semSufixo = !!(opts && opts.semSufixo);
   if(ehDocNovoSchema(l)) {
-    const sufixar = (label, viaApp, codigo) => {
+    const sufixar = (label, viaApp) => {
       if(semSufixo || !viaApp) return label;
-      const cod = (codigo || "").toString().trim();
-      return cod ? `${label} (via app · ${cod})` : `${label} (via app)`;
+      return `${label} (via app)`;
     };
-    const a = sufixar(infoFormaPagamento(l.forma_pagamento_1).label, l.via_app_1, l.app_codigo_1);
+    const a = sufixar(infoFormaPagamento(l.forma_pagamento_1).label, l.via_app_1);
     if(l.forma_pagamento_2) {
-      const b = sufixar(infoFormaPagamento(l.forma_pagamento_2).label, l.via_app_2, l.app_codigo_2);
+      const b = sufixar(infoFormaPagamento(l.forma_pagamento_2).label, l.via_app_2);
       return `${a} + ${b}`;
     }
     return a;
@@ -13169,15 +13169,26 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
   try { categoriaLabel = inferirProdutoLabel(l); } catch(e) { categoriaLabel = l.produto || "—"; }
 
   // Forma de pagamento (label amigável). Feature #3 Etapa 6 — dois labels:
-  //   formaLabel: com sufixo "(via app · CÓDIGO)" quando aplicável — usado na
-  //     tabela HTML do relatório e na aba "Lançamentos" do Excel (visibilidade
-  //     total pro operador conciliar com o extrato do app).
+  //   formaLabel: com sufixo "(via app)" quando aplicável — usado na tabela
+  //     HTML e no Excel. A partir da Etapa 8, NÃO inclui mais o código
+  //     (código virou coluna "ID Transação" própria).
   //   formaChave: sem sufixo — usado na agregação "Por Forma de Pagamento"
-  //     do Excel Resumo (senão cada código de app viraria bucket próprio,
-  //     fragmentando o total do PIX/Débito/Crédito).
+  //     do Excel Resumo pra não fragmentar totais por sub-tipo.
   let formaLabel, formaChave;
   try { formaLabel = inferirPagamentoLabel(l); } catch(e) { formaLabel = l.forma_pagamento || "—"; }
   try { formaChave = inferirPagamentoLabel(l, { semSufixo: true }); } catch(e) { formaChave = formaLabel; }
+
+  // Feature #3 Etapa 8 — ID Transação isolado. Coluna dedicada na tabela e no
+  // Excel pra facilitar copiar/colar na conciliação com o extrato do app.
+  // Regra de negócio permite no máximo 1 forma via app por doc — na prática
+  // apenas app_codigo_1 OU app_codigo_2 estará preenchido; se ambos (defesa),
+  // concatena com " + " pra não perder informação.
+  let idTransacao = "";
+  if(l.via_app_1 && l.app_codigo_1) idTransacao = String(l.app_codigo_1).trim();
+  if(l.via_app_2 && l.app_codigo_2) {
+    const c2 = String(l.app_codigo_2).trim();
+    idTransacao = idTransacao ? `${idTransacao} + ${c2}` : c2;
+  }
 
   // Médico solicitante — campo principal é `prescritor`. Aceita fallbacks
   // legacy: `medico` / `medico_solicitante` (caso algum doc antigo use).
@@ -13208,6 +13219,7 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
     subtipo:        subtipo || "",
     formaLabel:     formaLabel || "—",
     formaChave:     formaChave || formaLabel || "—",  // Feature #3 Etapa 6 — chave sem sufixo pra agregação do Resumo
+    idTransacao:    idTransacao || "",                 // Feature #3 Etapa 8 — coluna dedicada ID Transação
     valor:          _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma),
     _raw:           l,
   };
@@ -13579,10 +13591,11 @@ function _renderTabelaPrincipal(modo, linhas) {
       <th>Categoria</th>
       <th>Subtipo</th>
       <th>Forma Pagto</th>
+      <th>ID Transação</th>
       <th style="text-align:right">Valor</th>
     </tr>`;
     if(linhas.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">Nenhum lançamento para o filtro atual.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">Nenhum lançamento para o filtro atual.</td></tr>`;
     } else {
       tbody.innerHTML = linhas.map(l => `
         <tr>
@@ -13594,6 +13607,7 @@ function _renderTabelaPrincipal(modo, linhas) {
           <td>${l.categoriaLabel}</td>
           <td>${l.subtipo  ? escHTML(l.subtipo)  : "—"}</td>
           <td>${l.formaLabel}</td>
+          <td>${l.idTransacao ? escHTML(l.idTransacao) : "—"}</td>
           <td style="text-align:right;font-weight:600">${_relFmtBRL(l.valor)}</td>
         </tr>
       `).join("");
@@ -13794,10 +13808,12 @@ function exportarRelatorioExcel() {
   let wsLanc, wsResumo;
   if(!emSaidas) {
   // ── Aba 1: "Lançamentos"
-  // Ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma de Pagamento | Valor (R$)
+  // Ordem: Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma de Pagamento | ID Transação | Valor (R$)
+  // Feature #3 Etapa 8 — "ID Transação" isolada em coluna própria pra
+  // facilitar copiar/colar na conciliação bancária com o extrato do app.
   // CPF como texto (preserva zeros à esquerda). Sem dados → célula vazia (não "—").
   const dadosLanc = [
-    ["Data", "Paciente", "CPF", "Médico", "Recepcionista", "Categoria", "Subtipo", "Forma de Pagamento", "Valor (R$)"],
+    ["Data", "Paciente", "CPF", "Médico", "Recepcionista", "Categoria", "Subtipo", "Forma de Pagamento", "ID Transação", "Valor (R$)"],
     ...linhas.map(l => [
       _relFmtData(l.data),
       l.paciente || "",
@@ -13807,6 +13823,7 @@ function exportarRelatorioExcel() {
       l.categoriaLabel,
       l.subtipo  || "",
       l.formaLabel,
+      l.idTransacao || "",
       Number(l.valor) || 0,
     ])
   ];
@@ -13817,12 +13834,18 @@ function exportarRelatorioExcel() {
     const cellCpf = wsLanc[refCpf];
     if(cellCpf) { cellCpf.t = "s"; cellCpf.z = "@"; }
   }
-  // Coluna I (Valor, índice 8) — formato moeda
+  // Coluna I (ID Transação, índice 8) — força string pra preservar códigos alfanuméricos
+  // (evita Excel converter "0001234" em número).
   for(let r = 1; r < dadosLanc.length; r++) {
     const cell = wsLanc[XLSX.utils.encode_cell({ c:8, r })];
+    if(cell) { cell.t = "s"; cell.z = "@"; }
+  }
+  // Coluna J (Valor, índice 9) — formato moeda (era índice 8; shiftou depois do ID Transação)
+  for(let r = 1; r < dadosLanc.length; r++) {
+    const cell = wsLanc[XLSX.utils.encode_cell({ c:9, r })];
     if(cell) cell.z = 'R$ #,##0.00';
   }
-  // Largura das colunas (Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma | Valor)
+  // Largura das colunas (Data | Paciente | CPF | Médico | Recepcionista | Categoria | Subtipo | Forma | ID Transação | Valor)
   wsLanc["!cols"] = [
     { wch:12 },  // Data
     { wch:28 },  // Paciente
@@ -13832,10 +13855,11 @@ function exportarRelatorioExcel() {
     { wch:18 },  // Categoria
     { wch:26 },  // Subtipo
     { wch:22 },  // Forma de Pagamento
+    { wch:20 },  // ID Transação  ← Feature #3 Etapa 8
     { wch:14 },  // Valor
   ];
-  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito (9 colunas)
-  _relAplicarEstiloCabecalho(wsLanc, 9);
+  // Estilo do cabeçalho — fundo #E8003D, texto branco, negrito (10 colunas)
+  _relAplicarEstiloCabecalho(wsLanc, 10);
 
   // ── Aba 2: "Resumo"
   // Totais por recepcionista
