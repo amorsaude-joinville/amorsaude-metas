@@ -8407,10 +8407,11 @@ function renderResumoDia() {
   const valorProduzido = dia.caixa + dia.credito;
   setText("rd-valor-produzido", brl(valorProduzido));
 
-  // Total em PIX, Dinheiro, Débito e Boleto = Caixa do dia + Boleto do dia
-  // (regra Abr/2026: boleto já entra em caixa nos pagos via forma_pagamento, mas o
-  //  campo `boleto` separado ainda existe — somar ambos garante o número da planilha)
-  const totalPixDinDebBol = dia.caixa + dia.boleto;
+  // Total em PIX, Dinheiro, Débito e Boleto = Caixa do dia.
+  // Pela regra Abr/2026 (mapearFormaPagamento), boleto já entra em `caixa` junto
+  // com pix/dinheiro/débito — então `dia.caixa` já é a soma dos quatro. Somar
+  // `dia.boleto` por cima duplicava o boleto (`dia.boleto` é só recorte informativo).
+  const totalPixDinDebBol = dia.caixa;
   setText("rd-total-pix-din-deb-bol", brl(totalPixDinDebBol));
 
   // Linha 5 (tripla): Meta líquido (input) | Alcançado (auto) | Diferença (auto, verde/vermelho)
