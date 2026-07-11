@@ -13158,7 +13158,7 @@ function _onMudarCategoriaRelatorio() {
 // com Data, Paciente, CPF, Médico, Recepcionista, Categoria, Subtipo, Forma Pagto e Valor.
 // O valor exibido é calculado por `_calcularValorRelatorio` — que cruza os filtros
 // de forma de pagamento e categoria (ratea proporcionalmente quando ambos ativos).
-function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma) {
+function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma, filtroFormaApp) {
   const dt = l.data_hora
     ? (l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora))
     : (l.criado_em
@@ -13221,7 +13221,7 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
     formaLabel:     formaLabel || "—",
     formaChave:     formaChave || formaLabel || "—",  // Feature #3 Etapa 6 — chave sem sufixo pra agregação do Resumo
     idTransacao:    idTransacao || "",                 // Feature #3 Etapa 8 — coluna dedicada ID Transação
-    valor:          _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma),
+    valor:          _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma, filtroFormaApp),
     _raw:           l,
   };
 }
@@ -13240,16 +13240,16 @@ function _normalizarLancamentoParaRelatorio(l, filtroCategoria, filtroSubtipo, f
 // fatia da categoria foi 100% paga naquela forma). Quando a categoria não é dividida
 // idem. O método é consistente entre os filtros: a soma das parcelas por forma de
 // um mesmo lançamento = fatia total da categoria — sem dupla contagem.
-function _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma) {
+function _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma, filtroFormaApp) {
   if(!filtroForma && !filtroCategoria) return Number(l.valor) || 0;
   if(!filtroForma)    return _calcularValorFatia(l, filtroCategoria, filtroSubtipo);
-  if(!filtroCategoria) return _calcularValorPorForma(l, filtroForma);
+  if(!filtroCategoria) return _calcularValorPorForma(l, filtroForma, filtroFormaApp);
   // Forma + categoria: rateio proporcional
   const total = Number(l.valor) || 0;
   if(total <= 0) return 0;
   const fatiaCategoria = _calcularValorFatia(l, filtroCategoria, filtroSubtipo);
   if(fatiaCategoria <= 0) return 0;
-  const parcelaForma = _calcularValorPorForma(l, filtroForma);
+  const parcelaForma = _calcularValorPorForma(l, filtroForma, filtroFormaApp);
   if(parcelaForma <= 0) return 0;
   return parcelaForma * (fatiaCategoria / total);
 }
@@ -13261,8 +13261,17 @@ function _calcularValorRelatorio(l, filtroCategoria, filtroSubtipo, filtroForma)
 // Schema legacy (forma_pagamento único, sem _1/_2): retorna l.valor cheio se a forma
 // legacy (normalizada) bate com a filtrada — porque no legacy o valor todo era da
 // única forma cadastrada. Não há split a fazer.
-function _calcularValorPorForma(l, forma) {
+function _calcularValorPorForma(l, forma, appTipo) {
   if(!forma) return Number(l.valor) || 0;
+  // Filtro "App Cartão de TODOS": simétrico ao _matchFormaPagamento — soma a
+  // parcela cujo via_app_N=true. Se appTipo (sub-filtro pix/debito/credito) veio
+  // preenchido, restringe pra parcelas cujo sub-tipo real bate.
+  if(forma === "app") {
+    let v = 0;
+    if(l.via_app_1 && (!appTipo || l.forma_pagamento_1 === appTipo)) v += Number(l.valor_1) || 0;
+    if(l.via_app_2 && (!appTipo || l.forma_pagamento_2 === appTipo)) v += Number(l.valor_2) || 0;
+    return v;
+  }
   let v = 0;
   if(l.forma_pagamento_1 === forma) v += Number(l.valor_1) || 0;
   if(l.forma_pagamento_2 === forma) v += Number(l.valor_2) || 0;
@@ -13711,7 +13720,7 @@ async function gerarRelatorio() {
     // Normaliza pra exibição. O valor da linha é decidido por _calcularValorRelatorio:
     // forma+categoria juntos → rateio proporcional; só um dos dois → fatia direta;
     // nenhum → valor cheio. Tabela/Cards/Excel todos consomem linha.valor já fatiado.
-    let linhas = docs.map(l => _normalizarLancamentoParaRelatorio(l, cat, subtipo, forma));
+    let linhas = docs.map(l => _normalizarLancamentoParaRelatorio(l, cat, subtipo, forma, formaApp));
 
     // Ordena por data desc
     linhas.sort((a,b) => (b.data?.getTime() || 0) - (a.data?.getTime() || 0));
