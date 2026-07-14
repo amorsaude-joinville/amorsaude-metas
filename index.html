@@ -6807,13 +6807,23 @@ function renderCardMetasEquipe() {
       const cor = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
     }).sort((a,b)=>b.caixa-a.caixa);
-    const rankHtml = ranking.map((r,i)=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:18px;min-width:28px">${i===0?"🥇":i===1?"🥈":"🥉"}</span>
-        <span style="flex:1;font-weight:600;font-size:14px">${r.nome}</span>
-        <span style="font-size:13px;color:var(--text2)">${brl(r.caixa)}</span>
-        <span style="font-size:12px;font-weight:700;color:${r.cor}">${r.pct.toFixed(1)}%</span>
-      </div>`).join("");
+    // Privacidade — CC puro vê apenas a PRÓPRIA posição, sem nome nem valor
+    // da colega. Gestão/liderança (branch `grupoCC` abaixo) segue vendo ranking
+    // completo. `ranking` continua calculado com CC_TODOS pois o findIndex
+    // depende da ordenação por caixa; só o RENDER é fatiado.
+    const _idxMe  = ranking.findIndex(r => r.nome === usuario?.nome);
+    const _posMe  = _idxMe + 1;
+    const _totMe  = ranking.length;
+    const _meMedalha = _posMe === 1 ? "🥇" : _posMe === 2 ? "🥈" : _posMe === 3 ? "🥉" : "🏅";
+    const _meDados = _idxMe >= 0 ? ranking[_idxMe] : null;
+    const rankHtml = _meDados
+      ? `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+          <span style="font-size:22px;min-width:32px">${_meMedalha}</span>
+          <span style="flex:1;font-weight:600;font-size:14px">Você está em ${_posMe}º lugar entre ${_totMe} atendentes</span>
+          <span style="font-size:13px;color:var(--text2)">${brl(_meDados.caixa)}</span>
+          <span style="font-size:12px;font-weight:700;color:${_meDados.cor}">${_meDados.pct.toFixed(1)}%</span>
+        </div>`
+      : `<div style="font-size:12px;color:var(--text2);padding:8px 0">Sem dados de ranking neste mês.</div>`;
     const ccHtml =
       `<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin:16px 0 10px">📞 Call Center</div>` +
       `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC.caixa, metaCC)}</div>` +
@@ -13714,6 +13724,16 @@ function _renderTabelaPrincipal(modo, linhas) {
 }
 
 async function gerarRelatorio() {
+  // Privacidade — gate defensivo por perfil. A aba #sec-relatorios já é
+  // escondida pra recepcionista/callcenter em aplicarAbaCC/Rec, mas se algo
+  // (bookmarklet, extensão, chamada sintética) invocar esta função, recusamos
+  // antes de qualquer query que traria docs de todos os pacientes.
+  // Reforço real (contra F12 no console) precisa endurecer firestore.rules
+  // — hoje callcenter/recepcionista têm read amplo em /lancamentos; ver README.
+  if(!VE_RELATORIOS.includes(usuario?.perfil)) {
+    toast("Você não tem permissão para gerar relatórios.","err");
+    return;
+  }
   const iniStr = document.getElementById("rel-data-ini").value;
   const fimStr = document.getElementById("rel-data-fim").value;
   const recep  = document.getElementById("rel-recep").value || "";
