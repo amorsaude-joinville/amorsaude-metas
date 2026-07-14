@@ -1550,6 +1550,21 @@
               <input type="text" id="e-total" readonly style="font-weight:700;color:var(--primary);font-size:18px" value="0,00" />
             </div>
 
+            <!-- Etapa 1 CC — Tipo de atendimento. Só aparece pra perfis
+                 callcenter/lider_callcenter (visibilidade aplicada em
+                 _aplicarVisibilidadeTipoCC após login e em resetFormEntrada).
+                 Obrigatório na gravação quando o autor é CC. O doc de orçamento
+                 é o mesmo doc de lançamento (kanban → pago atualiza in-place),
+                 então o campo viaja naturalmente com o card até o pagamento. -->
+            <div class="fg full" id="e-tipo-cc-wrap" style="display:none;border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
+              <label>📞 Tipo de atendimento *</label>
+              <select id="e-tipo-cc" style="max-width:280px">
+                <option value="" disabled selected>Selecione...</option>
+                <option value="receptivo">Receptivo</option>
+                <option value="ativo">Ativo</option>
+              </select>
+            </div>
+
             <!-- Status (vem ANTES da forma de pagamento — controla visibilidade dela) -->
             <div class="fg full" style="border-top:1px dashed var(--border);padding-top:14px;margin-top:6px">
               <label style="font-weight:600;margin-bottom:8px;display:block">Status *</label>
@@ -2099,6 +2114,19 @@
         <label>Data do atendimento</label>
         <input type="text" id="ed-data-disp" readonly style="background:#F3F4F6" />
         <small style="font-size:11px;color:var(--text2)">A data do atendimento não é editável (gerada no momento da gravação).</small>
+      </div>
+
+      <!-- Etapa 1 CC — Tipo de atendimento (só aparece quando o doc editado foi
+           criado por callcenter/lider_callcenter; visibilidade aplicada em
+           abrirModalEdicao com base em doc.perfil). Obrigatório no save. Permite
+           à coordenação marcar os "não classificados" de julho/2026 em diante. -->
+      <div class="fg full" id="ed-tipo-cc-wrap" style="display:none">
+        <label>📞 Tipo de atendimento *</label>
+        <select id="ed-tipo-cc" style="max-width:280px">
+          <option value="" disabled selected>Selecione...</option>
+          <option value="receptivo">Receptivo</option>
+          <option value="ativo">Ativo</option>
+        </select>
       </div>
 
       <!-- Categorias -->
@@ -2771,6 +2799,19 @@ const METAS_EQUIPE_PADRAO = {
 const TEM_CREDITO = ["recepcionista","lider"];
 // Perfis que fazem lançamento
 const FAZ_LANC = ["recepcionista","callcenter","lider","lider_callcenter"];
+// Etapa 1 CC — helper único pra "é do call center". Usado pra decidir se o
+// selector "Tipo de atendimento" (receptivo/ativo) aparece no form-entrada e
+// no modal de edição, e se a validação obrigatória dispara.
+function _ehPerfilCC(perfil) {
+  return perfil === "callcenter" || perfil === "lider_callcenter";
+}
+// Mostra/esconde o wrap do seletor "Tipo de atendimento" no form-entrada
+// conforme o perfil do usuário logado. Chamado no login e em resetFormEntrada.
+function _aplicarVisibilidadeTipoCC() {
+  const wrap = document.getElementById("e-tipo-cc-wrap");
+  if(!wrap) return;
+  wrap.style.display = _ehPerfilCC(usuario?.perfil) ? "" : "none";
+}
 // Perfis que vêem o dashboard geral
 const VE_DASHBOARD = ["gestor","subgestora","lider"];
 // Perfis que SÓ vêem o dashboard geral (sem aba de lançamento)
@@ -4252,6 +4293,8 @@ function iniciarApp() {
   popularSelectFormaPagamento("pag-fp2");
   popularSelectFormaPagamento("ed-fp1");
   popularSelectFormaPagamento("ed-fp2");
+  // Etapa 1 CC — aplica visibilidade do seletor "Tipo de atendimento" no form-entrada
+  _aplicarVisibilidadeTipoCC();
   document.getElementById("tela-login").classList.add("hidden");
   document.getElementById("tela-app").classList.remove("hidden");
 
@@ -5201,6 +5244,9 @@ function resetFormEntrada() {
   // sub-tipo/código da 1ª forma (a 2ª é limpa por removerSegundaForma abaixo).
   onFormaPagamentoChange("e-fp1");
   removerSegundaForma();
+  // Etapa 1 CC — reseta seletor "Tipo de atendimento" e reaplica visibilidade
+  set("e-tipo-cc","");
+  _aplicarVisibilidadeTipoCC();
   set("busca-pres","");
   preencherPres();
   document.getElementById("e-pres").selectedIndex = -1;
@@ -5282,6 +5328,15 @@ async function salvarEntrada() {
     if(p.tipo === "Outros" && !(p.descricao && p.descricao.trim())) {
       toast("Descreva qual procedimento (campo 'Outros').","err"); return;
     }
+  }
+  // Etapa 1 CC — obrigatório para autor callcenter/lider_callcenter em qualquer
+  // status (o tipo caracteriza o atendimento, não o pagamento). Para outros
+  // perfis o seletor está escondido e o valor fica vazio (não gravado).
+  const tipoAtendimentoCC = _ehPerfilCC(usuario?.perfil)
+    ? (document.getElementById("e-tipo-cc")?.value || "")
+    : "";
+  if(_ehPerfilCC(usuario?.perfil) && !tipoAtendimentoCC) {
+    toast("Selecione o tipo de atendimento (Receptivo ou Ativo).","err"); return;
   }
 
   // Forma de pagamento: obrigatória SOMENTE se status === "pago".
@@ -5421,6 +5476,12 @@ async function salvarEntrada() {
   // chaining garante que os ifs não disparam nesse caso.
   if(appPag?.ehApp1) { doc.via_app_1 = true; doc.app_codigo_1 = appPag.appCodigo1; }
   if(appPag?.ehApp2) { doc.via_app_2 = true; doc.app_codigo_2 = appPag.appCodigo2; }
+
+  // Etapa 1 CC — grava tipo_atendimento_cc apenas quando o autor é CC (schema
+  // limpo: docs de outros perfis ficam sem o campo). Regra de leitura pra docs
+  // sem o campo é aplicada na Etapa 3 (histórico ≤ 30/06/2026 → receptivo;
+  // ≥ julho/2026 → não classificado). Aqui só gravamos nos novos.
+  if(tipoAtendimentoCC) { doc.tipo_atendimento_cc = tipoAtendimentoCC; }
 
   // D4: Pago + saída embutida → cria 2 docs com id_par. Saída materializada agora.
   // D5: Status≠Pago + saída embutida → guarda saida_pendente no próprio doc.
@@ -11799,6 +11860,17 @@ async function abrirModalEdicao(docId) {
   set("ed-cpf",           doc.paciente_cpf  || "");
   set("ed-prescritor",    doc.prescritor    || doc.medico   || "");
   set("ed-especialidade", doc.prescritor_especialidade || "");
+
+  // Etapa 1 CC — mostra seletor "Tipo de atendimento" quando o DOC foi criado
+  // por callcenter/lider_callcenter (baseado em doc.perfil, não no editor).
+  // Pré-carrega o valor existente (ou vazio, caso o doc seja histórico sem o
+  // campo — coordenação usa esta tela pra marcar os "não classificados").
+  const _edTipoCCWrap = document.getElementById("ed-tipo-cc-wrap");
+  if(_edTipoCCWrap) {
+    const _docEhCC = _ehPerfilCC(doc.perfil);
+    _edTipoCCWrap.style.display = _docEhCC ? "" : "none";
+    set("ed-tipo-cc", _docEhCC ? (doc.tipo_atendimento_cc || "") : "");
+  }
   // F2 — Observações
   set("ed-observacoes", doc.observacoes || "");
   const edCobs = document.getElementById("ed-contador-obs");
@@ -12187,6 +12259,18 @@ async function salvarEdicaoLanc() {
     }
   }
 
+  // Etapa 1 CC — se o DOC editado é de call center (por doc.perfil), exigir
+  // Tipo de atendimento. Vale pra qualquer status (característica do
+  // atendimento, não do pagamento). Docs de outros perfis: campo ausente,
+  // seletor escondido, valor não gravado.
+  const _edEhCC = _ehPerfilCC(docOrig.perfil);
+  const tipoAtendimentoCC = _edEhCC
+    ? (document.getElementById("ed-tipo-cc")?.value || "")
+    : "";
+  if(_edEhCC && !tipoAtendimentoCC) {
+    toast("Selecione o tipo de atendimento (Receptivo ou Ativo).","err"); return;
+  }
+
   // E2: desconto editável — valida limite por perfil se checkbox marcado
   const temSaida = document.getElementById("ed-tem-saida")?.checked;
   let descSaida = null; // { tipo, pct, rs, descR$, motivo } ou null
@@ -12224,6 +12308,10 @@ async function salvarEdicaoLanc() {
     observacoes: ((document.getElementById("ed-observacoes")?.value || "").trim().slice(0, 250)),
     atualizado_em: firebase.firestore.FieldValue.serverTimestamp(),
   };
+
+  // Etapa 1 CC — grava tipo_atendimento_cc quando o doc é de CC (validação
+  // já garantiu que tipoAtendimentoCC não está vazio nesse caminho).
+  if(_edEhCC) { updates.tipo_atendimento_cc = tipoAtendimentoCC; }
 
   // Pagamento — só se status="pago"
   if(ehPago) {
