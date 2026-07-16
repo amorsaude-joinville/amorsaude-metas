@@ -2509,11 +2509,11 @@
       </div>
       <div class="modal-sec-label">Recepção — metas individuais</div>
       <div id="mm-rec-individual" style="display:flex;flex-direction:column;gap:14px"></div>
-      <div class="modal-sec-label">Call Center</div>
-      <div class="fg">
-        <label>Meta de Caixa — Call Center (R$)</label>
-        <input type="text" id="mm-caixa-callcenter" placeholder="0,00" oninput="mascaraValor(this)" />
-      </div>
+      <!-- Etapa 2 CC — metas individuais por atendente (Receptivo + Ativo).
+           Substitui o input único "mm-caixa-callcenter" (legado). A div
+           mm-cc-individual é populada por _renderInputsMetasCC() ao abrir. -->
+      <div class="modal-sec-label">Call Center — metas individuais (Receptivo + Ativo)</div>
+      <div id="mm-cc-individual" style="display:flex;flex-direction:column;gap:14px"></div>
       <div class="modal-sec-label">Exames &amp; Procedimentos</div>
       <div class="fg">
         <label>Meta Exames Laboratoriais (R$)</label>
@@ -2782,6 +2782,36 @@ const CC_MEMBROS = ["Erielly","Júlia"];
 const CC_TODOS   = ["Erielly","Júlia"];
 // Meta fixa de caixa por atendente CC (usada na coordenadora quando não há meta configurada)
 const META_CC_PADRAO = 28000;
+
+// ─────────────────────────────────────────────────────────────
+// Etapa 2 CC — helpers de leitura das metas individuais de CC.
+// Schema novo: metas/{mesAno}.metas_cc = { "Erielly": {receptivo,ativo}, ... }
+// Fallback pra docs antigos (sem `metas_cc`): usa `meta_caixa_callcenter` legado
+// como RECEPTIVO (alinhado à regra "docs sem tipo_atendimento_cc → receptivo"),
+// e ativo = 0. Preserva os números de meses fechados sem os campos novos.
+// Se nem legado existir: META_CC_PADRAO no receptivo, 0 no ativo.
+function metaReceptivoDeCC(nome, m) {
+  const entrada = m?.metas_cc?.[nome];
+  if(entrada && typeof entrada.receptivo === "number") return Number(entrada.receptivo) || 0;
+  // Fallback legado
+  const legado = Number(m?.meta_caixa_callcenter);
+  if(legado > 0) return legado;
+  return META_CC_PADRAO;
+}
+function metaAtivoDeCC(nome, m) {
+  const entrada = m?.metas_cc?.[nome];
+  if(entrada && typeof entrada.ativo === "number") return Number(entrada.ativo) || 0;
+  return 0; // ativo é novidade — 0 quando ausente
+}
+function metaTotalDeCC(nome, m) {
+  return metaReceptivoDeCC(nome, m) + metaAtivoDeCC(nome, m);
+}
+// Meta total da equipe CC = soma das metas totais das atendentes.
+// Substitui o `meta_caixa_callcenter_equipe` fixo/hardcoded (56.000) que existia.
+function metaTotalEquipeCC(m) {
+  return CC_TODOS.reduce((s, n) => s + metaTotalDeCC(n, m), 0);
+}
+// ─────────────────────────────────────────────────────────────
 
 // Metas padrão da EQUIPE — valores independentes, NÃO são soma das metas individuais
 const METAS_EQUIPE_PADRAO = {
@@ -4801,7 +4831,8 @@ function atualizarCards() {
   const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
   // Recepcionista/líder usa META INDIVIDUAL (fallback nas coletivas se vazio)
   const metaInd = isCC ? null : metaIndUsuarioLogado();
-  const metaCaixa   = isCC ? (metas.meta_caixa_callcenter||0) : (metaInd.metaCaixa   || 0);
+  // Etapa 2 CC — meta CC = soma dos nichos (receptivo + ativo) da própria atendente
+  const metaCaixa   = isCC ? metaTotalDeCC(usuario?.nome, metas) : (metaInd.metaCaixa   || 0);
   const metaCredito = isCC ? 0                                : (metaInd.metaCredito || 0);
   const contBoleto  = isCC ? 0 : lancMes.filter(_ehLancBoleto).length;
 
@@ -6774,8 +6805,10 @@ function renderCardMetasEquipe() {
     const metaCxMed  = m.meta_caixa_equipe                || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
     const metaCrMed  = m.meta_credito_equipe              || METAS_EQUIPE_PADRAO.meta_credito_equipe;
     const metaBol    = m.meta_boleto_equipe               || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
-    const metaCC     = m.meta_caixa_callcenter_equipe     || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
-    const metaIndCC  = m.meta_caixa_callcenter     || META_CC_PADRAO;
+    // Etapa 2 CC — meta EQUIPE = soma total dos nichos das atendentes
+    // (era hardcoded em 56.000 antes). Meta individual vira per-atendente
+    // dentro do map do ranking abaixo.
+    const metaCC     = metaTotalEquipeCC(m);
 
     // Seção medicina (sem "Sua parte" — CC não participa do pool)
     const medHtml =
@@ -6803,7 +6836,9 @@ function renderCardMetasEquipe() {
     }
     const ranking = CC_TODOS.map(nome => {
       const caixa = usarHist ? (porPessoa[nome] || 0) : calcTotais(porPessoa[nome]||[]).caixa;
-      const pct = metaIndCC > 0 ? (caixa/metaIndCC)*100 : 0;
+      // Etapa 2 CC — meta per-atendente = receptivo + ativo dela
+      const metaInd = metaTotalDeCC(nome, m);
+      const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
       const cor = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
     }).sort((a,b)=>b.caixa-a.caixa);
@@ -6836,8 +6871,8 @@ function renderCardMetasEquipe() {
 
   } else if(grupoCC) {
     // ── Coord / lider_callcenter: vê só CC (comportamento original) ──
-    const metaCC    = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
-    const metaInd   = m.meta_caixa_callcenter || META_CC_PADRAO;
+    // Etapa 2 CC — meta EQUIPE = soma dos nichos; individual vira per-atendente no map.
+    const metaCC    = metaTotalEquipeCC(m);
     const srcCC2    = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
     const totCC2    = usarHist ? calcTotaisFromHistoricoDocs(srcCC2) : calcTotaisDetalhados(srcCC2);
     const porPessoa2 = {};
@@ -6851,6 +6886,8 @@ function renderCardMetasEquipe() {
     }
     const ranking2 = CC_TODOS.map(nome => {
       const caixa = usarHist ? (porPessoa2[nome] || 0) : calcTotais(porPessoa2[nome]||[]).caixa;
+      // Etapa 2 CC — meta per-atendente = receptivo + ativo dela
+      const metaInd = metaTotalDeCC(nome, m);
       const pct = metaInd > 0 ? (caixa/metaInd)*100 : 0;
       const cor  = pct>=100?"#10B981":pct>=80?"#F59E0B":"#EF4444";
       return { nome, caixa, pct, cor };
@@ -7100,7 +7137,8 @@ function buildCardPremGestao(titulo, faixas, total, meta, cor) {
 
 // Renderiza cards de premiação da gestão (usa sempre o mês inteiro, não o filtro de período)
 function renderCoordPremiacaoGestao() {
-  const metaEquipe = metas?.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
+  // Etapa 2 CC — meta equipe = soma dos nichos das atendentes (não mais 56.000 fixo)
+  const metaEquipe = metaTotalEquipeCC(metas);
   let totalCaixa = 0;
   CC_TODOS.forEach(n => { totalCaixa += calcTotais(coordLancs.filter(l => l.usuario_nome === n)).caixa; });
 
@@ -7126,7 +7164,8 @@ function renderCoordPremiacaoGestao() {
 }
 
 function renderCoordResumoCCs(lancs) {
-  const metaCC  = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  // Etapa 2 CC — meta individual vira per-atendente dentro do map abaixo.
+  // `metaCC` (constante genérica) removido — cada mini-card usa a meta dela.
   const diasPass = diasUteisPassadosFloat();
   const diasUteis = metas?.dias_uteis || 22;
   const el = document.getElementById("coord-resumo-cards");
@@ -7134,7 +7173,7 @@ function renderCoordResumoCCs(lancs) {
 
   let totalCaixa = 0;
   CC_TODOS.forEach(n => { totalCaixa += calcTotais(lancs.filter(l => l.usuario_nome === n)).caixa; });
-  const metaEquipe = metas?.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
+  const metaEquipe = metaTotalEquipeCC(metas);
   const pct = metaEquipe > 0 ? Math.min((totalCaixa/metaEquipe)*100,100) : 0;
   const ok  = totalCaixa >= metaEquipe && metaEquipe > 0;
 
@@ -7163,6 +7202,8 @@ function renderCoordResumoCCs(lancs) {
       const media = diasPass > 0 ? caixa/diasPass : 0;
       const proj  = media * diasUteis;
       const cor   = CC_CORES[nome] || "var(--primary)";
+      // Etapa 2 CC — meta per-atendente (receptivo + ativo da própria)
+      const metaCC = metaTotalDeCC(nome, metas);
       const p = metaCC > 0 ? Math.min((caixa/metaCC)*100,100) : 0;
       const isOk = caixa >= metaCC && metaCC > 0;
       return `<div class="card-meta" style="padding:18px;border-top:3px solid ${cor}">
@@ -7183,9 +7224,11 @@ function renderCoordResumoCCs(lancs) {
 }
 
 function renderCoordRanking(lancs) {
-  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
   const rank = CC_TODOS.map(nome => ({
-    nome, caixa: calcTotais(lancs.filter(l => l.usuario_nome === nome)).caixa
+    nome,
+    caixa: calcTotais(lancs.filter(l => l.usuario_nome === nome)).caixa,
+    metaCC: metaTotalDeCC(nome, metas),
   })).sort((a,b) => b.caixa - a.caixa);
 
   const medals = ["🥇","🥈","🥉"];
@@ -7195,15 +7238,15 @@ function renderCoordRanking(lancs) {
     <thead><tr><th>#</th><th>Atendente</th><th>Caixa</th><th>% da Meta</th><th>Premiação</th></tr></thead>
     <tbody>
       ${rank.map((r,i) => {
-        const pct  = metaCC > 0 ? (r.caixa/metaCC*100).toFixed(1)+"%" : "—";
-        const prem = calcPremiacao(r.caixa, 0, "callcenter", metaCC, 0);
-        const barW = metaCC > 0 ? Math.min((r.caixa/metaCC)*100,100).toFixed(0) : 0;
+        const pct  = r.metaCC > 0 ? (r.caixa/r.metaCC*100).toFixed(1)+"%" : "—";
+        const prem = calcPremiacao(r.caixa, 0, "callcenter", r.metaCC, 0);
+        const barW = r.metaCC > 0 ? Math.min((r.caixa/r.metaCC)*100,100).toFixed(0) : 0;
         const cor  = CC_CORES[r.nome] || "var(--primary)";
         return `<tr>
           <td><span class="rank-medal">${medals[i]||i+1}</span></td>
           <td><strong style="color:${cor}">${r.nome}</strong></td>
           <td>${brl(r.caixa)}<div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div></td>
-          <td style="font-weight:600;color:${r.caixa>=metaCC&&metaCC>0?"var(--success)":"var(--primary)"}">${pct}</td>
+          <td style="font-weight:600;color:${r.caixa>=r.metaCC&&r.metaCC>0?"var(--success)":"var(--primary)"}">${pct}</td>
           <td><span class="prem-badge">🏅 ${brl(prem.valor)}</span></td>
         </tr>`;
       }).join("")}
@@ -7212,19 +7255,20 @@ function renderCoordRanking(lancs) {
 }
 
 function renderCoordPremiacao(lancs) {
-  const metaCC    = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  // Etapa 2 CC — meta per-atendente (receptivo + ativo). Removida a const genérica.
   const diasPass  = diasUteisPassadosFloat();
   const diasUteis = metas?.dias_uteis || 22;
   const el = document.getElementById("coord-premiacao");
   if(!el) return;
 
   const dados = CC_TODOS.map(nome => {
+    const metaCC = metaTotalDeCC(nome, metas);
     const { caixa } = calcTotais(lancs.filter(l => l.usuario_nome === nome));
     const prem  = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
     const media = diasPass > 0 ? caixa/diasPass : 0;
     const proj  = media * diasUteis;
     const premProj = calcPremiacao(proj, 0, "callcenter", metaCC, 0);
-    return { nome, caixa, prem, proj, premProj };
+    return { nome, caixa, prem, proj, premProj, metaCC };
   });
 
   const totalPrem     = dados.reduce((s,d) => s + d.prem.valor, 0);
@@ -7254,8 +7298,8 @@ function renderCoordPremiacao(lancs) {
       </tr></thead>
       <tbody>
         ${dados.map(d => {
-          const pct = metaCC > 0 ? (d.caixa/metaCC*100).toFixed(1) : "—";
-          const ok  = d.caixa >= metaCC && metaCC > 0;
+          const pct = d.metaCC > 0 ? (d.caixa/d.metaCC*100).toFixed(1) : "—";
+          const ok  = d.caixa >= d.metaCC && d.metaCC > 0;
           const cor = CC_CORES[d.nome] || "var(--primary)";
           return `<tr>
             <td><strong style="color:${cor}">${d.nome}</strong></td>
@@ -7277,11 +7321,12 @@ function renderCoordPremiacao(lancs) {
 }
 
 function renderCoordColabs(lancs) {
-  const metaCC = metas?.meta_caixa_callcenter || META_CC_PADRAO;
+  // Etapa 2 CC — meta per-atendente (receptivo + ativo). Constante genérica removida.
   const el = document.getElementById("coord-colab-cards");
   if(!el) return;
 
   el.innerHTML = CC_TODOS.map(nome => {
+    const metaCC = metaTotalDeCC(nome, metas);
     const ls   = lancs.filter(l => l.usuario_nome === nome);
     const { caixa } = calcTotais(ls);
     const pct  = metaCC > 0 ? Math.min((caixa/metaCC)*100,100) : 0;
@@ -7820,9 +7865,10 @@ function renderDashHistorico() {
 
   function rankRow(r, i) {
     const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
-    // Meta individual por nome (caixa/crédito) — CC continua coletivo
+    // Meta individual por nome (caixa/crédito).
+    // Etapa 2 CC — CC agora tem meta per-atendente (receptivo + ativo dela).
     const indv = !isCC ? metaIndPorNome(r.nome) : null;
-    const mC  = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const mC  = isCC ? metaTotalDeCC(r.nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const mCr =                                                   (indv?.metaCredito || 0);
     const pct = mC > 0 ? (r.caixa/mC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
@@ -7856,7 +7902,8 @@ function renderDashHistorico() {
     const perfil = r.perfil;
     const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
     const indv = !isCC ? metaIndPorNome(r.nome) : null;
-    const mC   = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    // Etapa 2 CC — meta per-atendente (receptivo + ativo)
+    const mC   = isCC ? metaTotalDeCC(r.nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const mCr  = isCC ? 0                                        : (indv.metaCredito || 0);
     const prem = mC > 0 ? calcPremiacao(r.caixa||0, r.credito||0, perfil, mC, mCr) : null;
     const pct  = mC > 0 ? (((r.caixa||0)/mC)*100).toFixed(1)+"%" : "—";
@@ -8513,12 +8560,13 @@ function renderDashPremiacao() {
 
   const m          = dashMetasMes || {};
   // Recepcionistas/líderes usam metaIndPorNome(nome) dentro de linhasRec — não há meta coletiva única aqui.
-  const metaCC     = m.meta_caixa_callcenter  || 28000;
+  // Etapa 2 CC — meta individual CC agora é per-atendente (movido pra dentro do map de linhasCC).
   const metaLab    = m.meta_lab_equipe        || 273000;
   const metaImg    = m.meta_img_equipe        || 144000;
   const metaProc   = m.meta_proc_equipe       || 227500;
   const metaCredEq = m.meta_credito_equipe    || METAS_EQUIPE_PADRAO.meta_credito_equipe;
-  const metaEquipeCC = m.meta_caixa_callcenter_equipe || METAS_EQUIPE_PADRAO.meta_caixa_callcenter_equipe;
+  // Etapa 2 CC — meta equipe = soma dos nichos das atendentes (não mais 56.000 fixo)
+  const metaEquipeCC = metaTotalEquipeCC(m);
   const diasUteis  = m.dias_uteis || 22;
   const diasPassF  = diasUteisPassadosFloat();
   // Pool de Crédito vigente apenas a partir do marco (Maio/2026).
@@ -8592,6 +8640,8 @@ function renderDashPremiacao() {
     .filter(([nome]) => { const p=PERFIS[nome]||""; return p==="callcenter"; })
     .map(([nome, ls]) => {
       const tot  = calcTotaisDetalhados(ls);
+      // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
+      const metaCC = metaTotalDeCC(nome, m);
       const prem = calcPremiacao(tot.caixa, tot.credito, "callcenter", metaCC, 0);
       let premProj = prem;
       if(diasPassF > 0) {
@@ -8782,9 +8832,10 @@ function renderDashRanking(lista) {
 
   function rankRow(r, posicao) {
     const isCC = r.perfil==="callcenter"||r.perfil==="lider_callcenter";
-    // Meta individual por nome (caixa/crédito). CC continua coletivo.
+    // Meta individual por nome (caixa/crédito).
+    // Etapa 2 CC — CC agora tem meta per-atendente (receptivo + ativo dela).
     const indv  = !isCC ? metaIndPorNome(r.nome) : null;
-    const metaC = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    const metaC = isCC ? metaTotalDeCC(r.nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const mCr   =                                                   (indv?.metaCredito || 0);
     const pct = metaC > 0 ? (r.caixa/metaC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
@@ -8848,7 +8899,8 @@ function renderDashColaboradoras(lista) {
     const perfil = PERFIS[nome] || "";
     const isCC = perfil === "callcenter" || perfil === "lider_callcenter";
     const indv = !isCC ? metaIndPorNome(nome) : null;
-    const metaC  = isCC ? (dashMetasMes?.meta_caixa_callcenter||0) : (indv.metaCaixa   || 0);
+    // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
+    const metaC  = isCC ? metaTotalDeCC(nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const metaCr = isCC ? 0                                        : (indv.metaCredito || 0);
     const prem   = metaC > 0 ? calcPremiacao(tot.caixa,tot.credito,perfil,metaC,metaCr) : null;
     const pct    = metaC > 0 ? (tot.caixa/metaC*100).toFixed(1)+"%" : "—";
@@ -10051,7 +10103,6 @@ function abrirModalMetas() {
   set("mm-credito-equipe",   m.meta_credito_equipe   || 0);
   set("mm-boleto-equipe",    m.meta_boleto_equipe    || 0);
   set("mm-dias-uteis",       m.dias_uteis            || 22);
-  set("mm-caixa-callcenter", m.meta_caixa_callcenter || 0);
   set("mm-lab",              m.meta_lab_equipe        || 0);
   set("mm-img",              m.meta_img_equipe        || 0);
   set("mm-proc",             m.meta_proc_equipe       || 0);
@@ -10059,6 +10110,8 @@ function abrirModalMetas() {
 
   // Metas individuais de caixa/crédito por recepcionista/líder (Tuane afastada não aparece)
   _renderInputsMetasIndividuais();
+  // Etapa 2 CC — metas individuais (Receptivo + Ativo) por atendente
+  _renderInputsMetasCC();
 
   document.getElementById("modal-metas").classList.remove("hidden");
 }
@@ -10106,6 +10159,45 @@ function _renderInputsMetasIndividuais() {
   }).join("");
 }
 
+// Etapa 2 CC — monta 1 linha por atendente de CC com 2 inputs (Receptivo + Ativo).
+// Fonte da verdade dos nomes: CC_TODOS. Valores pré-preenchidos vêm de
+// dashMetasMes.metas_cc (schema novo) OU do fallback legado via metaReceptivoDeCC/
+// metaAtivoDeCC (que herda `meta_caixa_callcenter` como receptivo em meses antigos).
+function _renderInputsMetasCC() {
+  const wrap = document.getElementById("mm-cc-individual");
+  if(!wrap) return;
+  const fmt = v => Number(v) > 0
+    ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 })
+    : "";
+  const m = dashMetasMes || metas || {};
+  if(!CC_TODOS.length) {
+    wrap.innerHTML = `<div class="mm-rec-vazio">Nenhuma atendente de call center cadastrada.</div>`;
+    return;
+  }
+  wrap.innerHTML = CC_TODOS.map(nome => {
+    const valR = fmt(metaReceptivoDeCC(nome, m));
+    const valA = fmt(metaAtivoDeCC(nome, m));
+    const docId = _docIdMetaCC(nome);
+    return `
+      <div class="mm-rec-linha">
+        <div class="mm-rec-nome">${escHTML(nome)}<span class="mm-rec-perfil">Call Center</span></div>
+        <div class="fg" style="margin:0">
+          <label>Meta Caixa Receptivo (R$)</label>
+          <input type="text" id="mm-cc-rec-${docId}" placeholder="0,00" value="${valR}" oninput="mascaraValor(this)" />
+        </div>
+        <div class="fg" style="margin:0">
+          <label>Meta Caixa Ativo (R$)</label>
+          <input type="text" id="mm-cc-at-${docId}" placeholder="0,00" value="${valA}" oninput="mascaraValor(this)" />
+        </div>
+      </div>`;
+  }).join("");
+}
+// Sanitiza nome pra usar como sufixo de id de input (sem espaços/acentos).
+// Mesmo padrão usado em mapearFormaPagamento (̀-ͯ = diacríticos).
+function _docIdMetaCC(nome) {
+  return String(nome || "").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]/g,"_");
+}
+
 function fecharModalMetas() {
   document.getElementById("modal-metas").classList.add("hidden");
 }
@@ -10114,18 +10206,35 @@ async function salvarModalMetas() {
   const get = id => parseBRL(document.getElementById(id)?.value || "0");
   const getN = id => parseInt(document.getElementById(id)?.value) || 22;
 
-  // Metas coletivas (equipe/CC/lab/img/proc/injet./boleto continuam coletivas — SEM alteração)
+  // Metas coletivas (equipe/lab/img/proc/injet./boleto continuam coletivas).
+  // Etapa 2 CC — `meta_caixa_callcenter` legado NÃO é mais gravado aqui; as
+  // metas individuais de CC vão em `dados.metas_cc` abaixo (após coleta dos
+  // inputs por atendente). O campo legado no doc permanece intocado pra
+  // retrocompat de leitura de meses fechados (helpers de meta_*DeCC fazem fallback).
   const dados = {
     meta_caixa_equipe:     get("mm-caixa-equipe"),
     meta_credito_equipe:   get("mm-credito-equipe"),
     meta_boleto_equipe:    get("mm-boleto-equipe"),
     dias_uteis:            getN("mm-dias-uteis"),
-    meta_caixa_callcenter: get("mm-caixa-callcenter"),
     meta_lab_equipe:            get("mm-lab"),
     meta_img_equipe:            get("mm-img"),
     meta_proc_equipe:           get("mm-proc"),
     meta_injetaveis_equipe:     get("mm-injetaveis"),
   };
+
+  // Etapa 2 CC — coleta metas individuais por atendente e monta o mapa
+  // metas_cc = { "Erielly": {receptivo, ativo}, "Júlia": {receptivo, ativo} }.
+  // Guardado no próprio doc metas/{mesAno} (herda as firestore.rules do parent,
+  // sem exigir novo match).
+  const metasCC = {};
+  CC_TODOS.forEach(nome => {
+    const id = _docIdMetaCC(nome);
+    metasCC[nome] = {
+      receptivo: get(`mm-cc-rec-${id}`),
+      ativo:     get(`mm-cc-at-${id}`),
+    };
+  });
+  dados.metas_cc = metasCC;
 
   const alvo = dashMesAno || getMesAno();
   const btn  = document.querySelector("#modal-metas .btn-primary");
