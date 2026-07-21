@@ -8802,7 +8802,9 @@ function renderDashPremiacao() {
         const projC = (tot.caixa / diasPassF) * diasUteis;
         premProj = calcPremiacao(projC, 0, "callcenter", metaCC, 0);
       }
-      return { nome, tot, prem, premProj };
+      // metaCC precisa vazar do closure pro rowCC usar (via r.metaCC).
+      // Sem isso, rowCC referencia `metaCC` bare e explode (ReferenceError).
+      return { nome, tot, prem, premProj, metaCC };
     })
     .sort((a,b) => b.prem.valor - a.prem.valor);
 
@@ -8868,7 +8870,7 @@ function renderDashPremiacao() {
   }
 
   function rowCC(r) {
-    const pct = metaCC > 0 ? (r.tot.caixa / metaCC * 100).toFixed(1) : "—";
+    const pct = r.metaCC > 0 ? (r.tot.caixa / r.metaCC * 100).toFixed(1) : "—";
     const fc  = faixaClass(r.prem.faixa);
     return `<tr>
       <td><strong>${r.nome}</strong></td>
