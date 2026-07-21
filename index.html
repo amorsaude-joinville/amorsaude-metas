@@ -3992,6 +3992,88 @@ function calcPremBoleto(contBoleto) {
   return 0;
 }
 
+// ─────────────────────────────────────────────────────────────
+// PREMIAÇÃO CALL CENTER — NOVA REGRA (só atendente `callcenter`).
+// Vigente a partir de MARCO_NOVA_PREM_CC (default: Jul/2026). Meses
+// anteriores continuam usando `calcPremiacao` (fixo por faixa) pra não
+// alterar valores já pagos. `lider_callcenter` (Andrielli) segue no fixo
+// antigo — decisão explícita: liderança acompanha mas não recebe esta regra.
+// Recepção nunca passa por aqui: helpers específicos (calcPremiacaoCaixaRec/
+// calcPremBoleto) são chamados nos consumidores de recep.
+// ─────────────────────────────────────────────────────────────
+const MARCO_NOVA_PREM_CC = "2026-07";
+
+// Regra de premiação de CAIXA por BUCKET (aplicada separadamente a receptivo
+// e ativo). 150% é o teto de faixa — quem passa fica na 150% mas segue
+// crescendo linearmente (caixa × 1,69%), sem cap absoluto.
+function calcPremiacaoCaixaCC(caixaBucket, metaBucket) {
+  if(metaBucket <= 0) return { valor:0, faixa:"Meta não definida", proxFaixa:null, faltaProx:0 };
+  const pct = caixaBucket / metaBucket;
+  if(pct >= 1.50) return { valor: caixaBucket * 0.0169, faixa:"150% da meta 🏆", proxFaixa:null,   faltaProx:0 };
+  if(pct >= 1.25) return { valor: caixaBucket * 0.0133, faixa:"125% da meta 🔥", proxFaixa:"150%", faltaProx: metaBucket*1.50 - caixaBucket };
+  if(pct >= 1.00) return { valor: caixaBucket * 0.0100, faixa:"100% da meta ✅", proxFaixa:"125%", faltaProx: metaBucket*1.25 - caixaBucket };
+  if(pct >= 0.90) return { valor: caixaBucket * 0.0075, faixa:"90% da meta",     proxFaixa:"100%", faltaProx: metaBucket      - caixaBucket };
+  if(pct >= 0.80) return { valor: caixaBucket * 0.0050, faixa:"80% da meta",     proxFaixa:"90%",  faltaProx: metaBucket*0.90 - caixaBucket };
+  return             { valor:0,                         faixa:"Abaixo de 80%",   proxFaixa:"80%",  faltaProx: metaBucket*0.80 - caixaBucket };
+}
+
+// Premiação total da atendente CC = prem(receptivo) + prem(ativo) + boleto.
+// Boleto usa a MESMA regra da recepção (calcPremBoleto), sem separar rec/atv
+// (a contagem é única). Chamador precisa garantir que este é o caminho certo
+// pelo par (perfil === "callcenter", mesAno >= MARCO_NOVA_PREM_CC).
+function calcPremiacaoCC(caixaRec, caixaAtv, metaRec, metaAtv, contBoleto) {
+  const rec = calcPremiacaoCaixaCC(caixaRec || 0, metaRec || 0);
+  const atv = calcPremiacaoCaixaCC(caixaAtv || 0, metaAtv || 0);
+  const boleto = calcPremBoleto(Number(contBoleto) || 0);
+  return {
+    rec, atv,
+    boleto,
+    valorCaixa: rec.valor + atv.valor,
+    valorTotal: rec.valor + atv.valor + boleto,
+  };
+}
+
+// Decisor único: retorna true quando devemos aplicar a NOVA regra pra este
+// (perfil, mês). Concentra a política num só lugar — mudar o marco ou incluir
+// lider_callcenter no futuro é uma edição só.
+function usarPremCCNova(perfil, mesAnoStr) {
+  return perfil === "callcenter" && (mesAnoStr || "") >= MARCO_NOVA_PREM_CC;
+}
+
+// Helper de premiação pra atendente CC nas views do gestor/coord. Recebe lancs
+// da atendente + meta doc + contagem de boletos, e retorna pack (rec/atv/boleto/
+// total). Se cair na regra ANTIGA (perfil != callcenter ou mês fechado), delega
+// pra `calcPremiacao` com meta total pra preservar valor.
+// `mult`: multiplicador aplicado nos caixas/boletos ANTES de calcular a faixa.
+// Usado pras projeções (mult = diasUteis/diasPass); atual usa mult = 1.
+function _premCCPorAtendente(ls, nome, m, mesAnoStr, contBoleto, mult = 1) {
+  const metaTotal = metaTotalDeCC(nome, m);
+  if(usarPremCCNova("callcenter", mesAnoStr)) {
+    const split   = splitCaixaCC(ls, { usarHist:false });
+    const metaRec = metaReceptivoDeCC(nome, m);
+    const metaAtv = metaAtivoDeCC(nome, m);
+    return calcPremiacaoCC(
+      split.caixaReceptivo * mult,
+      split.caixaAtivo     * mult,
+      metaRec, metaAtv,
+      Math.round((contBoleto || 0) * mult),
+    );
+  }
+  const caixaTot = calcTotais(ls).caixa * mult;
+  const old = calcPremiacao(caixaTot, 0, "callcenter", metaTotal, 0);
+  return {
+    rec: null, atv: null, boleto: 0,
+    valorCaixa: old.valor, valorTotal: old.valor,
+    // Compat pros pontos que ainda leem `faixa` do formato antigo (ranking/premiação).
+    _legacyFaixa: old.faixa, _legacyProxFaixa: old.proxFaixa, _legacyFaltaProx: old.faltaProx,
+  };
+}
+
+// Extrai o mês selecionado no painel do coord (input #coord-mes). Fallback: mês corrente.
+function _mesAnoCoord() {
+  return document.getElementById("coord-mes")?.value || getMesAno();
+}
+
 // Valor do pool coletivo baseado no total de equipe vs meta
 function calcPoolPremio(total, meta, faixas) {
   if(meta <= 0) return 0;
@@ -4920,22 +5002,38 @@ function atualizarCards() {
   const isCC = perfil==="callcenter"||perfil==="lider_callcenter";
   // Recepcionista/líder usa META INDIVIDUAL (fallback nas coletivas se vazio)
   const metaInd = isCC ? null : metaIndUsuarioLogado();
-  // Etapa 2 CC — meta CC = soma dos nichos (receptivo + ativo) da própria atendente
+  // Etapa 2 CC — meta CC (total) = soma dos nichos (receptivo + ativo) da própria atendente.
+  // Ainda é o valor usado por lider_callcenter e por meses < MARCO_NOVA_PREM_CC (regra antiga).
   const metaCaixa   = isCC ? metaTotalDeCC(usuario?.nome, metas) : (metaInd.metaCaixa   || 0);
   const metaCredito = isCC ? 0                                : (metaInd.metaCredito || 0);
-  const contBoleto  = isCC ? 0 : lancMes.filter(_ehLancBoleto).length;
+  // Nova premiação CC (Jul/2026+): atendente `callcenter` agora recebe boleto
+  // igual recep. lider_callcenter e meses fechados seguem com 0 (regra antiga).
+  const _premCCNova = usarPremCCNova(perfil, mesAno);
+  const contBoleto  = _premCCNova
+    ? lancMes.filter(_ehLancBoleto).length
+    : (isCC ? 0 : lancMes.filter(_ehLancBoleto).length);
+  // Split rec/atv só faz sentido quando cai na regra nova; senão passa null.
+  const _splitCC = _premCCNova ? splitCaixaCC(lancMes, { usarHist:false }) : null;
+  const _metaCCRec = _premCCNova ? metaReceptivoDeCC(usuario?.nome, metas) : 0;
+  const _metaCCAtv = _premCCNova ? metaAtivoDeCC(usuario?.nome, metas) : 0;
 
   console.log(`[Amor Saúde] Totais — Perfil: ${perfil} | Caixa: ${caixa.toFixed(2)} | Crédito: ${credito.toFixed(2)} | MetaCaixa: ${metaCaixa} | MetaCredito: ${metaCredito} | Boletos: ${contBoleto} | Qtd lançamentos: ${lancMes.length}`);
 
   const grid = document.getElementById("grid-metas");
   grid.innerHTML = "";
-  grid.appendChild(cardMeta("Meta de Caixa","💰",caixa,metaCaixa));
+  if(_premCCNova) {
+    // Etapa CC-prem — atendente vê 2 metas separadas.
+    grid.appendChild(cardMeta("Meta Caixa Receptivo","💰", _splitCC.caixaReceptivo, _metaCCRec));
+    grid.appendChild(cardMeta("Meta Caixa Ativo",    "📞", _splitCC.caixaAtivo,     _metaCCAtv));
+  } else {
+    grid.appendChild(cardMeta("Meta de Caixa","💰",caixa,metaCaixa));
+  }
   if(TEM_CREDITO.includes(perfil))
     grid.appendChild(cardMeta("Meta de Crédito","💳",credito,metaCredito));
 
-  atualizarProj(caixa, metaCaixa, credito, metaCredito);
-  atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto);
-  atualizarMetaDiaria(caixa, metaCaixa);
+  atualizarProj(caixa, metaCaixa, credito, metaCredito, _splitCC, _metaCCRec, _metaCCAtv);
+  atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto, _splitCC, _metaCCRec, _metaCCAtv);
+  atualizarMetaDiaria(caixa, metaCaixa, _splitCC, _metaCCRec, _metaCCAtv);
   atualizarResumoDia();
   renderTabelaPremiacao();
   if(metaCaixa > 0) {
@@ -4975,7 +5073,7 @@ function cardMeta(titulo, ico, atingido, meta) {
   return div;
 }
 
-function atualizarProj(caixaAtual, metaCaixa, credito, metaCredito) {
+function atualizarProj(caixaAtual, metaCaixa, credito, metaCredito, splitCC, metaCCRec, metaCCAtv) {
   const diasUteis = metas?.dias_uteis||22;
   const diasPass  = diasUteisPassados(diasUteis);
   const diasRest  = diasUteis - diasPass;
@@ -4983,6 +5081,25 @@ function atualizarProj(caixaAtual, metaCaixa, credito, metaCredito) {
   if(diasPass===0) {
     document.getElementById("proj-val").textContent = "Início do mês";
     document.getElementById("proj-det").innerHTML   = "Faça o primeiro lançamento!";
+    return;
+  }
+
+  // Nova regra CC — atendente vê projeção separada por bucket + prem CC completa.
+  if(splitCC) {
+    const projRec = (splitCC.caixaReceptivo / diasPass) * diasUteis;
+    const projAtv = (splitCC.caixaAtivo     / diasPass) * diasUteis;
+    const pctRec  = metaCCRec > 0 ? (projRec/metaCCRec)*100 : 0;
+    const pctAtv  = metaCCAtv > 0 ? (projAtv/metaCCAtv)*100 : 0;
+    const contProj = Math.round((lancMes.filter(_ehLancBoleto).length / diasPass) * diasUteis);
+    const premProjCC = calcPremiacaoCC(projRec, projAtv, metaCCRec, metaCCAtv, contProj);
+    const premStr = premProjCC.valorTotal > 0
+      ? ` &nbsp;·&nbsp; Premiação projetada: <strong>${brl(premProjCC.valorTotal)}</strong>`
+      : "";
+    document.getElementById("proj-val").textContent = `Projeção: ${brl(projRec + projAtv)}`;
+    document.getElementById("proj-det").innerHTML =
+      `Receptivo: <strong>${brl(projRec)}</strong> (${pctRec.toFixed(0)}%) &nbsp;·&nbsp; `
+      + `Ativo: <strong>${brl(projAtv)}</strong> (${pctAtv.toFixed(0)}%)`
+      + `${premStr} &nbsp;·&nbsp; ${diasRest} dias úteis restantes`;
     return;
   }
 
@@ -6043,11 +6160,33 @@ function renderHistorico(lista, dataSel) {
 // ═══════════════════════════════════════════════════════════
 //  CARD PREMIAÇÃO
 // ═══════════════════════════════════════════════════════════
-function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto) {
+function atualizarCardPremiacao(caixa, credito, metaCaixa, metaCredito, perfil, contBoleto, splitCC, metaCCRec, metaCCAtv) {
   const el = document.getElementById("card-prem");
   if(!el) return;
 
-  // Call Center: lógica por faixa fixa
+  // Nova regra CC (atendente `callcenter`, mês >= MARCO_NOVA_PREM_CC):
+  // Rec + Ativo com faixa própria + Boleto (mesma regra da recepção).
+  if(splitCC) {
+    const p = calcPremiacaoCC(splitCC.caixaReceptivo, splitCC.caixaAtivo, metaCCRec, metaCCAtv, contBoleto);
+    const linhaBucket = (rotulo, pct, r) => {
+      const detalhe = r.proxFaixa && r.faltaProx > 0
+        ? `<span style="opacity:.75">${r.faixa} · falta ${brl(r.faltaProx)} pra ${r.proxFaixa}</span>`
+        : `<span style="opacity:.75">${r.faixa}</span>`;
+      return `<div>${rotulo}: <strong>${brl(r.valor)}</strong> ${detalhe}</div>`;
+    };
+    el.innerHTML = `
+      <div class="prem-top"><div class="prem-tit">🏅 Premiação Atual</div><span style="font-size:26px">🎯</span></div>
+      <div class="prem-val">${brl(p.valorTotal)}</div>
+      <div style="font-size:12px;color:#78350F;margin:8px 0 6px;display:flex;flex-direction:column;gap:5px">
+        ${linhaBucket("💰 Receptivo", metaCCRec > 0 ? splitCC.caixaReceptivo/metaCCRec : 0, p.rec)}
+        ${linhaBucket("📞 Ativo",     metaCCAtv > 0 ? splitCC.caixaAtivo/metaCCAtv     : 0, p.atv)}
+        <div>🧾 Boleto: <strong>${brl(p.boleto)}</strong> <span style="opacity:.75">(${contBoleto||0} boleto${(contBoleto||0)!==1?"s":""})</span></div>
+      </div>
+    `;
+    return;
+  }
+
+  // Call Center (regra antiga — lider_callcenter sempre; atendente em meses fechados)
   if(perfil === "callcenter" || perfil === "lider_callcenter") {
     const { valor, faixa, proxFaixa, faltaProx } = calcPremiacao(caixa, credito, perfil, metaCaixa, metaCredito);
     let proxHtml = "";
@@ -6330,18 +6469,80 @@ function _tabPremBlocoPool(titulo, parteLabel, total, meta, faixas, fracaoIndivi
   </div>`;
 }
 
-// Dispatcher — visível só pra recepcionista e lider.
+// Bloco "🎧 Caixa CC (Receptivo / Ativo)" — 5 faixas cada bucket, com valor
+// = caixa × pct da faixa (150% é teto, mas linear acima). Usado só pela
+// atendente `callcenter` em meses >= MARCO_NOVA_PREM_CC.
+function _tabPremBlocoCaixaCC(caixaBucket, metaBucket, rotuloBucket) {
+  if(metaBucket <= 0) return "";
+  const faixas = [
+    { label:"80% da meta",  pct:0.80, mult:0.0050 },
+    { label:"90% da meta",  pct:0.90, mult:0.0075 },
+    { label:"100% da meta", pct:1.00, mult:0.0100 },
+    { label:"125% da meta", pct:1.25, mult:0.0133 },
+    { label:"150% da meta 🏆", pct:1.50, mult:0.0169 },
+  ];
+  const pctAtual = caixaBucket / metaBucket;
+  let idxAtingida = -1;
+  faixas.forEach((f,i) => { if(pctAtual >= f.pct) idxAtingida = i; });
+  const idxAtual = idxAtingida >= 0 ? idxAtingida : 0;
+
+  const linhas = faixas.map((f,i) => {
+    // valorLabel usa a projeção do valor NA FAIXA (meta_bucket × pct × mult) —
+    // isso dá uma referência estável. Na batida real, o caixa pode divergir.
+    const valorRef = metaBucket * f.pct * f.mult;
+    const valorLabel = `${brl(valorRef)} <span style="opacity:.6;font-weight:400">(${(f.mult*100).toFixed(2)}% do caixa)</span>`;
+    let status, extra;
+    if(i < idxAtual) { status = "batida"; extra = "Batida"; }
+    else if(i === idxAtual) {
+      status = "atual";
+      extra = pctAtual >= f.pct
+        ? `Você (${(pctAtual*100).toFixed(1)}%)`
+        : `faltam ${brl(metaBucket * f.pct - caixaBucket)}`;
+    } else {
+      status = "proxima";
+      extra = `faltam ${brl(metaBucket * f.pct - caixaBucket)}`;
+    }
+    return _tabPremFaixaLinha(f.label, valorLabel, status, extra);
+  }).join("");
+
+  return `<div class="tab-prem-cat">
+    <div class="tab-prem-cat-titulo">
+      <span>${rotuloBucket}</span>
+      <span class="tab-prem-cat-parte">150% é o teto de faixa (linear acima)</span>
+    </div>
+    ${linhas}
+  </div>`;
+}
+
+// Dispatcher — visível pra recepcionista, lider e atendente CC (regra nova).
 function renderTabelaPremiacao() {
   const card = document.getElementById("card-tabela-premiacao");
   const el   = document.getElementById("tab-prem-body");
   if(!card || !el) return;
 
   const perfil = usuario?.perfil;
-  if(!["recepcionista","lider"].includes(perfil)) {
+  // Nova regra CC: atendente `callcenter` (Erielly/Júlia) vê tabela específica.
+  // lider_callcenter (Andrielli) segue sem tabela (mesma visão da coord Paola).
+  const ehAtendCC = usarPremCCNova(perfil, mesAno);
+  if(!["recepcionista","lider"].includes(perfil) && !ehAtendCC) {
     card.style.display = "none";
     return;
   }
   card.style.display = "";
+  if(ehAtendCC) {
+    if(!metas) { el.innerHTML = `<div style="font-size:13px;color:var(--text2);padding:12px 0">Aguardando metas...</div>`; return; }
+    const split = splitCaixaCC(lancMes, { usarHist:false });
+    const metaRec = metaReceptivoDeCC(usuario?.nome, metas);
+    const metaAtv = metaAtivoDeCC(usuario?.nome, metas);
+    const contBoleto = lancMes.filter(_ehLancBoleto).length;
+    const blocos = [
+      _tabPremBlocoCaixaCC(split.caixaReceptivo, metaRec, "💰 Caixa Receptivo"),
+      _tabPremBlocoCaixaCC(split.caixaAtivo,     metaAtv, "📞 Caixa Ativo"),
+      _tabPremBlocoBoleto(contBoleto),
+    ].filter(Boolean);
+    el.innerHTML = blocos.join("") || `<div class="tab-prem-aviso">📊 Nenhuma faixa disponível — verifique se as metas do mês foram configuradas.</div>`;
+    return;
+  }
 
   // Em meses < MARCO: lançamentos individuais não eram registrados.
   // Mostra mensagem amigável em vez dos cards.
@@ -6402,12 +6603,47 @@ function renderTabelaPremiacao() {
 // ═══════════════════════════════════════════════════════════
 //  CARD META DIÁRIA
 // ═══════════════════════════════════════════════════════════
-function atualizarMetaDiaria(caixaAtual, metaCaixa) {
+function atualizarMetaDiaria(caixaAtual, metaCaixa, splitCC, metaCCRec, metaCCAtv) {
   const el = document.getElementById("card-dia");
   if(!el) return;
 
   const diasPass   = diasUteisPassadosFloat();
   const diasRest   = diasUteisRestantes();
+
+  // Nova regra CC — 2 linhas (Receptivo / Ativo), cada uma com necessário-hoje + média.
+  if(splitCC) {
+    function linhaBucket(rotulo, caixa, meta) {
+      const media   = diasPass > 0 ? caixa / diasPass : 0;
+      const falta   = Math.max(0, meta - caixa);
+      const metaDia = diasRest > 0 ? falta / diasRest : 0;
+      const noRitmo = meta <= 0 || media >= metaDia;
+      return `
+        <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">${rotulo}</div>
+          <div class="dia-nums">
+            <div class="dia-num">
+              <label>Necessário hoje</label>
+              <div class="dn-val" style="color:${noRitmo?"var(--success)":"var(--primary)"}">${brl(metaDia)}</div>
+            </div>
+            <div class="dia-num">
+              <label>Sua média diária</label>
+              <div class="dn-val">${brl(media)}</div>
+            </div>
+          </div>
+          <span class="dia-ritmo ${noRitmo?"dia-ok":"dia-nok"}">
+            ${noRitmo ? "✅ No ritmo" : "⚠️ Abaixo do ritmo"}
+          </span>
+        </div>`;
+    }
+    el.innerHTML = `
+      <div class="dia-tit">📅 Meta Diária</div>
+      ${linhaBucket("💰 Receptivo", splitCC.caixaReceptivo, metaCCRec)}
+      ${linhaBucket("📞 Ativo",     splitCC.caixaAtivo,     metaCCAtv)}
+      <div style="font-size:12px;color:var(--text2);margin-top:10px">${diasRest.toFixed(1)} dias úteis restantes no mês</div>
+    `;
+    return;
+  }
+
   const mediaAtual = diasPass > 0 ? caixaAtual / diasPass : 0;
   const falta      = Math.max(0, metaCaixa - caixaAtual);
   const metaDia    = diasRest > 0 ? falta / diasRest : 0;
@@ -7374,13 +7610,20 @@ function renderCoordResumoCCs(lancs) {
 
 function renderCoordRanking(lancs) {
   // Etapa 2 CC — meta per-atendente (receptivo + ativo dela).
-  // Etapa 3 CC — ranking segue sobre o TOTAL (decisão registrada); desdobrar por
-  // nicho aqui só se necessário mais tarde.
-  const rank = CC_TODOS.map(nome => ({
-    nome,
-    caixa: calcTotais(lancs.filter(l => l.usuario_nome === nome)).caixa,
-    metaCC: metaTotalDeCC(nome, metas),
-  })).sort((a,b) => b.caixa - a.caixa);
+  // Etapa 3 CC — ranking segue sobre o TOTAL (decisão registrada).
+  // Nova regra CC — a premiação exibida é a nova (rec + atv + boleto) quando
+  // mês >= MARCO_NOVA_PREM_CC; antes disso permanece a fixa antiga.
+  const mesAnoAtual = _mesAnoCoord();
+  const rank = CC_TODOS.map(nome => {
+    const ls = lancs.filter(l => l.usuario_nome === nome);
+    return {
+      nome,
+      ls,
+      caixa: calcTotais(ls).caixa,
+      metaCC: metaTotalDeCC(nome, metas),
+      contBol: ls.filter(_ehLancBoleto).length,
+    };
+  }).sort((a,b) => b.caixa - a.caixa);
 
   const medals = ["🥇","🥈","🥉"];
   const el = document.getElementById("coord-ranking");
@@ -7390,7 +7633,7 @@ function renderCoordRanking(lancs) {
     <tbody>
       ${rank.map((r,i) => {
         const pct  = r.metaCC > 0 ? (r.caixa/r.metaCC*100).toFixed(1)+"%" : "—";
-        const prem = calcPremiacao(r.caixa, 0, "callcenter", r.metaCC, 0);
+        const prem = _premCCPorAtendente(r.ls, r.nome, metas, mesAnoAtual, r.contBol);
         const barW = r.metaCC > 0 ? Math.min((r.caixa/r.metaCC)*100,100).toFixed(0) : 0;
         const cor  = CC_CORES[r.nome] || "var(--primary)";
         return `<tr>
@@ -7398,7 +7641,7 @@ function renderCoordRanking(lancs) {
           <td><strong style="color:${cor}">${r.nome}</strong></td>
           <td>${brl(r.caixa)}<div class="rank-bar"><div class="rank-bar-fill" style="width:${barW}%"></div></div></td>
           <td style="font-weight:600;color:${r.caixa>=r.metaCC&&r.metaCC>0?"var(--success)":"var(--primary)"}">${pct}</td>
-          <td><span class="prem-badge">🏅 ${brl(prem.valor)}</span></td>
+          <td><span class="prem-badge">🏅 ${brl(prem.valorTotal)}</span></td>
         </tr>`;
       }).join("")}
     </tbody>
@@ -7407,25 +7650,29 @@ function renderCoordRanking(lancs) {
 
 function renderCoordPremiacao(lancs) {
   // Etapa 2 CC — meta per-atendente (receptivo + ativo). Removida a const genérica.
-  // Etapa 3 CC — premiação P1 individual segue sobre o TOTAL da atendente
-  // (calcPremiacao recebe caixa/metaCC totais). Sem desdobramento.
+  // Nova regra CC — para mês >= MARCO_NOVA_PREM_CC, `_premCCPorAtendente` calcula
+  // (rec + atv + boleto). Meses anteriores caem no fixo antigo.
   const diasPass  = diasUteisPassadosFloat();
   const diasUteis = metas?.dias_uteis || 22;
+  const mesAnoAtual = _mesAnoCoord();
   const el = document.getElementById("coord-premiacao");
   if(!el) return;
 
   const dados = CC_TODOS.map(nome => {
     const metaCC = metaTotalDeCC(nome, metas);
-    const { caixa } = calcTotais(lancs.filter(l => l.usuario_nome === nome));
-    const prem  = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
+    const ls = lancs.filter(l => l.usuario_nome === nome);
+    const { caixa } = calcTotais(ls);
+    const contBol = ls.filter(_ehLancBoleto).length;
+    const prem  = _premCCPorAtendente(ls, nome, metas, mesAnoAtual, contBol);
     const media = diasPass > 0 ? caixa/diasPass : 0;
     const proj  = media * diasUteis;
-    const premProj = calcPremiacao(proj, 0, "callcenter", metaCC, 0);
+    const mult  = diasPass > 0 ? diasUteis/diasPass : 1;
+    const premProj = _premCCPorAtendente(ls, nome, metas, mesAnoAtual, contBol, mult);
     return { nome, caixa, prem, proj, premProj, metaCC };
   });
 
-  const totalPrem     = dados.reduce((s,d) => s + d.prem.valor, 0);
-  const totalPremProj = dados.reduce((s,d) => s + d.premProj.valor, 0);
+  const totalPrem     = dados.reduce((s,d) => s + d.prem.valorTotal,     0);
+  const totalPremProj = dados.reduce((s,d) => s + d.premProj.valorTotal, 0);
 
   el.innerHTML = `
     <div class="prem-resumo-grid">
@@ -7454,13 +7701,17 @@ function renderCoordPremiacao(lancs) {
           const pct = d.metaCC > 0 ? (d.caixa/d.metaCC*100).toFixed(1) : "—";
           const ok  = d.caixa >= d.metaCC && d.metaCC > 0;
           const cor = CC_CORES[d.nome] || "var(--primary)";
+          // Faixa: nova regra mostra rec/atv separados; regra antiga usa _legacyFaixa.
+          const faixaHtml = d.prem.rec
+            ? `<div style="font-size:11px;line-height:1.5">Rec: <strong>${d.prem.rec.faixa}</strong><br>Atv: <strong>${d.prem.atv.faixa}</strong></div>`
+            : `<span class="prem-faixa${ok?" ok":""}">${d.prem._legacyFaixa || ""}</span>`;
           return `<tr>
             <td><strong style="color:${cor}">${d.nome}</strong></td>
             <td class="num">${brl(d.caixa)}</td>
             <td class="num" style="color:${ok?"var(--success)":"var(--primary)"};font-weight:600">${pct}%</td>
-            <td><span class="prem-faixa${ok?" ok":""}">${d.prem.faixa}</span></td>
-            <td class="num vp"><strong>${brl(d.prem.valor)}</strong></td>
-            <td class="num" style="color:var(--text2)">${brl(d.premProj.valor)}</td>
+            <td>${faixaHtml}</td>
+            <td class="num vp"><strong>${brl(d.prem.valorTotal)}</strong></td>
+            <td class="num" style="color:var(--text2)">${brl(d.premProj.valorTotal)}</td>
           </tr>`;
         }).join("")}
       </tbody>
@@ -7476,6 +7727,9 @@ function renderCoordPremiacao(lancs) {
 function renderCoordColabs(lancs) {
   // Etapa 2 CC — meta per-atendente (receptivo + ativo). Constante genérica removida.
   // Etapa 3 CC — cards colapsáveis por atendente seguem no TOTAL (não desdobrados).
+  // Nova regra CC — premiação exibida usa `_premCCPorAtendente` (valorTotal já
+  // inclui rec+atv+boleto quando aplicável).
+  const mesAnoAtual = _mesAnoCoord();
   const el = document.getElementById("coord-colab-cards");
   if(!el) return;
 
@@ -7483,9 +7737,10 @@ function renderCoordColabs(lancs) {
     const metaCC = metaTotalDeCC(nome, metas);
     const ls   = lancs.filter(l => l.usuario_nome === nome);
     const { caixa } = calcTotais(ls);
+    const contBol = ls.filter(_ehLancBoleto).length;
     const pct  = metaCC > 0 ? Math.min((caixa/metaCC)*100,100) : 0;
     const ok   = caixa >= metaCC && metaCC > 0;
-    const prem = calcPremiacao(caixa, 0, "callcenter", metaCC, 0);
+    const prem = _premCCPorAtendente(ls, nome, metas, mesAnoAtual, contBol);
     const cor  = CC_CORES[nome] || "var(--primary)";
     const id   = "coord-colab-" + nome.replace(/\s/g,"-");
 
@@ -7513,7 +7768,7 @@ function renderCoordColabs(lancs) {
           </div>
           <div style="text-align:right;margin-right:12px">
             <div class="area-total">${brl(caixa)}</div>
-            <div style="font-size:12px;color:${ok?"var(--success)":"var(--text2)"}">${pct.toFixed(1)}% · 🏅 ${brl(prem.valor)}</div>
+            <div style="font-size:12px;color:${ok?"var(--success)":"var(--text2)"}">${pct.toFixed(1)}% · 🏅 ${brl(prem.valorTotal)}</div>
           </div>
           <span class="area-chev">▼</span>
         </div>
@@ -8026,6 +8281,10 @@ function renderDashHistorico() {
     const mCr =                                                   (indv?.metaCredito || 0);
     const pct = mC > 0 ? (r.caixa/mC*100).toFixed(1) : "—";
     const barW = Math.min((r.caixa/maxCaixa)*100,100).toFixed(0);
+    // Ranking do dashboard HISTÓRICO: docs sem raw lancs → sem como split rec/atv.
+    // Meses fechados são pré-marco por padrão, então o CC cai no fixo antigo (correto).
+    // Se um dia gerarmos historico_mensal pra mês >= MARCO_NOVA_PREM_CC, este ponto
+    // vai continuar mostrando o valor pela regra ANTIGA (fallback deliberado).
     const premV = mC > 0
       ? (isCC ? calcPremiacao(r.caixa,r.credito||0,r.perfil,mC,0).valor
                : calcPremiacaoCaixaRec(r.caixa,r.credito||0,mC,mCr,dashMesAno).valor)
@@ -8059,6 +8318,8 @@ function renderDashHistorico() {
     // Etapa 2 CC — meta per-atendente (receptivo + ativo)
     const mC   = isCC ? metaTotalDeCC(r.nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const mCr  = isCC ? 0                                        : (indv.metaCredito || 0);
+    // Cards da colaboradora no HISTÓRICO — mesma limitação do rank histórico:
+    // sem raw lancs, CC cai no fixo antigo. Ver comentário em `rankRow` acima.
     const prem = mC > 0 ? calcPremiacao(r.caixa||0, r.credito||0, perfil, mC, mCr) : null;
     const pct  = mC > 0 ? (((r.caixa||0)/mC)*100).toFixed(1)+"%" : "—";
     return `<div class="colab-card">
@@ -8790,23 +9051,22 @@ function renderDashPremiacao() {
     .sort((a,b) => b.total - a.total);
 
   // ── Linhas CC ──────────────────────────────────────────────
+  // Nova regra CC — `_premCCPorAtendente` decide (nova pra mês >= marco, senão
+  // fixo antigo). Retorna `valorTotal` como fonte única de verdade da premiação.
   const linhasCC = Object.entries(por)
     .filter(([nome]) => { const p=PERFIS[nome]||""; return p==="callcenter"; })
     .map(([nome, ls]) => {
       const tot  = calcTotaisDetalhados(ls);
-      // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
       const metaCC = metaTotalDeCC(nome, m);
-      const prem = calcPremiacao(tot.caixa, tot.credito, "callcenter", metaCC, 0);
-      let premProj = prem;
-      if(diasPassF > 0) {
-        const projC = (tot.caixa / diasPassF) * diasUteis;
-        premProj = calcPremiacao(projC, 0, "callcenter", metaCC, 0);
-      }
-      // metaCC precisa vazar do closure pro rowCC usar (via r.metaCC).
-      // Sem isso, rowCC referencia `metaCC` bare e explode (ReferenceError).
+      const contBol = ls.filter(_ehLancBoleto).length;
+      const prem = _premCCPorAtendente(ls, nome, m, dashMesAno, contBol);
+      const mult = diasPassF > 0 ? diasUteis/diasPassF : 1;
+      const premProj = diasPassF > 0
+        ? _premCCPorAtendente(ls, nome, m, dashMesAno, contBol, mult)
+        : prem;
       return { nome, tot, prem, premProj, metaCC };
     })
-    .sort((a,b) => b.prem.valor - a.prem.valor);
+    .sort((a,b) => b.prem.valorTotal - a.prem.valorTotal);
 
   // ── Liderança + Coordenação CC ─────────────────────────────
   let totalCaixaCC = 0;
@@ -8832,8 +9092,8 @@ function renderDashPremiacao() {
   // ── Totalizadores ──────────────────────────────────────────
   const totalRec       = linhasRec.reduce((s,r) => s + r.total, 0);
   const totalProjRec   = linhasRec.reduce((s,r) => s + r.totalProj, 0);
-  const totalCCInd     = linhasCC.reduce((s,r) => s + r.prem.valor, 0);
-  const totalProjCCInd = linhasCC.reduce((s,r) => s + r.premProj.valor, 0);
+  const totalCCInd     = linhasCC.reduce((s,r) => s + r.prem.valorTotal,     0);
+  const totalProjCCInd = linhasCC.reduce((s,r) => s + r.premProj.valorTotal, 0);
   const totalLider     = premLider + premCoord;
   const totalProjLider = premLiderProj + premCoordProj;
   const totalGeral     = totalRec + totalCCInd + totalLider;
@@ -8871,16 +9131,22 @@ function renderDashPremiacao() {
 
   function rowCC(r) {
     const pct = r.metaCC > 0 ? (r.tot.caixa / r.metaCC * 100).toFixed(1) : "—";
-    const fc  = faixaClass(r.prem.faixa);
+    // Faixa: nova regra tem rec/atv separados; regra antiga usa _legacyFaixa.
+    const faixaTxt = r.prem.rec
+      ? `Rec: ${r.prem.rec.faixa} · Atv: ${r.prem.atv.faixa}`
+      : (r.prem._legacyFaixa || "");
+    const fc  = faixaClass(faixaTxt);
+    // Boleto: só existe no pack novo; regra antiga não tem parcela de boleto.
+    const boletoCel = r.prem.rec ? brl(r.prem.boleto) : "—";
     return `<tr>
       <td><strong>${r.nome}</strong></td>
       <td class="num">${brl(r.tot.caixa)}<div style="font-size:11px;color:${pct!=="—"&&+pct>=100?"var(--success)":"var(--primary)"}">${pct !== "—" ? pct+"%" : "—"}</div></td>
-      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">
-        ${brl(r.prem.valor)}<div><span class="prem-faixa ${fc}" style="font-size:10px">${r.prem.faixa}</span></div>
+      <td class="num" style="font-weight:700;color:${r.prem.valorCaixa>0?"#B45309":"var(--text2)"}">
+        ${brl(r.prem.valorCaixa)}<div><span class="prem-faixa ${fc}" style="font-size:10px">${faixaTxt}</span></div>
       </td>
-      <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
-      <td class="num" style="font-weight:700;color:${r.prem.valor>0?"#B45309":"var(--text2)"}">${brl(r.prem.valor)}</td>
-      <td class="num" style="font-weight:700;color:${r.premProj.valor>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valor)}</td>
+      <td class="num">${boletoCel}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
+      <td class="num" style="font-weight:700;color:${r.prem.valorTotal>0?"#B45309":"var(--text2)"}">${brl(r.prem.valorTotal)}</td>
+      <td class="num" style="font-weight:700;color:${r.premProj.valorTotal>0?"#B45309":"var(--text2)"}">${brl(r.premProj.valorTotal)}</td>
     </tr>`;
   }
 
@@ -8971,7 +9237,7 @@ function renderDashRanking(lista) {
     por[l.usuario_nome].push(l);
   });
   const todos = Object.entries(por).map(([nome,ls]) => ({
-    nome, perfil: PERFIS[nome]||"", ...calcTotaisDetalhados(ls)
+    nome, perfil: PERFIS[nome]||"", ls, ...calcTotaisDetalhados(ls)
   }));
 
   const rankRec = todos.filter(r => r.perfil==="recepcionista"||r.perfil==="lider").sort((a,b)=>b.caixa-a.caixa);
@@ -8998,8 +9264,16 @@ function renderDashRanking(lista) {
     const premBadge = metaC > 0
       ? (() => {
           let v = 0;
-          if(isCC) { v = calcPremiacao(r.caixa,r.credito,r.perfil,metaC,0).valor; }
-          else     { v = calcPremiacaoCaixaRec(r.caixa,r.credito,metaC,mCr,dashMesAno).valor; }
+          if(r.perfil === "callcenter") {
+            // Nova regra CC (atendente): _premCCPorAtendente decide nova/antiga por mês.
+            const contBol = (r.ls || []).filter(_ehLancBoleto).length;
+            v = _premCCPorAtendente(r.ls || [], r.nome, dashMetasMes, dashMesAno, contBol).valorTotal;
+          } else if(isCC) {
+            // lider_callcenter (Andrielli) — segue no fixo antigo, decisão explícita.
+            v = calcPremiacao(r.caixa,r.credito,r.perfil,metaC,0).valor;
+          } else {
+            v = calcPremiacaoCaixaRec(r.caixa,r.credito,metaC,mCr,dashMesAno).valor;
+          }
           return v > 0 ? `<span class="prem-badge">🏅 ${brl(v)}</span>` : "";
         })()
       : "";
@@ -9058,7 +9332,18 @@ function renderDashColaboradoras(lista) {
     // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
     const metaC  = isCC ? metaTotalDeCC(nome, dashMetasMes) : (indv.metaCaixa   || 0);
     const metaCr = isCC ? 0                                        : (indv.metaCredito || 0);
-    const prem   = metaC > 0 ? calcPremiacao(tot.caixa,tot.credito,perfil,metaC,metaCr) : null;
+    // Nova regra CC (perfil === "callcenter", mês >= marco): usa pack completo.
+    // Outros perfis (recep/lider/lider_callcenter): calcPremiacao clássico.
+    let prem = null;
+    if(metaC > 0) {
+      if(perfil === "callcenter") {
+        const contBol = ls.filter(_ehLancBoleto).length;
+        const pkg = _premCCPorAtendente(ls, nome, dashMetasMes, dashMesAno, contBol);
+        prem = { valor: pkg.valorTotal }; // adaptador — o consumo abaixo usa `prem.valor`
+      } else {
+        prem = calcPremiacao(tot.caixa, tot.credito, perfil, metaC, metaCr);
+      }
+    }
     const pct    = metaC > 0 ? (tot.caixa/metaC*100).toFixed(1)+"%" : "—";
 
     const procDetHtml = Object.entries(tot.porProcTipo).length
