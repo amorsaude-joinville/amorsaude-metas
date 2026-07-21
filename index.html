@@ -1881,6 +1881,19 @@
               <option value="">Todos os motivos</option>
             </select>
           </div>
+          <!-- Etapa 5 CC — filtro por tipo de atendimento do call center.
+               Ao escolher Receptivo/Ativo, o relatório passa a mostrar SÓ docs
+               de perfil CC (recep/médicos somem — decisão intencional). Escondido
+               em modo saídas (não se aplica); zerado ao esconder pra evitar
+               filtragem invisível. -->
+          <div class="fg" id="rel-tipo-cc-wrap" style="margin:0">
+            <label>🎧 Tipo (Call Center)</label>
+            <select id="rel-tipo-cc">
+              <option value="">Todos</option>
+              <option value="receptivo">Receptivo</option>
+              <option value="ativo">Ativo</option>
+            </select>
+          </div>
           <!-- Busca opcional por nome de paciente (case-insensitive, substring) -->
           <div class="fg" style="margin:0">
             <label>🔍 Buscar paciente</label>
@@ -13440,6 +13453,10 @@ function limparFiltrosRelatorio() {
   // Reseta o subtipo e re-aplica visibilidade (esconde o wrapper)
   const selSub = document.getElementById("rel-subtipo");
   if(selSub) selSub.value = "";
+  // Etapa 5 CC — reseta o filtro de Tipo (CC). _onMudarCategoriaRelatorio() abaixo
+  // re-aplica a visibilidade (esconde em modo saídas).
+  const selTipoCC = document.getElementById("rel-tipo-cc");
+  if(selTipoCC) selTipoCC.value = "";
   _onMudarCategoriaRelatorio();
   const hoje = new Date();
   const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -13490,9 +13507,11 @@ function _onMudarCategoriaRelatorio() {
   const wrapForma   = document.getElementById("rel-forma")?.closest(".fg");
   const wrapFormaApp = document.getElementById("rel-forma-app-wrap"); // Feature #3 Etapa 7
   const wrapMotivo  = document.getElementById("rel-motivo-wrap");
+  const wrapTipoCC  = document.getElementById("rel-tipo-cc-wrap");     // Etapa 5 CC
   if(wrapProf)     wrapProf.style.display     = isSaidas ? "none" : "";
   if(wrapForma)    wrapForma.style.display    = isSaidas ? "none" : "";
   if(wrapMotivo)   wrapMotivo.style.display   = isSaidas ? "" : "none";
+  if(wrapTipoCC)   wrapTipoCC.style.display   = isSaidas ? "none" : "";
   // wrapFormaApp: em modo saídas SEMPRE escondido; em modo lançamentos, deixa
   // _onMudarFormaRelatorio() decidir (só aparece se forma==="app").
   if(isSaidas && wrapFormaApp) wrapFormaApp.style.display = "none";
@@ -13502,9 +13521,11 @@ function _onMudarCategoriaRelatorio() {
     const selProf = document.getElementById("rel-profissional");
     const selForma = document.getElementById("rel-forma");
     const selFormaApp = document.getElementById("rel-forma-app-tipo"); // Feature #3 Etapa 7
+    const selTipoCC = document.getElementById("rel-tipo-cc");           // Etapa 5 CC
     if(selProf) selProf.value = "";
     if(selForma) selForma.value = "";
     if(selFormaApp) selFormaApp.value = "";
+    if(selTipoCC) selTipoCC.value = "";
   } else {
     const selMotivo = document.getElementById("rel-motivo");
     if(selMotivo) selMotivo.value = "";
@@ -13700,6 +13721,22 @@ function _matchFormaPagamento(l, forma, appTipo) {
     if(infoFormaPagamento(l.forma_pagamento).chave === forma) return true;
   }
   return false;
+}
+
+// Etapa 5 CC — filtro do relatório por tipo de atendimento do Call Center.
+// Selecionar "Receptivo" ou "Ativo" restringe o resultado APENAS a docs de
+// perfil CC (callcenter/lider_callcenter) — docs de recepção/médicos somem, o
+// que é intencional (usuário optou por focar em CC). Dentro do universo CC,
+// segue a regra das Etapas 3/4/5: sem marcação = receptivo; "ativo" explícito
+// = ativo. Saídas-irmãs novas herdam o tipo do pai (Etapa 5), então também
+// passam corretamente por este filtro.
+function _matchTipoAtendimentoCC(l, tipoCC) {
+  if(!tipoCC) return true;
+  const ehCC = l.perfil === "callcenter" || l.perfil === "lider_callcenter";
+  if(!ehCC) return false;
+  return tipoCC === "ativo"
+    ? l.tipo_atendimento_cc === "ativo"
+    : l.tipo_atendimento_cc !== "ativo"; // "receptivo" — inclui ausência
 }
 
 // Calcula o conjunto de mes_ano cobertos pelo intervalo [iniStr, fimStr] (YYYY-MM-DD)
@@ -14006,6 +14043,8 @@ async function gerarRelatorio() {
   const cat    = document.getElementById("rel-categoria").value || "";
   // Subtipo de procedimento — só relevante quando cat === "procedimentos"
   const subtipo = document.getElementById("rel-subtipo")?.value || "";
+  // Etapa 5 CC — filtro por tipo de atendimento (Receptivo/Ativo). Vazio = Todos.
+  const tipoCC = document.getElementById("rel-tipo-cc")?.value || "";
   // Busca por paciente: case-insensitive, substring. Vazia = ignora filtro.
   // Aplicada a lançamentos E a saídas (ambas têm paciente_nome).
   const pacienteBusca = (document.getElementById("rel-paciente")?.value || "").trim().toLowerCase();
@@ -14070,6 +14109,7 @@ async function gerarRelatorio() {
     if(prof)  docs = docs.filter(l => (l.prescritor || "") === prof);
     if(cat && cat !== "saidas") docs = docs.filter(l => _matchCategoria(l, cat));
     if(forma) docs = docs.filter(l => _matchFormaPagamento(l, forma, formaApp));
+    if(tipoCC) docs = docs.filter(l => _matchTipoAtendimentoCC(l, tipoCC));
     if(cat === "procedimentos" && subtipo) {
       docs = docs.filter(l => Array.isArray(l.procedimentos)
         && l.procedimentos.some(p => p?.tipo === subtipo && (Number(p.valor) || 0) > 0));
