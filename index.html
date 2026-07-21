@@ -1529,7 +1529,19 @@
             </div>
             <div class="fg">
               <label>👨‍⚕️ Consultas (R$)</label>
-              <input type="text" id="e-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada()" />
+              <input type="text" id="e-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEntrada();atualizarLabelMedicoEntrada();_aplicarVisibilidadeConsultaTipo('e-')" />
+              <!-- Consulta/Retorno — só aparece quando Consultas > 0. Obrigatório
+                   nos lançamentos NOVOS (validação em salvarEntrada). Docs antigos
+                   sem o campo continuam válidos e não forçam edição — leitura
+                   trata ausência como "consulta" (regra da Parte 2). -->
+              <div id="e-consulta-tipo-wrap" style="display:none;margin-top:8px;padding-left:14px;border-left:2px solid var(--border)">
+                <label style="font-size:12px;color:var(--text2)">Consulta ou Retorno? *</label>
+                <select id="e-consulta-tipo" style="max-width:220px">
+                  <option value="" disabled selected>Selecione...</option>
+                  <option value="consulta">Consulta</option>
+                  <option value="retorno">Retorno</option>
+                </select>
+              </div>
             </div>
             <div class="fg">
               <label>🧪 Laboratoriais (R$)</label>
@@ -2160,7 +2172,19 @@
       </div>
       <div class="fg">
         <label>👨‍⚕️ Consultas (R$)</label>
-        <input type="text" id="ed-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao()" />
+        <input type="text" id="ed-consultas" placeholder="0,00" oninput="mascaraValor(this);recalcTotalEdicao();atualizarLabelMedicoEdicao();_aplicarVisibilidadeConsultaTipo('ed-')" />
+        <!-- Consulta/Retorno — mesmo padrão do form-entrada. Na edição, só é
+             OBRIGATÓRIO se o doc original já tinha consulta_tipo (evita
+             regressão silenciosa). Docs antigos sem o campo salvam livres —
+             coordenação pode marcar depois sem ser forçada. -->
+        <div id="ed-consulta-tipo-wrap" style="display:none;margin-top:8px;padding-left:14px;border-left:2px solid var(--border)">
+          <label style="font-size:12px;color:var(--text2)">Consulta ou Retorno?</label>
+          <select id="ed-consulta-tipo" style="max-width:220px">
+            <option value="">Selecione...</option>
+            <option value="consulta">Consulta</option>
+            <option value="retorno">Retorno</option>
+          </select>
+        </div>
       </div>
       <div class="fg">
         <label>🧪 Laboratoriais (R$)</label>
@@ -2930,6 +2954,22 @@ function _aplicarVisibilidadeTipoCC() {
   const wrap = document.getElementById("e-tipo-cc-wrap");
   if(!wrap) return;
   wrap.style.display = _ehPerfilCC(usuario?.perfil) ? "" : "none";
+}
+// Parte 1 (captura consulta/retorno) — mostra/esconde o wrap "Consulta ou
+// Retorno?" conforme o valor do input Consultas. Serve pros dois formulários
+// (criação `e-` e edição `ed-`). Ao zerar o input, esconde e limpa o select
+// pra não gravar valor órfão. Obrigatoriedade fica no save (só criação NOVO
+// exige; edição bloqueia só se doc já tinha o campo — decisão explícita).
+function _aplicarVisibilidadeConsultaTipo(prefix) {
+  const inp  = document.getElementById(`${prefix}consultas`);
+  const wrap = document.getElementById(`${prefix}consulta-tipo-wrap`);
+  if(!inp || !wrap) return;
+  const mostrar = parseBRL(inp.value || "0") > 0;
+  wrap.style.display = mostrar ? "" : "none";
+  if(!mostrar) {
+    const sel = document.getElementById(`${prefix}consulta-tipo`);
+    if(sel) sel.value = "";
+  }
 }
 // Perfis que vêem o dashboard geral
 const VE_DASHBOARD = ["gestor","subgestora","lider"];
@@ -5506,6 +5546,9 @@ function resetFormEntrada() {
   // Etapa 1 CC — reseta seletor "Tipo de atendimento" e reaplica visibilidade
   set("e-tipo-cc","");
   _aplicarVisibilidadeTipoCC();
+  // Parte 1 (captura consulta/retorno) — esconde o wrap e zera o select
+  // depois de limpar #e-consultas.
+  _aplicarVisibilidadeConsultaTipo("e-");
   set("busca-pres","");
   preencherPres();
   document.getElementById("e-pres").selectedIndex = -1;
@@ -5596,6 +5639,15 @@ async function salvarEntrada() {
     : "";
   if(_ehPerfilCC(usuario?.perfil) && !tipoAtendimentoCC) {
     toast("Selecione o tipo de atendimento (Receptivo ou Ativo).","err"); return;
+  }
+  // Parte 1 (captura consulta/retorno) — obrigatório em lançamentos NOVOS
+  // quando Consultas > 0. Vale pra TODOS os perfis (recep e CC). Lançamentos
+  // sem valor em Consultas não gravam o campo (schema limpo).
+  const consultaTipo = consultas > 0
+    ? (document.getElementById("e-consulta-tipo")?.value || "")
+    : "";
+  if(consultas > 0 && !consultaTipo) {
+    toast("Escolha se é Consulta ou Retorno.","err"); return;
   }
 
   // Forma de pagamento: obrigatória SOMENTE se status === "pago".
@@ -5741,6 +5793,10 @@ async function salvarEntrada() {
   // na Etapa 3: docs sem o campo contam como RECEPTIVO (histórico e novos, sem
   // corte por data); só "ativo" explícito vai pro ativo. Aqui só gravamos.
   if(tipoAtendimentoCC) { doc.tipo_atendimento_cc = tipoAtendimentoCC; }
+  // Parte 1 (captura consulta/retorno) — grava consulta_tipo só quando o
+  // lançamento tem Consultas > 0 e o usuário escolheu. Leitura futura (Parte 2)
+  // trata ausência como "consulta" (regra "sem marcação = consulta").
+  if(consultaTipo) { doc.consulta_tipo = consultaTipo; }
 
   // D4: Pago + saída embutida → cria 2 docs com id_par. Saída materializada agora.
   // D5: Status≠Pago + saída embutida → guarda saida_pendente no próprio doc.
@@ -12473,6 +12529,12 @@ async function abrirModalEdicao(docId) {
   const fmtNum = v => Number(v) ? Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "";
   set("ed-imagem",    fmtNum(doc.imagem));
   set("ed-consultas", fmtNum(doc.consultas));
+  // Parte 1 (captura consulta/retorno) — pré-carrega valor existente (se doc
+  // já tinha) e revela o wrap quando `ed-consultas` > 0. Docs antigos sem o
+  // campo abrem com o select vazio ("Selecione..."); salvar sem escolher é
+  // permitido (validação backward-compat em salvarEdicaoLanc).
+  set("ed-consulta-tipo", doc.consulta_tipo || "");
+  _aplicarVisibilidadeConsultaTipo("ed-");
   // Lab no doc é o COMBINADO (lab puro + preventivo). No form mostra-se o lab PURO
   // (lab combinado - preventivo_valor); o preventivo vai no campo dedicado.
   const prevVal = Number(doc.preventivo_valor) || 0;
@@ -12852,6 +12914,19 @@ async function salvarEdicaoLanc() {
   if(_edEhCC && !tipoAtendimentoCC) {
     toast("Selecione o tipo de atendimento (Receptivo ou Ativo).","err"); return;
   }
+  // Parte 1 (captura consulta/retorno) — validação BACKWARD-COMPAT:
+  // - Doc antigo (sem `consulta_tipo`) e com Consultas > 0: permite salvar em
+  //   branco (não força escolha em edição de doc legado; decisão explícita).
+  // - Doc que JÁ tinha `consulta_tipo`: exige seleção (evita perda silenciosa
+  //   do dado ao editar outros campos).
+  // - Consultas <= 0: não valida nada; o campo é irrelevante.
+  const _edConsultaTipoDom = consultas > 0
+    ? (document.getElementById("ed-consulta-tipo")?.value || "")
+    : "";
+  const _edTinhaConsultaTipo = !!docOrig.consulta_tipo;
+  if(consultas > 0 && _edTinhaConsultaTipo && !_edConsultaTipoDom) {
+    toast("Escolha se é Consulta ou Retorno.","err"); return;
+  }
 
   // E2: desconto editável — valida limite por perfil se checkbox marcado
   const temSaida = document.getElementById("ed-tem-saida")?.checked;
@@ -12894,6 +12969,11 @@ async function salvarEdicaoLanc() {
   // Etapa 1 CC — grava tipo_atendimento_cc quando o doc é de CC (validação
   // já garantiu que tipoAtendimentoCC não está vazio nesse caminho).
   if(_edEhCC) { updates.tipo_atendimento_cc = tipoAtendimentoCC; }
+  // Parte 1 (captura consulta/retorno) — só grava se o usuário selecionou.
+  // Docs antigos sem escolha permanecem sem o campo (leitura futura trata
+  // ausência como "consulta"). Não usamos FieldValue.delete pra não apagar
+  // marcação que já existia caso o usuário limpasse o select por engano.
+  if(_edConsultaTipoDom) { updates.consulta_tipo = _edConsultaTipoDom; }
 
   // Pagamento — só se status="pago"
   if(ehPago) {
