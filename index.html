@@ -4227,6 +4227,16 @@ async function esqueceuSenha() {
 function _encerrarSessao() {
   pararAutoRefresh();
   usuario = null; lancMes = []; lancHoje = [];
+  // Privacidade — reset defensivo de seções privilegiadas ao encerrar sessão.
+  // Sem isso, se coord/gestor faz logout e outra usuária (ex: callcenter/recep)
+  // loga no MESMO tab sem F5, o DOM da sessão anterior fica exposto (viu no
+  // caso da Erielly rolando a página e enxergando "Relatório de Lançamentos"
+  // + tabela de saídas de outro perfil).
+  ["sec-relatorios","sec-backup","sec-coord","sec-dashboard","sec-orcamentos",
+   "sec-card-equipe","sec-fat-diario"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = "none";
+  });
   document.getElementById("tela-app").classList.add("hidden");
   document.getElementById("tela-login").classList.remove("hidden");
   document.getElementById("sel-usuario").value = "";
@@ -4709,6 +4719,12 @@ function aplicarAbaRec() {
   document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
+  // Privacidade — recepcionista nunca vê relatório nem backup. Reset explícito
+  // fecha vaza­mento de sessão anterior no mesmo tab (o default HTML display:none
+  // não protege se coord/gestor tornou visível antes de fazer logout).
+  document.getElementById("sec-relatorios").style.display  = "none";
+  const _secBkpRec = document.getElementById("sec-backup");
+  if(_secBkpRec) _secBkpRec.style.display = "none";
 
   if(emOrc) renderKanbanOrcamentos();
   // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras)
@@ -4742,6 +4758,12 @@ function aplicarAbaCC() {
   document.getElementById("sec-metas").style.display       = emMetas  ? "" : "none";
   document.getElementById("sec-card-equipe").style.display = emEquipe ? "" : "none";
   document.getElementById("sec-orcamentos").style.display  = emOrc    ? "" : "none";
+  // Privacidade — call center nunca vê relatório nem backup. Reset explícito
+  // fecha vazamento de sessão anterior no mesmo tab (o default HTML display:none
+  // não protege se coord/gestor tornou visível antes de fazer logout).
+  document.getElementById("sec-relatorios").style.display  = "none";
+  const _secBkpCC = document.getElementById("sec-backup");
+  if(_secBkpCC) _secBkpCC.style.display = "none";
 
   if(emOrc) renderKanbanOrcamentos();
   // [C3] Recalcula ranking ao trocar de aba (síncrono, zero leituras)
@@ -14310,10 +14332,11 @@ function _renderTabelaPrincipal(modo, linhas) {
 }
 
 async function gerarRelatorio() {
-  // Privacidade — gate defensivo por perfil. A aba #sec-relatorios já é
-  // escondida pra recepcionista/callcenter em aplicarAbaCC/Rec, mas se algo
-  // (bookmarklet, extensão, chamada sintética) invocar esta função, recusamos
-  // antes de qualquer query que traria docs de todos os pacientes.
+  // Privacidade — gate defensivo por perfil. A seção #sec-relatorios agora é
+  // ativamente escondida em aplicarAbaCC/Rec (correção do vazamento em que
+  // sessão anterior de coord/gestor deixava o DOM visível pra CC/recep) e
+  // resetada em _encerrarSessao no logout. Este if é a segunda linha de defesa
+  // contra invocação sintética via console/bookmarklet/extensão.
   // Reforço real (contra F12 no console) precisa endurecer firestore.rules
   // — hoje callcenter/recepcionista têm read amplo em /lancamentos; ver README.
   if(!VE_RELATORIOS.includes(usuario?.perfil)) {
