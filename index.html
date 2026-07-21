@@ -2811,6 +2811,53 @@ function metaTotalDeCC(nome, m) {
 function metaTotalEquipeCC(m) {
   return CC_TODOS.reduce((s, n) => s + metaTotalDeCC(n, m), 0);
 }
+// Etapa 3 CC — soma das metas de RECEPTIVO / ATIVO da equipe (usadas nos
+// dois cards separados que substituíram o card único "Caixa CC — Equipe").
+function metaReceptivoEquipeCC(m) {
+  return CC_TODOS.reduce((s, n) => s + metaReceptivoDeCC(n, m), 0);
+}
+function metaAtivoEquipeCC(m) {
+  return CC_TODOS.reduce((s, n) => s + metaAtivoDeCC(n, m), 0);
+}
+// Etapa 3 CC — separa o alcançado da equipe/atendente em receptivo vs ativo.
+// Regra final: docs sem `tipo_atendimento_cc` contam como RECEPTIVO (histórico
+// e novos, sem corte por data). Só `tipo_atendimento_cc === "ativo"` conta no
+// ativo. Saídas (embutidas ou avulsas) descontam do receptivo — não trazem o
+// campo, e resolver via id_par ficaria fora do escopo desta etapa.
+// `usarHist=true`  → src são docs do historicoEquipe (têm d.caixa pré-computado)
+// `usarHist=false` → src são lancamentos ao vivo (replica calcTotais)
+function splitCaixaCC(src, { usarHist }) {
+  let caixaReceptivo = 0, caixaAtivo = 0;
+  if(usarHist) {
+    src.forEach(d => {
+      const v = Number(d.caixa) || 0;
+      if(d.tipo_atendimento_cc === "ativo") caixaAtivo += v;
+      else caixaReceptivo += v;
+    });
+    return { caixaReceptivo: Math.max(0, caixaReceptivo), caixaAtivo: Math.max(0, caixaAtivo) };
+  }
+  const fmCaixa = ["Dinheiro","Débito","Pix","Boleto"];
+  src.forEach(l => {
+    if(!ehDocPago(l)) return;
+    if(l.tipo === "saida") return; // tratado no loop de saídas abaixo
+    if(l.tipo !== "entrada") return;
+    let v = 0;
+    if(ehDocNovoSchema(l)) {
+      v = Number(l.caixa) || 0;
+    } else {
+      const val = Number(l.valor) || 0;
+      const fp  = (l.forma_pagamento || "").normalize("NFC").trim();
+      if(fmCaixa.includes(fp)) v = val;
+    }
+    if(l.tipo_atendimento_cc === "ativo") caixaAtivo += v;
+    else caixaReceptivo += v;
+  });
+  src.filter(l => l.tipo === "saida" && ehDocPago(l)).forEach(l => {
+    if(!l.id_par && (l.mes_ano || "") >= MARCO_NOVO_MODELO) return;
+    caixaReceptivo -= Number(l.valor) || 0;
+  });
+  return { caixaReceptivo: Math.max(0, caixaReceptivo), caixaAtivo: Math.max(0, caixaAtivo) };
+}
 // ─────────────────────────────────────────────────────────────
 
 // Metas padrão da EQUIPE — valores independentes, NÃO são soma das metas individuais
@@ -5509,9 +5556,9 @@ async function salvarEntrada() {
   if(appPag?.ehApp2) { doc.via_app_2 = true; doc.app_codigo_2 = appPag.appCodigo2; }
 
   // Etapa 1 CC — grava tipo_atendimento_cc apenas quando o autor é CC (schema
-  // limpo: docs de outros perfis ficam sem o campo). Regra de leitura pra docs
-  // sem o campo é aplicada na Etapa 3 (histórico ≤ 30/06/2026 → receptivo;
-  // ≥ julho/2026 → não classificado). Aqui só gravamos nos novos.
+  // limpo: docs de outros perfis ficam sem o campo). Regra de leitura definida
+  // na Etapa 3: docs sem o campo contam como RECEPTIVO (histórico e novos, sem
+  // corte por data); só "ativo" explícito vai pro ativo. Aqui só gravamos.
   if(tipoAtendimentoCC) { doc.tipo_atendimento_cc = tipoAtendimentoCC; }
 
   // D4: Pago + saída embutida → cria 2 docs com id_par. Saída materializada agora.
@@ -6796,7 +6843,9 @@ function renderCardMetasEquipe() {
       : getTotaisEquipeFatDiario(mesAno);
     // CC: mantém lancamentos para ranking individual por pessoa
     const srcCC  = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
-    const totCC  = usarHist ? calcTotaisFromHistoricoDocs(srcCC)  : calcTotaisDetalhados(srcCC);
+    // Etapa 3 CC — alcançado separado por nicho pra alimentar os 2 cards.
+    // (Removido `totCC` = calcTotais* — só o `.caixa` era usado no card único que virou dois.)
+    const splitCC = splitCaixaCC(srcCC, { usarHist });
 
     const metaLab    = m.meta_lab_equipe          || 273000;
     const metaImg    = m.meta_img_equipe           || 144000;
@@ -6805,10 +6854,10 @@ function renderCardMetasEquipe() {
     const metaCxMed  = m.meta_caixa_equipe                || METAS_EQUIPE_PADRAO.meta_caixa_equipe;
     const metaCrMed  = m.meta_credito_equipe              || METAS_EQUIPE_PADRAO.meta_credito_equipe;
     const metaBol    = m.meta_boleto_equipe               || METAS_EQUIPE_PADRAO.meta_boleto_equipe;
-    // Etapa 2 CC — meta EQUIPE = soma total dos nichos das atendentes
-    // (era hardcoded em 56.000 antes). Meta individual vira per-atendente
-    // dentro do map do ranking abaixo.
-    const metaCC     = metaTotalEquipeCC(m);
+    // Etapa 3 CC — metas por nicho pra cada card. `metaTotalEquipeCC` continua
+    // disponível pra premiação P2/gestão (que segue sobre a soma).
+    const metaCCRec  = metaReceptivoEquipeCC(m);
+    const metaCCAtv  = metaAtivoEquipeCC(m);
 
     // Seção medicina (sem "Sua parte" — CC não participa do pool)
     const medHtml =
@@ -6861,7 +6910,10 @@ function renderCardMetasEquipe() {
       : `<div style="font-size:12px;color:var(--text2);padding:8px 0">Sem dados de ranking neste mês.</div>`;
     const ccHtml =
       `<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin:16px 0 10px">📞 Call Center</div>` +
-      `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC.caixa, metaCC)}</div>` +
+      `<div class="equipe-metricas-grid">` +
+        metrica("💰 Caixa Receptivo — Equipe", splitCC.caixaReceptivo, metaCCRec) +
+        metrica("📞 Caixa Ativo — Equipe",     splitCC.caixaAtivo,     metaCCAtv) +
+      `</div>` +
       `<div style="margin-top:12px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
         ${rankHtml}
@@ -6871,10 +6923,12 @@ function renderCardMetasEquipe() {
 
   } else if(grupoCC) {
     // ── Coord / lider_callcenter: vê só CC (comportamento original) ──
-    // Etapa 2 CC — meta EQUIPE = soma dos nichos; individual vira per-atendente no map.
-    const metaCC    = metaTotalEquipeCC(m);
+    // Etapa 3 CC — meta EQUIPE dividida em nichos (receptivo/ativo).
+    const metaCCRec2 = metaReceptivoEquipeCC(m);
+    const metaCCAtv2 = metaAtivoEquipeCC(m);
     const srcCC2    = (usarHist ? historicoEquipeAtual : equipeLancs).filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
-    const totCC2    = usarHist ? calcTotaisFromHistoricoDocs(srcCC2) : calcTotaisDetalhados(srcCC2);
+    // (Removido `totCC2` = calcTotais* — só o `.caixa` era usado no card único.)
+    const splitCC2  = splitCaixaCC(srcCC2, { usarHist });
     const porPessoa2 = {};
     if(usarHist) {
       srcCC2.forEach(d => { porPessoa2[d.usuario_nome] = d.caixa || 0; });
@@ -6901,7 +6955,10 @@ function renderCardMetasEquipe() {
       </div>`).join("");
     el.innerHTML =
       fonteHtml +
-      `<div class="equipe-metricas-grid">${metrica("💰 Caixa CC — Equipe", totCC2.caixa, metaCC)}</div>` +
+      `<div class="equipe-metricas-grid">` +
+        metrica("💰 Caixa Receptivo — Equipe", splitCC2.caixaReceptivo, metaCCRec2) +
+        metrica("📞 Caixa Ativo — Equipe",     splitCC2.caixaAtivo,     metaCCAtv2) +
+      `</div>` +
       `<div style="margin-top:16px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏆 Ranking CC</div>
         ${rankHtml2}
@@ -7164,18 +7221,18 @@ function renderCoordPremiacaoGestao() {
 }
 
 function renderCoordResumoCCs(lancs) {
-  // Etapa 2 CC — meta individual vira per-atendente dentro do map abaixo.
-  // `metaCC` (constante genérica) removido — cada mini-card usa a meta dela.
+  // Etapa 2 CC — meta individual (dos cards per-atendente abaixo) vira per-atendente no map.
+  // Etapa 3 CC — mini card único "Caixa — Equipe CC" virou dois: Receptivo e Ativo.
+  // Cards individuais seguem sobre o TOTAL da atendente (consistente com ranking).
   const diasPass = diasUteisPassadosFloat();
   const diasUteis = metas?.dias_uteis || 22;
   const el = document.getElementById("coord-resumo-cards");
   if(!el) return;
 
-  let totalCaixa = 0;
-  CC_TODOS.forEach(n => { totalCaixa += calcTotais(lancs.filter(l => l.usuario_nome === n)).caixa; });
-  const metaEquipe = metaTotalEquipeCC(metas);
-  const pct = metaEquipe > 0 ? Math.min((totalCaixa/metaEquipe)*100,100) : 0;
-  const ok  = totalCaixa >= metaEquipe && metaEquipe > 0;
+  const lancsCC   = lancs.filter(l => CC_TODOS.includes(l.usuario_nome));
+  const splitEq   = splitCaixaCC(lancsCC, { usarHist: false });
+  const metaEqRec = metaReceptivoEquipeCC(metas);
+  const metaEqAtv = metaAtivoEquipeCC(metas);
 
   function miniCardCC(tit, val, meta) {
     const p = meta > 0 ? Math.min((val/meta)*100,100) : 0;
@@ -7196,7 +7253,8 @@ function renderCoordResumoCCs(lancs) {
   }
 
   el.innerHTML =
-    miniCardCC("Caixa — Equipe CC", totalCaixa, metaEquipe) +
+    miniCardCC("Caixa Receptivo — Equipe CC", splitEq.caixaReceptivo, metaEqRec) +
+    miniCardCC("Caixa Ativo — Equipe CC",     splitEq.caixaAtivo,     metaEqAtv) +
     CC_TODOS.map(nome => {
       const { caixa } = calcTotais(lancs.filter(l => l.usuario_nome === nome));
       const media = diasPass > 0 ? caixa/diasPass : 0;
@@ -7224,7 +7282,9 @@ function renderCoordResumoCCs(lancs) {
 }
 
 function renderCoordRanking(lancs) {
-  // Etapa 2 CC — meta per-atendente (receptivo + ativo dela)
+  // Etapa 2 CC — meta per-atendente (receptivo + ativo dela).
+  // Etapa 3 CC — ranking segue sobre o TOTAL (decisão registrada); desdobrar por
+  // nicho aqui só se necessário mais tarde.
   const rank = CC_TODOS.map(nome => ({
     nome,
     caixa: calcTotais(lancs.filter(l => l.usuario_nome === nome)).caixa,
@@ -7256,6 +7316,8 @@ function renderCoordRanking(lancs) {
 
 function renderCoordPremiacao(lancs) {
   // Etapa 2 CC — meta per-atendente (receptivo + ativo). Removida a const genérica.
+  // Etapa 3 CC — premiação P1 individual segue sobre o TOTAL da atendente
+  // (calcPremiacao recebe caixa/metaCC totais). Sem desdobramento.
   const diasPass  = diasUteisPassadosFloat();
   const diasUteis = metas?.dias_uteis || 22;
   const el = document.getElementById("coord-premiacao");
@@ -7322,6 +7384,7 @@ function renderCoordPremiacao(lancs) {
 
 function renderCoordColabs(lancs) {
   // Etapa 2 CC — meta per-atendente (receptivo + ativo). Constante genérica removida.
+  // Etapa 3 CC — cards colapsáveis por atendente seguem no TOTAL (não desdobrados).
   const el = document.getElementById("coord-colab-cards");
   if(!el) return;
 
