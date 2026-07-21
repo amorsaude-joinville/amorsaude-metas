@@ -2833,8 +2833,10 @@ function metaAtivoEquipeCC(m) {
 // Etapa 3 CC — separa o alcançado da equipe/atendente em receptivo vs ativo.
 // Regra final: docs sem `tipo_atendimento_cc` contam como RECEPTIVO (histórico
 // e novos, sem corte por data). Só `tipo_atendimento_cc === "ativo"` conta no
-// ativo. Saídas (embutidas ou avulsas) descontam do receptivo — não trazem o
-// campo, e resolver via id_par ficaria fora do escopo desta etapa.
+// ativo. Saídas: a Etapa 5 fez a saída-irmã HERDAR o tipo do orçamento pai (só
+// docs novos), então saídas de orçamento ATIVO agora descontam do ativo. Saídas
+// avulsas ou saídas-irmãs antigas continuam sem marcação → receptivo, pela
+// mesma regra "sem marcação = receptivo".
 // `usarHist=true`  → src são docs do historicoEquipe (têm d.caixa pré-computado)
 // `usarHist=false` → src são lancamentos ao vivo (replica calcTotais)
 function splitCaixaCC(src, { usarHist }) {
@@ -2872,7 +2874,9 @@ function splitCaixaCC(src, { usarHist }) {
 // Etapa 4 CC — particiona os lançamentos do CC em receptivo/ativo e devolve os
 // 7 indicadores agregados (caixa, credito, boleto, lab, img, proc, injetaveis)
 // pra cada metade, reusando os agregadores existentes. Mesma regra da Etapa 3:
-// sem marcação = receptivo; só "ativo" explícito conta como ativo.
+// sem marcação = receptivo; só "ativo" explícito conta como ativo. A Etapa 5
+// fez as saídas-irmãs novas herdarem o tipo do orçamento pai, então a partição
+// as classifica no balde certo automaticamente.
 // `usarHist=true`  → docs históricos (calcTotaisFromHistoricoDocs)
 // `usarHist=false` → lancamentos ao vivo (agregarTotaisEquipeLancs — já resolve
 //                    boleto via forma_pagamento_1/2 e saídas-irmãs por id_par)
@@ -5638,6 +5642,9 @@ async function salvarEntrada() {
         id_par: idPar,
         status: "pago", // necessário pra listener do kanban trazer essa saída-doc (D3.5)
       };
+      // Etapa 5 CC — saída-irmã herda tipo_atendimento_cc do pai (só docs novos).
+      // Sem essa marcação a saída caía sempre no balde receptivo do splitCaixa*.
+      if(tipoAtendimentoCC) { docSaida.tipo_atendimento_cc = tipoAtendimentoCC; }
       const refS = await db.collection("lancamentos").add(docSaida);
       console.log("[Amor Saúde] Saída embutida salva (id_par):", refS.id, idPar);
       toast(`Orçamento + saída registrados (${ORC_STATUS_LABEL[status]||status}).`, "ok");
@@ -12667,6 +12674,13 @@ async function salvarEdicaoLanc() {
         id_par: idPar,
         status: "pago",
       };
+      // Etapa 5 CC — só entra no PAYLOAD (usado pelo `.set` do branch add). No
+      // branch update (linha ~12766) o destructuring seletivo IGNORA este campo
+      // → saídas existentes não são "migradas" retroativamente.
+      // Prioriza updates.tipo_atendimento_cc (edição pode ter alterado o pai)
+      // → docOrig.tipo_atendimento_cc → não grava.
+      const _tipoAtdCC = updates.tipo_atendimento_cc || docOrig.tipo_atendimento_cc;
+      if(_tipoAtdCC) { saidaPayload.tipo_atendimento_cc = _tipoAtdCC; }
       if(edicaoSaidaIrmaId) {
         opSaidaIrma = { tipo:"update", id: edicaoSaidaIrmaId, payload: saidaPayload };
       } else {
@@ -13133,7 +13147,7 @@ async function salvarPagamentoModal() {
       // Pega dados do doc pra construir saída-doc
       const snap = await db.collection("lancamentos").doc(docId).get();
       const d = snap.exists ? snap.data() : {};
-      await db.collection("lancamentos").add({
+      const docSaidaMat = {
         usuario_id: d.usuario_id || (usuario.uid || usuario.nome),
         usuario_nome: d.usuario_nome || usuario.nome || "",
         perfil: d.perfil || usuario.perfil || "",
@@ -13154,7 +13168,12 @@ async function salvarPagamentoModal() {
         criado_em: ts,
         id_par: idPar,
         status: "pago", // necessário pra listener do kanban trazer essa saída-doc (D3.5)
-      });
+      };
+      // Etapa 5 CC — materialização de saida_pendente também herda tipo_atendimento_cc.
+      // Ausente em docs pais antigos → saída fica sem marcação (cai no receptivo,
+      // regra da Etapa 3 — comportamento igual ao anterior; nenhum retrocesso).
+      if(d.tipo_atendimento_cc) { docSaidaMat.tipo_atendimento_cc = d.tipo_atendimento_cc; }
+      await db.collection("lancamentos").add(docSaidaMat);
     } else {
       // Sem saída no modal: remove saida_pendente (se havia) — recepcionista desistiu
       updates.saida_pendente = firebase.firestore.FieldValue.delete();
