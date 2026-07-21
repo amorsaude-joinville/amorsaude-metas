@@ -3923,6 +3923,53 @@ function getTotaisPorDia(dataStr) {
   };
 }
 
+// Contagem AUTOMÁTICA de consultas e sessões pra o Resumo do Dia. Substitui
+// os inputs manuais (#rd-consultas / #rd-sessoes). Fonte = lançamentos PAGOS
+// do dia (dashLancs). Regras confirmadas:
+//   - CONSULTAS = 1 por lançamento com `consultas > 0` (consulta + retorno
+//     somam juntos; regra "sem marcação = consulta" — Parte 1 do consulta_tipo).
+//     Lançamentos só de imagem/lab/procedimento NÃO contam.
+//   - SESSÕES = 1 por LINHA de procedimento com `tipo === "Sessão"` e valor > 0
+//     (2 linhas de sessão no mesmo doc = 2 sessões). Identificação por tipo
+//     no schema — nunca por valor (R$ 82/60/65 são preços, não marcadores).
+// Card só aparece pra mês >= MARCO_NOVO_MODELO (linha ~8886 de renderResumoDia),
+// então dashLancs sempre cobre esse período.
+function getContagemAtendimentosPorDia(dataStr) {
+  if(!dataStr) return { consultas: 0, sessoes: 0 };
+  const fonte = (typeof dashLancs !== "undefined" ? dashLancs : []);
+  const lancsDoDia = fonte.filter(l => {
+    if(!l.data_hora || l.tipo !== "entrada" || l.status !== "pago") return false;
+    const d = l.data_hora.toDate ? l.data_hora.toDate() : new Date(l.data_hora);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    return ds === dataStr;
+  });
+  let consultas = 0, sessoes = 0;
+  lancsDoDia.forEach(l => {
+    if(Number(l.consultas) > 0) consultas++;
+    if(Array.isArray(l.procedimentos)) {
+      l.procedimentos.forEach(p => {
+        if(p?.tipo === "Sessão" && Number(p?.valor) > 0) sessoes++;
+      });
+    }
+  });
+  return { consultas, sessoes };
+}
+
+// Trava os inputs de contagem automática pra que ninguém digite (nem gestor).
+// Reforço com `disabled` + `readOnly` + estilo visual (mesmo do #ed-data-disp).
+// Idempotente — pode chamar em todo render.
+function _travarInputsContagemAuto() {
+  ["rd-consultas","rd-sessoes"].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.disabled = true;
+    el.readOnly = true;
+    el.title = "Calculado automaticamente a partir dos lançamentos pagos do dia";
+    el.style.background = "#F3F4F6";
+    el.style.cursor = "not-allowed";
+  });
+}
+
 function mascaraCPF(el) {
   let v = el.value.replace(/\D/g,"").slice(0,11);
   if(v.length>9) v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/,"$1.$2.$3-$4");
@@ -8734,14 +8781,17 @@ function atualizarInputsResumoDia(dados) {
     ? Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 })
     : "0,00";
   const set = (id, v) => { const el = document.getElementById(id); if(el && document.activeElement !== el) el.value = v; };
-  set("rd-consultas",    Number(dados.consultas)                     || 0);
-  set("rd-sessoes",      Number(dados.sessoes)                       || 0);
+  // rd-consultas / rd-sessoes NÃO são lidos do Firestore aqui — viraram números
+  // calculados pelo renderResumoDia (via getContagemAtendimentosPorDia) que
+  // roda em seguida. `_travarInputsContagemAuto` mantém os inputs como read-only.
   set("rd-alc-simul",    Number(dados.alcancado_simulacoes_credito)  || 0);
   set("rd-meta-liquida", fmt(Number(dados.meta_liquida)              || 0));
 
-  // Habilita/desabilita edição conforme perfil. VE_DASHBOARD pode editar.
+  // Habilita/desabilita edição conforme perfil (só pros campos que ainda
+  // aceitam edição manual — Alcançado sim. crédito e Meta líquido).
+  // rd-consultas/rd-sessoes ficam sempre travados via _travarInputsContagemAuto.
   const podeEditar = VE_DASHBOARD.includes(usuario?.perfil);
-  ["rd-consultas","rd-sessoes","rd-alc-simul","rd-meta-liquida"].forEach(id => {
+  ["rd-alc-simul","rd-meta-liquida"].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.disabled = !podeEditar;
   });
@@ -8927,6 +8977,16 @@ function renderResumoDia() {
   // Totais do dia + acumulado mês até a data
   const dia = getTotaisPorDia(dataStr);
   const acu = getTotaisAcumuladosAteData(mesAnoStr, dataStr);
+
+  // Contagem AUTOMÁTICA de consultas/sessões — substitui o input manual antigo.
+  // Precisa vir ANTES do bloco de "campos manuais" abaixo, porque Meta simulações
+  // crédito (linha ~9014) lê `document.getElementById("rd-consultas").value`.
+  const cont = getContagemAtendimentosPorDia(dataStr);
+  const _inpCont  = document.getElementById("rd-consultas");
+  const _inpSess  = document.getElementById("rd-sessoes");
+  if(_inpCont) _inpCont.value = String(cont.consultas);
+  if(_inpSess) _inpSess.value = String(cont.sessoes);
+  _travarInputsContagemAuto();
 
   // Dias úteis (passados clamp em total)
   const totalDU    = calcularDiasUteisMes(anoSel, mesSel);
