@@ -1436,9 +1436,20 @@
 
     <!-- ── CARD METAS DA EQUIPE (recepcionista/callcenter/lider) ── -->
     <div id="sec-card-equipe" style="display:none">
-      <div class="card" style="margin-bottom:0">
+      <div class="card" style="margin-bottom:12px">
         <div class="equipe-card-tit">🎯 Metas da Equipe</div>
         <div id="equipe-metricas">
+          <div class="loading"><div class="spinner"></div>Carregando...</div>
+        </div>
+      </div>
+      <!-- Etapa 4 CC — card "Vendas Call Center" (só realizado, sem meta).
+           Reagrupa os 7 indicadores do CC separados por receptivo/ativo.
+           Exibição pura: o dinheiro já está somado no card acima. -->
+      <div class="card" style="margin-bottom:0">
+        <div class="equipe-card-tit">🎧 Vendas Call Center
+          <span style="font-size:10px;font-weight:700;background:#E0F2FE;color:#0369A1;padding:2px 7px;border-radius:999px;margin-left:4px;letter-spacing:.3px">informativo</span>
+        </div>
+        <div id="equipe-vendas-cc">
           <div class="loading"><div class="spinner"></div>Carregando...</div>
         </div>
       </div>
@@ -2857,6 +2868,20 @@ function splitCaixaCC(src, { usarHist }) {
     caixaReceptivo -= Number(l.valor) || 0;
   });
   return { caixaReceptivo: Math.max(0, caixaReceptivo), caixaAtivo: Math.max(0, caixaAtivo) };
+}
+// Etapa 4 CC — particiona os lançamentos do CC em receptivo/ativo e devolve os
+// 7 indicadores agregados (caixa, credito, boleto, lab, img, proc, injetaveis)
+// pra cada metade, reusando os agregadores existentes. Mesma regra da Etapa 3:
+// sem marcação = receptivo; só "ativo" explícito conta como ativo.
+// `usarHist=true`  → docs históricos (calcTotaisFromHistoricoDocs)
+// `usarHist=false` → lancamentos ao vivo (agregarTotaisEquipeLancs — já resolve
+//                    boleto via forma_pagamento_1/2 e saídas-irmãs por id_par)
+function splitTotaisCC(src, { usarHist }) {
+  const eAtivo = d => d.tipo_atendimento_cc === "ativo";
+  const srcRec = src.filter(d => !eAtivo(d));
+  const srcAtv = src.filter(eAtivo);
+  const agg    = usarHist ? calcTotaisFromHistoricoDocs : agregarTotaisEquipeLancs;
+  return { rec: agg(srcRec), atv: agg(srcAtv) };
 }
 // ─────────────────────────────────────────────────────────────
 
@@ -7006,6 +7031,52 @@ function renderCardMetasEquipe() {
       metrica("💊 Injetáveis",   tot.injetaveis, metaInj) +
       `</div>`;
   }
+
+  // Etapa 4 CC — card informativo "Vendas Call Center" (comum aos 3 branches).
+  // Filtra a mesma fonte que branches A/B usam (callcenter + lider_callcenter)
+  // e delega pra renderCardVendasCC. Exibição pura — não altera nenhum total.
+  const srcCCall = (usarHist ? historicoEquipeAtual : equipeLancs)
+    .filter(d => ["callcenter","lider_callcenter"].includes(d.perfil));
+  renderCardVendasCC("equipe-vendas-cc", srcCCall, { usarHist });
+}
+
+// Etapa 4 CC — renderiza a tabela informativa "Vendas Call Center" no card
+// separado dentro de #sec-card-equipe. 7 linhas × (Receptivo | Ativo | Total).
+// Usa `splitTotaisCC` — mesma regra de partição do splitCaixaCC (Etapa 3):
+// sem marcação = receptivo; só "ativo" explícito = ativo.
+function renderCardVendasCC(containerId, srcCC, { usarHist }) {
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const { rec, atv } = splitTotaisCC(srcCC, { usarHist });
+  const linhas = [
+    { tit: "💰 Caixa",         key: "caixa"      },
+    { tit: "💳 Crédito",       key: "credito"    },
+    { tit: "📄 Boleto",        key: "boleto"     },
+    { tit: "🧪 Lab",           key: "lab"        },
+    { tit: "🩻 Imagem",        key: "img"        },
+    { tit: "💉 Procedimentos", key: "proc"       },
+    { tit: "💊 Injetáveis",    key: "injetaveis" },
+  ];
+  const rows = linhas.map(({tit, key}) => {
+    const vr = Number(rec[key]) || 0;
+    const va = Number(atv[key]) || 0;
+    const vt = vr + va;
+    return `<tr>
+      <td><strong>${tit}</strong></td>
+      <td class="num">${brl(vr)}</td>
+      <td class="num">${brl(va)}</td>
+      <td class="num vp">${brl(vt)}</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<div class="tbl-wrap"><table class="prem-table">
+    <thead><tr>
+      <th>Indicador</th>
+      <th class="num">Receptivo</th>
+      <th class="num">Ativo</th>
+      <th class="num">Total</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function mudarModoCoord(modo) {
